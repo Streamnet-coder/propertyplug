@@ -1,0 +1,42 @@
+{
+  "summary": "First iteration end-to-end test for My Builder App (Expo + FastAPI). Backend: 24/24 pytest cases passed (auth incl. demo + new-user seeding, project computed totals, line-items CRUD, contacts plan gating 403/200, receipts/media CRUD, upload+download via Emergent object storage, AI estimate ~20-40s returning items/total_low/total_high, Stripe checkout + status). Frontend (390x844): welcome -> sign-in with demo creds -> home (project-hero-card renders with correct Nottingham project), Budget tab (filter chips, add-line-item modal, ai-estimate-banner), Team tab (trades list ok on basic, sub/stakeholder show lock card on basic, both unlock + show add-contact-button + rows on pro), Media tab (3 photos, 3 receipts, upload FAB visible), Profile (plan-toggle-switch wrapper rendered + working through role=switch, upgrade-pro-button present when basic), BRRR Pro screen (£40,750 money-left-in, ROI 8.5%, cashflow, comparables), AI estimate screen (returned £1,660-£2,870 with Add buttons). React Native deprecation detected: shadow* style props on multiple cards (RN Web console warning).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "profile.tsx", "issue": "'Upgrade to Pro · £19' button is still displayed when user.plan=='pro' but paid_pro==false (e.g. after the plan-toggle-switch flips them to Pro). Condition at /app/frontend/app/profile.tsx:105 uses !user.paid_pro; should also hide when user.plan=='pro' to avoid a misleading CTA while already in Pro preview.", "testID": "upgrade-card", "priority": "LOW"},
+      {"component": "profile.tsx Switch", "issue": "plan-toggle-switch testID is placed on the React Native Switch wrapper but on react-native-web it does not propagate data-testid onto the actual clickable <input role=\"switch\">. Clicking the wrapper via Playwright `[data-testid=\"plan-toggle-switch\"]` does not reliably toggle the control (automation had to fall back to get_by_role('switch')). Reference: /app/frontend/app/profile.tsx:142. Suggest wrapping Switch in a Pressable with testID or exposing an additional testID on the input.", "testID": "plan-toggle-switch", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "global", "issues": ["Console warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' Replace shadowColor/shadowOffset/shadowOpacity/shadowRadius in Card/Button styles with boxShadow for RN Web parity."]}
+    ],
+    "react_native_issues": [
+      {"component": "StyleSheet shadow*", "issue": "Deprecated shadow* style props produce RN Web console warnings; migrate to boxShadow. Reference: cards/buttons in /app/frontend components."}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Hide upgrade-card when user.plan==='pro' (profile.tsx line 105) to prevent misleading 'Upgrade to Pro' button after the preview toggle is on.",
+    "Make plan-toggle-switch testID reachable on web: wrap the Switch in a Pressable with testID='plan-toggle-switch' (keeping the Switch internal) OR verify RN version propagates testID to the <input>.",
+    "Replace shadowColor/shadowOffset/shadowOpacity/shadowRadius with boxShadow across styles to clear RN Web deprecation warnings."
+  ],
+  "critical_code_review_comments": [
+    "server.py is ~660 lines in a single file; still manageable but approaching the recommended 700-line split threshold—consider separating routers (auth/project/contacts/media/payments) into modules.",
+    "AI estimate uses regex `{.*}` with DOTALL to extract JSON from LLM output—works but fragile. If Claude ever wraps JSON in markdown fences the current path still works; good resilience.",
+    "mark_paid() updates user to paid_pro=true/plan=pro—idempotent via early return if already paid. Good.",
+    "/api/files/{path} accepts token both via Bearer and ?token= query—correct for <Image> src usage from the mobile app."
+  ],
+  "updated_files": [
+    "/app/backend/tests/__init__.py",
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "95%"},
+  "seed_data_creation": "No manual seeds created. New-user registration test (TEST_<uuid>@example.com) is auto-seeded by backend; one such account is left in the DB per test run but prefixed with TEST_ for cleanup.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend endpoints are all healthy via EXPO_PUBLIC_BACKEND_URL. Demo account demo@mybuilder.app/demo1234 is seeded; tests set plan back to basic in a session fixture, but a test may leave it as basic at the end. Pro-only screens (BRRR, comparables, Team subcontractor/stakeholder) require either Stripe-upgrade or toggling plan via POST /api/auth/plan {plan:'pro'}. Note Switch testID issue: use page.get_by_role('switch') for toggling. AI estimate takes ~20-40s; wait up to 60s before asserting result. Upload tests exercise Emergent object storage (STORAGE_URL) and will skip gracefully on 402 credit exhaustion.",
+  "rca_of_issue": "N/A - no critical bugs. Two low-priority UX/testing issues reported above with proposed fixes referenced to exact file lines."
+}

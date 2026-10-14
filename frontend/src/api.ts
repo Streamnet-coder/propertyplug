@@ -1,0 +1,76 @@
+export const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL as string;
+
+let token: string | null = null;
+export const setApiToken = (t: string | null) => {
+  token = t;
+};
+export const getApiToken = () => token;
+
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
+type Opts = { method?: string; body?: unknown; form?: FormData };
+
+export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (opts.body !== undefined) headers["Content-Type"] = "application/json";
+  const res = await fetch(`${BACKEND_URL}/api${path}`, {
+    method: opts.method ?? (opts.body !== undefined || opts.form ? "POST" : "GET"),
+    headers,
+    body: opts.form ?? (opts.body !== undefined ? JSON.stringify(opts.body) : undefined),
+  });
+  const text = await res.text();
+  let data: any = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { detail: text };
+  }
+  if (!res.ok) {
+    const d = data?.detail;
+    throw new ApiError(typeof d === "string" ? d : Array.isArray(d) ? d[0]?.msg ?? "Request failed" : `Error ${res.status}`, res.status);
+  }
+  return data as T;
+}
+
+export const fileUrl = (path: string) => `${BACKEND_URL}/api/files/${path}?token=${encodeURIComponent(token ?? "")}`;
+
+export function gbp(n: number, decimals = 0) {
+  const neg = n < 0;
+  const fixed = Math.abs(n).toFixed(decimals);
+  const [int, dec] = fixed.split(".");
+  const withCommas = int.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${neg ? "-" : ""}£${withCommas}${dec ? "." + dec : ""}`;
+}
+
+export type User = { id: string; name: string; email: string; plan: "basic" | "pro"; paid_pro: boolean; trial_ends: string };
+export type Category = "Hard Cost" | "Soft Cost" | "Contingency";
+export type Project = {
+  id: string;
+  name: string;
+  address: string;
+  target_type: string;
+  finish_type: string;
+  purchase_price: number;
+  estimated_valuation: number;
+  monthly_rent: number;
+  budget: { hard: number; soft: number; contingency: number };
+  spent: { hard: number; soft: number; contingency: number };
+  total_budget: number;
+  total_spent: number;
+  line_item_count: number;
+  receipt_count: number;
+};
+export type LineItem = { id: string; category: Category; name: string; budgeted: number; actual: number; supplier: string; status: string };
+export type ContactKind = "trade" | "subcontractor" | "stakeholder";
+export type Contact = { id: string; kind: ContactKind; name: string; role: string; phone: string; email: string; status: string; schedule: string; cost: string };
+export type Receipt = { id: string; title: string; amount: number; date: string; category: string; supplier: string; storage_path?: string | null };
+export type MediaItem = { id: string; title: string; phase: "before" | "progress" | "after"; url?: string | null; storage_path?: string | null; date: string };
+export type Comparable = { address: string; beds: number; price: number; distance: string; date: string };
+export type Estimate = { items: { name: string; category: string; low: number; high: number; supplier: string }[]; total_low: number; total_high: number; notes: string };
