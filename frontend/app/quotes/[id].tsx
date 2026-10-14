@@ -177,10 +177,13 @@ export default function QuoteDetail() {
                     <Button small icon="check" title="Accept" loading={accept.isPending && accept.variables === e.id} onPress={() => accept.mutate(e.id)} testID={`quote-accept-${i}`} />
                   )}
                   {accepted && (
-                    <View style={s.acceptedBox}>
-                      <Icon name="badge-check" size={16} color={colors.success} />
-                      <Text style={[s.muted, { color: colors.success, fontFamily: fonts.semibold }]}>Added to budget</Text>
-                    </View>
+                    <>
+                      <View style={s.acceptedBox}>
+                        <Icon name="badge-check" size={16} color={colors.success} />
+                        <Text style={[s.muted, { color: colors.success, fontFamily: fonts.semibold }]}>Added to budget</Text>
+                      </View>
+                      <Button small variant="outline" icon="calendar-check" title="Payment schedule" onPress={() => router.push("/payments")} testID={`quote-payments-${i}`} />
+                    </>
                   )}
                 </View>
               </View>

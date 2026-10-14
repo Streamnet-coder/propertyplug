@@ -84,6 +84,8 @@ class User(BaseDocument):
     active_project_id: Optional[str] = None
     branding: Branding = Branding()
     signup_source: Optional[str] = None
+    referred_by: Optional[str] = None
+    referral_count: int = 0
     created_at: str = Field(default_factory=now_iso)
 
 
@@ -430,7 +432,7 @@ async def delete_project(pid: str, user: User = Depends(current_user)):
     r = await db.projects.delete_one({"_id": oid(pid), "user_id": user.id})
     if not r.deleted_count:
         raise HTTPException(404, "Project not found")
-    for coll in (db.line_items, db.contacts, db.receipts, db.media, db.milestones, db.quote_requests):
+    for coll in (db.line_items, db.contacts, db.receipts, db.media, db.milestones, db.quote_requests, db.stage_payments, db.snags):
         await coll.delete_many({"user_id": user.id, "project_id": pid})
     if user.active_project_id == pid:
         await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"active_project_id": None}})
@@ -964,9 +966,9 @@ font-weight:700;padding:12px 18px;border-radius:12px;white-space:nowrap}.cta .t{
 .bb a{color:#0f766e;text-decoration:none}"""
 
 
-def page(title: str, body: str, ref: Optional[str] = None) -> HTMLResponse:
+def page(title: str, body: str, ref: Optional[str] = None, by: Optional[str] = None) -> HTMLResponse:
     cta = (f"<div class='cta' id='trial-cta'><div class='t'><h3>Run your own renovation like this</h3><p>Budgets, milestones, quotes & lender reports in one app. "
-           f"30 days free, no card needed.</p></div><a href='/api/join?ref={E(ref)}' id='start-trial-link'>Start free trial</a></div>") if ref else ""
+           f"30 days free, no card needed.</p></div><a href='/api/join?ref={E(ref)}&by={E(by or '')}' id='start-trial-link'>Start free trial</a></div>") if ref else ""
     return HTMLResponse(f"<!DOCTYPE html><html><head><meta charset='utf-8'/><meta name='viewport' content='width=device-width,initial-scale=1'/>"
                         f"<title>{E(title)}</title><style>{PAGE_CSS}{CTA_CSS}</style></head><body><div class='wrap'>{body}{cta}"
                         f"<div class='foot'>Powered by My Builder App</div></div></body></html>")
@@ -1023,7 +1025,7 @@ async def share_logo(token: str):
 # ---------------- Public trial signup ----------------
 JOIN_FORM = """<div class='hdr'><div class='brand'>MY BUILDER <b>APP</b></div><h1>Start your 30-day free trial</h1>
 <div>Track refurb budgets, milestones, trades & BRRR numbers in one app. No card required.</div></div>
-<form class='card' method='post' id='join-form'><input type='hidden' name='ref' value='{ref}'/>{err}
+<form class='card' method='post' id='join-form'><input type='hidden' name='ref' value='{ref}'/><input type='hidden' name='by' value='{by}'/>{err}
 <label>Full name</label><input name='name' required value='{name}'/>
 <label>Email</label><input name='email' type='email' required value='{email}'/>
 <label>Password (min 6 characters)</label><input name='password' type='password' minlength='6' required/>
@@ -1031,20 +1033,46 @@ JOIN_FORM = """<div class='hdr'><div class='brand'>MY BUILDER <b>APP</b></div><h
 
 
 @api.get("/join", response_class=HTMLResponse)
-async def join_page(ref: str = "direct"):
-    return page("Start free trial", JOIN_FORM.format(ref=E(ref), err="", name="", email=""))
+async def join_page(ref: str = "direct", by: str = ""):
+    return page("Start free trial", JOIN_FORM.format(ref=E(ref), by=E(by), err="", name="", email=""))
+
+
+REFERRAL_DAYS = 30
+
+
+async def credit_referrer(by: str, new_user: User, source: str):
+    if not by or not ObjectId.is_valid(by) or by == new_user.id:
+        return
+    ref = await db.users.find_one({"_id": ObjectId(by)}, {"trial_ends": 1})
+    if not ref:
+        return
+    base = max(datetime.now(timezone.utc), datetime.fromisoformat(ref["trial_ends"]))
+    await db.users.update_one({"_id": ref["_id"]}, {"$set": {"trial_ends": (base + timedelta(days=REFERRAL_DAYS)).isoformat()},
+                                                   "$inc": {"referral_count": 1}})
+    await db.users.update_one({"_id": ObjectId(new_user.id)}, {"$set": {"referred_by": by}})
+    await db.referrals.insert_one({"referrer_id": by, "new_user_id": new_user.id, "name": new_user.name, "source": source,
+                                   "days": REFERRAL_DAYS, "created_at": now_iso()})
+
+
+@api.get("/referrals")
+async def my_referrals(user: User = Depends(current_user)):
+    docs = await db.referrals.find({"referrer_id": user.id}).sort("created_at", -1).to_list(100)
+    return {"count": len(docs), "months_earned": len(docs), "trial_ends": user.trial_ends,
+            "recent": [{"name": d["name"].split(" ")[0], "source": d["source"], "date": d["created_at"][:10]} for d in docs[:20]]}
 
 
 @api.post("/join", response_class=HTMLResponse)
-async def join_submit(name: str = Form(...), email: str = Form(...), password: str = Form(...), ref: str = Form("direct")):
+async def join_submit(name: str = Form(...), email: str = Form(...), password: str = Form(...), ref: str = Form("direct"), by: str = Form("")):
     src = re.sub(r"[^a-z_]", "", ref.lower())[:20] or "direct"
+    by = re.sub(r"[^a-f0-9]", "", by.lower())[:24]
     try:
         if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email.strip()):
             raise HTTPException(400, "Please enter a valid email")
-        await create_user(name, email, password, source=src)
+        nu = await create_user(name, email, password, source=src)
     except HTTPException as e:
         err = f"<p class='over' id='join-error'>{E(str(e.detail))}</p>"
-        return page("Start free trial", JOIN_FORM.format(ref=E(src), err=err, name=E(name), email=E(email)))
+        return page("Start free trial", JOIN_FORM.format(ref=E(src), by=E(by), err=err, name=E(name), email=E(email)))
+    await credit_referrer(by, nu, src)
     return page("Welcome", f"""<div class='hdr'><div class='brand'>MY BUILDER <b>APP</b></div><h1>You're in! 🎉</h1>
 <div>Your 30-day free trial has started.</div></div><div class='card' id='join-success'><h2>Next steps</h2>
 <p>1. Open <b>My Builder App</b> on your phone.</p><p>2. Tap <b>Sign in</b> and use <b>{E(email.strip().lower())}</b>.</p>
@@ -1120,6 +1148,11 @@ async def public_report(token: str):
                 f"<figure><img loading='lazy' src='/api/share/{E(token)}/photo/{ph['_id']}'/><figcaption><span class='tag'>{E(ph['phase'].upper())}</span></figcaption></figure>"
                 for ph in by_ms.get(str(m["_id"]), [])) + "</div>" if by_ms.get(str(m["_id"])) else "")
             for m in ms) + "</div>"
+    snags = await db.snags.find({"project_id": p.id}).to_list(500)
+    if snags:
+        open_n = sum(1 for x in snags if x["status"] == "open")
+        body += (f"<div class='card' id='snag-summary'><h2>Snagging · {len(snags) - open_n}/{len(snags)} fixed</h2>"
+                 f"<div class='cap'>{open_n} open item{'s' if open_n != 1 else ''} before sign-off</div></div>")
     body += "<div class='card'><h2>Budget breakdown</h2><table><tr><th>Category</th><th class='n'>Budget</th><th class='n'>Spent</th><th class='n'>Variance</th></tr>" + "".join(
         f"<tr><td>{l}</td><td class='n'>{money(b)}</td><td class='n'>{money(sp)}</td><td class='n {'over' if b - sp < 0 else 'under'}'>{money(b - sp)}</td></tr>"
         for l, b, sp in cats) + "</table></div>"
@@ -1132,7 +1165,7 @@ async def public_report(token: str):
         body += "<div class='card'><h2>Site photos</h2><div class='grid'>" + "".join(
             f"<div><img loading='lazy' src='/api/share/{E(token)}/photo/{m['_id']}'/><div class='cap'><span class='tag'>{E(m['phase'].upper())}</span> {E(m['title'])}</div></div>"
             for m in media) + "</div></div>"
-    return page(f"{p.name} · Project report", body, ref="share")
+    return page(f"{p.name} · Project report", body, ref="share", by=p.user_id)
 
 
 @api.get("/share/{token}/photo/{mid}")
@@ -1277,6 +1310,7 @@ async def accept_entry(qid: str, eid: str, body: AcceptIn, user: User = Depends(
 
 @api.delete("/quotes/{qid}")
 async def delete_quote(qid: str, user: User = Depends(current_user)):
+    await db.stage_payments.delete_many({"quote_id": qid, "user_id": user.id})
     await db.quote_requests.delete_one({"_id": oid(qid), "user_id": user.id})
     return {"ok": True}
 
@@ -1307,7 +1341,7 @@ async def public_quote_form(token: str):
 <label>Time to complete (working days)</label><input name='days' type='number' min='0' value='{e.days if e.days is not None else ''}'/>
 <label>Notes (what's included, availability)</label><textarea name='notes' rows='4'>{E(e.notes)}</textarea>
 <button type='submit'>Send quote</button></form>"""
-    return page(f"Quote: {q.title}", body, ref="quote")
+    return page(f"Quote: {q.title}", body, ref="quote", by=q.user_id)
 
 
 @api.get("/q/{token}/logo")
@@ -1330,7 +1364,155 @@ async def public_quote_submit(token: str, amount: float = Form(...), days: Optio
     e.amount, e.notes, e.status, e.responded_at = float(amount), notes.strip()[:2000], "received", now_iso()
     e.days = int(days) if days and days.strip().isdigit() else None
     await db.quote_requests.update_one({"_id": ObjectId(q.id)}, {"$set": {"quotes": [x.model_dump() for x in q.quotes]}})
-    return page("Quote sent", f"<div class='card'><h2>Thanks {E(e.name)} — your quote of {money(e.amount, 2)} was sent</h2><p>The project owner will be in touch. You can reopen this link to update your quote.</p></div>", ref="quote")
+    return page("Quote sent", f"<div class='card'><h2>Thanks {E(e.name)} — your quote of {money(e.amount, 2)} was sent</h2><p>The project owner will be in touch. You can reopen this link to update your quote.</p></div>", ref="quote", by=q.user_id)
+
+
+# ---------------- Stage payments (against accepted quotes) ----------------
+class StagePayment(BaseDocument):
+    user_id: str
+    project_id: str
+    quote_id: str
+    label: str
+    amount: float
+    due_date: Optional[str] = None
+    status: Literal["due", "paid"] = "due"
+    paid_at: Optional[str] = None
+    created_at: str = Field(default_factory=now_iso)
+
+
+class StagePaymentIn(BaseModel):
+    quote_id: str
+    label: str
+    amount: float
+    due_date: Optional[str] = None
+
+
+async def sync_line_item_actual(q: dict, user_id: str):
+    if not q.get("added_line_item_id"):
+        return
+    paid = sum(p["amount"] for p in await db.stage_payments.find({"quote_id": str(q["_id"]), "status": "paid"}).to_list(500))
+    await db.line_items.update_one({"_id": oid(q["added_line_item_id"]), "user_id": user_id},
+                                   {"$set": {"actual": round(paid, 2), "status": "Paid" if paid else "Quoted"}})
+
+
+@api.get("/stage-payments")
+async def list_contracts(user: User = Depends(current_user)):
+    pid = await active_pid(user)
+    out = []
+    async for q in db.quote_requests.find({"user_id": user.id, "project_id": pid}).sort("created_at", -1):
+        acc = next((e for e in q["quotes"] if e["status"] == "accepted"), None)
+        if not acc:
+            continue
+        pays = [StagePayment.from_mongo(d).out() for d in await db.stage_payments.find({"quote_id": str(q["_id"])}).sort("created_at", 1).to_list(200)]
+        paid = sum(p["amount"] for p in pays if p["status"] == "paid")
+        sched = sum(p["amount"] for p in pays)
+        out.append({"quote_id": str(q["_id"]), "title": q["title"], "payee": acc["name"], "phone": acc.get("phone", ""),
+                    "contract_amount": acc["amount"], "paid": round(paid, 2), "scheduled": round(sched, 2),
+                    "remaining": round(acc["amount"] - paid, 2), "unscheduled": round(acc["amount"] - sched, 2), "payments": pays})
+    return out
+
+
+@api.post("/stage-payments")
+async def add_stage_payment(body: StagePaymentIn, user: User = Depends(current_user)):
+    q = await db.quote_requests.find_one({"_id": oid(body.quote_id), "user_id": user.id})
+    acc = next((e for e in (q or {}).get("quotes", []) if e["status"] == "accepted"), None)
+    if not acc:
+        raise HTTPException(404, "Accepted quote not found")
+    if body.amount <= 0 or not body.label.strip():
+        raise HTTPException(400, "Enter a label and an amount above £0")
+    sched = sum(p["amount"] for p in await db.stage_payments.find({"quote_id": body.quote_id}).to_list(500))
+    if sched + body.amount > acc["amount"] + 0.009:
+        raise HTTPException(400, f"This would exceed the agreed quote by {money(sched + body.amount - acc['amount'], 2)}. "
+                                 f"Only {money(acc['amount'] - sched, 2)} is left to schedule.")
+    sp = StagePayment(user_id=user.id, project_id=q["project_id"], quote_id=body.quote_id, label=body.label.strip(),
+                      amount=round(body.amount, 2), due_date=body.due_date or None)
+    sp.id = str((await db.stage_payments.insert_one(sp.to_mongo())).inserted_id)
+    return sp.out()
+
+
+class PayStatusIn(BaseModel):
+    status: Literal["due", "paid"]
+
+
+@api.put("/stage-payments/{sid}")
+async def set_payment_status(sid: str, body: PayStatusIn, user: User = Depends(current_user)):
+    d = await db.stage_payments.find_one({"_id": oid(sid), "user_id": user.id})
+    if not d:
+        raise HTTPException(404, "Payment not found")
+    await db.stage_payments.update_one({"_id": d["_id"]}, {"$set": {"status": body.status, "paid_at": now_iso() if body.status == "paid" else None}})
+    await sync_line_item_actual(await db.quote_requests.find_one({"_id": oid(d["quote_id"])}) or {}, user.id)
+    return StagePayment.from_mongo(await db.stage_payments.find_one({"_id": d["_id"]})).out()
+
+
+@api.delete("/stage-payments/{sid}")
+async def delete_stage_payment(sid: str, user: User = Depends(current_user)):
+    d = await db.stage_payments.find_one({"_id": oid(sid), "user_id": user.id})
+    if d:
+        await db.stage_payments.delete_one({"_id": d["_id"]})
+        await sync_line_item_actual(await db.quote_requests.find_one({"_id": oid(d["quote_id"])}) or {}, user.id)
+    return {"ok": True}
+
+
+# ---------------- Snagging ----------------
+class Snag(BaseDocument):
+    user_id: str
+    project_id: str
+    room: str
+    description: str
+    priority: Literal["low", "medium", "high"] = "medium"
+    status: Literal["open", "fixed"] = "open"
+    storage_path: Optional[str] = None
+    assignee: str = ""
+    fixed_at: Optional[str] = None
+    created_at: str = Field(default_factory=now_iso)
+
+
+class SnagIn(BaseModel):
+    room: str
+    description: str
+    priority: Literal["low", "medium", "high"] = "medium"
+    storage_path: Optional[str] = None
+    assignee: str = ""
+
+
+class SnagUpdate(BaseModel):
+    room: Optional[str] = None
+    description: Optional[str] = None
+    priority: Optional[Literal["low", "medium", "high"]] = None
+    status: Optional[Literal["open", "fixed"]] = None
+    assignee: Optional[str] = None
+
+
+@api.get("/snags")
+async def list_snags(user: User = Depends(current_user)):
+    docs = await db.snags.find({"user_id": user.id, "project_id": await active_pid(user)}).sort("created_at", -1).to_list(1000)
+    return [Snag.from_mongo(d).out() for d in docs]
+
+
+@api.post("/snags")
+async def create_snag(body: SnagIn, user: User = Depends(current_user)):
+    if not body.room.strip() or not body.description.strip():
+        raise HTTPException(400, "Room and description are required")
+    s = Snag(user_id=user.id, project_id=await active_pid(user), **{**body.model_dump(), "room": body.room.strip(), "description": body.description.strip()})
+    s.id = str((await db.snags.insert_one(s.to_mongo())).inserted_id)
+    return s.out()
+
+
+@api.put("/snags/{sid}")
+async def update_snag(sid: str, body: SnagUpdate, user: User = Depends(current_user)):
+    upd = body.model_dump(exclude_unset=True)
+    if "status" in upd:
+        upd["fixed_at"] = now_iso() if upd["status"] == "fixed" else None
+    r = await db.snags.update_one({"_id": oid(sid), "user_id": user.id}, {"$set": upd})
+    if not r.matched_count:
+        raise HTTPException(404, "Snag not found")
+    return Snag.from_mongo(await db.snags.find_one({"_id": oid(sid)})).out()
+
+
+@api.delete("/snags/{sid}")
+async def delete_snag(sid: str, user: User = Depends(current_user)):
+    await db.snags.delete_one({"_id": oid(sid), "user_id": user.id})
+    return {"ok": True}
 
 
 @api.get("/")

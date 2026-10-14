@@ -37,6 +37,11 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Stage photos: media.milestone_id, before/after per milestone, thumbnails on live report & timeline counts
 - Trial CTA on public share/quote pages -> public signup /api/join (signup_source tracked)
 
+## Iteration 5 (2026-06)
+- Referral rewards: CTA links carry &by=owner; /api/join credits +30 days trial; /api/referrals + Profile card
+- Stage payment schedule vs accepted quotes (overpay blocked), paid sums sync line item actuals
+- Snagging list per room with photo/priority/assignee, tick off; snag summary on live report
+
 ## Backlog
-- P1: Payment schedule vs accepted quotes, referral rewards for /api/join signups, split server.py into routers
+- P1: Lender comments on live report, snag share link for trades, split server.py into routers
 - P2: Supplier price benchmark lookup, stakeholder share link, milestones/timeline

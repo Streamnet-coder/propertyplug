@@ -88,6 +88,21 @@ export type QuoteEntry = {
   responded_at?: string | null;
 };
 export type QuoteRequest = { id: string; title: string; description: string; trade: string; quotes: QuoteEntry[]; created_at: string; added_line_item_id?: string | null };
+export type StagePayment = { id: string; quote_id: string; label: string; amount: number; due_date?: string | null; status: "due" | "paid"; paid_at?: string | null };
+export type Contract = {
+  quote_id: string;
+  title: string;
+  payee: string;
+  phone: string;
+  contract_amount: number;
+  paid: number;
+  scheduled: number;
+  remaining: number;
+  unscheduled: number;
+  payments: StagePayment[];
+};
+export type Snag = { id: string; room: string; description: string; priority: "low" | "medium" | "high"; status: "open" | "fixed"; storage_path?: string | null; assignee: string; created_at: string };
+export type Referrals = { count: number; months_earned: number; trial_ends: string; recent: { name: string; source: string; date: string }[] };
 export type LineItem = { id: string; category: Category; name: string; budgeted: number; actual: number; supplier: string; status: string };
 export type ContactKind = "trade" | "subcontractor" | "stakeholder";
 export type Contact = { id: string; kind: ContactKind; name: string; role: string; phone: string; email: string; status: string; schedule: string; cost: string };

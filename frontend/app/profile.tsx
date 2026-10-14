@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, BACKEND_URL, User } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Button, Card, fonts, Icon, IconName, radius, space, tap } from "@/src/components/ui";
-import { invalidate } from "@/src/queries";
+import { invalidate, useReferrals } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
@@ -25,6 +25,7 @@ export default function Profile() {
   const { colors } = useTheme();
   const toast = useToast();
   const { user, setUser, signOut, refresh } = useAuth();
+  const referrals = useReferrals();
   const [paying, setPaying] = useState(false);
   const [toggling, setToggling] = useState(false);
   const poll = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -148,6 +149,33 @@ export default function Profile() {
           </View>
         </Card>
 
+        <Card style={{ gap: space.sm }} testID="referral-card">
+          <View style={s.row}>
+            <Icon name="gift" size={22} color={colors.brandPrimary} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.rowTitle}>Referral rewards</Text>
+              <Text style={s.muted}>Earn a free month for every lender or trade who signs up from your report & quote links.</Text>
+            </View>
+          </View>
+          <View style={s.refStats}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.muted}>Signups</Text>
+              <Text style={s.refVal} testID="referral-count">{referrals.data?.count ?? 0}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.muted}>Free months earned</Text>
+              <Text style={[s.refVal, { color: colors.success }]} testID="referral-months">+{referrals.data?.months_earned ?? 0}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.muted}>Free until</Text>
+              <Text style={s.refVal} testID="referral-trial-ends">{new Date(user.trial_ends).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</Text>
+            </View>
+          </View>
+          {(referrals.data?.recent ?? []).slice(0, 3).map((r, i) => (
+            <Text key={i} style={s.muted} testID={`referral-recent-${i}`}>• {r.name} joined via your {r.source === "quote" ? "quote request" : "report link"} · {r.date}</Text>
+          ))}
+        </Card>
+
         <Card style={{ paddingVertical: space.xs }}>
           {[
             { icon: "folder-open" as IconName, label: "My projects", onPress: () => router.push("/projects"), id: "projects" },
@@ -155,6 +183,8 @@ export default function Profile() {
             { icon: "file-text" as IconName, label: "Quote requests", onPress: () => router.push("/quotes"), id: "quotes" },
             { icon: "share-2" as IconName, label: "Share report with lenders", onPress: () => router.push("/share-report"), id: "share" },
             { icon: "building-2" as IconName, label: "Report branding", onPress: () => router.push("/branding"), id: "branding" },
+            { icon: "calendar-check" as IconName, label: "Payment schedule", onPress: () => router.push("/payments"), id: "payments" },
+            { icon: "list-checks" as IconName, label: "Snagging list", onPress: () => router.push("/snags"), id: "snags" },
             { icon: "pencil" as IconName, label: "Edit project details", onPress: () => router.push("/project-edit"), id: "edit-project" },
             { icon: "calculator" as IconName, label: "BRRR calculator", onPress: () => router.push("/brrr"), id: "brrr" },
             { icon: "sparkles" as IconName, label: "AI cost estimate", onPress: () => router.push("/ai-estimate"), id: "ai" },
@@ -203,4 +233,6 @@ const useStyles = makeStyles((c) => ({
   rowTitle: { fontFamily: fonts.semibold, fontSize: 15, color: c.onSurface },
   link: { flexDirection: "row", alignItems: "center", gap: space.md, paddingVertical: space.md, minHeight: 48 },
   divider: { borderTopWidth: 1, borderTopColor: c.divider },
+  refStats: { flexDirection: "row", gap: space.sm, backgroundColor: c.surfaceSecondary, borderRadius: radius.md, padding: space.md },
+  refVal: { fontFamily: fonts.extrabold, fontSize: 18, color: c.onSurface, marginTop: 2 },
 }));

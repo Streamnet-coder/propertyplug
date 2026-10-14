@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { api, Branding, Comparable, Contact, ContactKind, LineItem, MediaItem, Milestone, Project, QuoteRequest, Receipt } from "@/src/api";
+import { api, Branding, Comparable, Contact, ContactKind, Contract, LineItem, MediaItem, Milestone, Project, QuoteRequest, Receipt, Referrals, Snag } from "@/src/api";
 import { queryClient } from "@/src/query-client";
 
 export const useProject = () => useQuery({ queryKey: ["project"], queryFn: () => api<Project>("/project") });
@@ -13,6 +13,9 @@ export const useComparables = (enabled: boolean) =>
   useQuery({ queryKey: ["comparables"], queryFn: () => api<Comparable[]>("/project/comparables"), enabled });
 export const useMilestones = () => useQuery({ queryKey: ["milestones"], queryFn: () => api<Milestone[]>("/milestones") });
 export const useBranding = () => useQuery({ queryKey: ["branding"], queryFn: () => api<Branding>("/branding") });
+export const useContracts = () => useQuery({ queryKey: ["contracts"], queryFn: () => api<Contract[]>("/stage-payments") });
+export const useSnags = () => useQuery({ queryKey: ["snags"], queryFn: () => api<Snag[]>("/snags") });
+export const useReferrals = () => useQuery({ queryKey: ["referrals"], queryFn: () => api<Referrals>("/referrals") });
 export const useQuotes = () => useQuery({ queryKey: ["quotes"], queryFn: () => api<QuoteRequest[]>("/quotes") });
 export const useQuote = (id: string) =>
   useQuery({ queryKey: ["quotes", id], queryFn: () => api<QuoteRequest>(`/quotes/${id}`), refetchInterval: 10000 });

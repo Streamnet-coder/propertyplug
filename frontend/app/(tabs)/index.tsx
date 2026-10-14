@@ -45,7 +45,7 @@ export default function Home() {
     { id: "brrr", icon: "calculator", label: "BRRR", onPress: () => router.push("/brrr"), pro: true },
     { id: "report", icon: "share-2", label: "Share", onPress: () => router.push("/share-report") },
     { id: "receipt", icon: "receipt", label: "Receipt", onPress: () => router.push("/receipt-form") },
-    { id: "edit", icon: "pencil", label: "Edit", onPress: () => router.push("/project-edit") },
+    { id: "snags", icon: "list-checks", label: "Snags", onPress: () => router.push("/snags") },
   ];
 
   return (

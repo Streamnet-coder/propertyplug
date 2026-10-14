@@ -59,6 +59,9 @@ export default function RootLayout() {
                 <Stack.Screen name="milestone-form" options={{ presentation: "modal" }} />
                 <Stack.Screen name="share-report" options={{ presentation: "modal" }} />
                 <Stack.Screen name="branding" options={{ presentation: "modal" }} />
+                <Stack.Screen name="payments" />
+                <Stack.Screen name="snags" />
+                <Stack.Screen name="snag-form" options={{ presentation: "modal" }} />
                 <Stack.Screen name="quotes/index" />
                 <Stack.Screen name="quotes/new" options={{ presentation: "modal" }} />
                 <Stack.Screen name="quotes/[id]" />

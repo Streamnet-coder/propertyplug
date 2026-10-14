@@ -90,6 +90,14 @@ export default function Budget() {
                 </View>
                 <Icon name="chevron-right" size={20} color={colors.onBrand} />
               </Pressable>
+              <Pressable testID="payment-schedule-banner" onPress={() => { tap(); router.push("/payments"); }} style={s.payCard}>
+                <Icon name="calendar-check" size={20} color={colors.brand} />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.itemName}>Payment schedule</Text>
+                  <Text style={s.meta}>Deposits & stage payments against accepted quotes</Text>
+                </View>
+                <Icon name="chevron-right" size={18} color={colors.muted} />
+              </Pressable>
               <View style={s.summary} testID="budget-summary">
                 <View>
                   <Text style={s.meta}>Budgeted</Text>
@@ -154,4 +162,5 @@ const useStyles = makeStyles((c) => ({
   amt: { fontFamily: fonts.bold, fontSize: 15, color: c.onSurface },
   variance: { fontFamily: fonts.semibold, fontSize: 11 },
   cta: { position: "absolute", left: space.lg, right: space.lg },
+  payCard: { flexDirection: "row", alignItems: "center", gap: space.md, backgroundColor: c.surface, borderRadius: radius.md, borderWidth: 1, borderColor: c.border, padding: space.lg },
 }));
