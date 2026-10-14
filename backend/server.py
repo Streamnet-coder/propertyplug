@@ -20,6 +20,12 @@ async def root():
     return {"message": "My Builder App API"}
 
 
+@app.get("/health")
+@api.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 app.include_router(api)
 app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
