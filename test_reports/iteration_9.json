@@ -1,0 +1,28 @@
+{
+  "summary": "All iteration 9 features verified end-to-end on the public URL. Backend: 14/14 pytest tests PASS in /app/backend/tests/test_iteration9.py covering (a) account deletion — 401 on wrong password, 429 after 5 failed attempts in 15 min, success wipes projects/line_items/milestones/receipts/shopping_items/contacts/media/quote_requests/stage_payments/snags/snag_links/estimates/payment_transactions, files by owner_id, referrals, user doc + old token 401 + login 401; (b) GET /api/projects returns correct per-project batched summaries (spent.hard/soft/contingency, total_spent, line_item_count, receipt_count, milestones_total/done, current_stage, rent_yield, active) consistent with GET /api/project for the active project; (c) digest share lifecycle (GET/POST idempotent, public /api/d/{token} HTML has #digest-kpis/#digest-milestones/#digest-snags and prev/next anchors, logo 404 when none, DELETE revokes with 'no longer active' page); (d) shopping purchase (POST /api/shopping/{id}/purchase creates receipt with correct title/supplier/category from linked line item or 'Hard Cost' default, idempotent across repeated calls, un-tick deletes receipt + clears actual_cost, amount<=0 → 422); (e) rename — GET /api/ returns 'Builder Assist API', /api/join, public report page and public digest page all show BUILDER <b>ASSIST</b> brand header + 'Powered by Builder Assist' footer, no residual 'my builder' text; (f) /api/health 200. Frontend (390x844 mobile viewport): register → home shows BUILDER ASSIST brand mark + seeded Nottingham project; /projects renders batched summary cards; /shopping add-from-budget then tap row opens purchase-sheet with purchase-amount-input prefilled to est cost, purchase-log-button logs purchase and row shows 'Paid £99.99 · From budget'; /digest shows digest-share-card and digest-create-link-button → digest-share-url contains /api/d/{token}, digest-revoke-button revokes; Profile shows 'Builder Assist Pro', footer '© 2026 Builder Assist Ltd', delete-account-link opens /delete-account, wrong password shows delete-account-error 'Password confirmation failed', correct password + accepted confirm dialog deletes account, signs out, redirects to /welcome, login API returns 401. Cleaned up: demo digest + project share links revoked; no TEST_ receipts/shopping items left on demo account.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration9.py",
+    "/app/test_reports/pytest/pytest_iteration9.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor (non-blocking, carried over from iteration 8): server.py still uses deprecated FastAPI @app.on_event('startup'/'shutdown') hooks. Consider migration to lifespan context manager.",
+    "Minor (web warning only, not a bug): React Native Web emits '\"shadow*\" style props are deprecated. Use \"boxShadow\".' twice on load. Harmless but worth sweeping shadow* props to boxShadow where supported to silence warnings."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration9.py (new — extends iter8 suite with TestBrandRename class)"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% (register, projects list, shopping purchase, digest share lifecycle, delete-account happy+error paths, brand rename all verified)"},
+  "seed_data_creation": "During tests several TEST_-prefixed users were registered and then deleted via DELETE /api/auth/account; one rate-limited user was DB-cleaned via pymongo in the 429 test (only after confirming TEST_ email). Demo account digest + project share links were revoked at the end; no TEST_ receipts/shopping items remain on demo.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Reuse /app/backend/tests/test_iteration9.py (~11s, 14 tests). Public base URL = frontend/.env EXPO_PUBLIC_BACKEND_URL. Login response key is access_token. Delete-account web flow uses window.confirm — Playwright must register page.on('dialog', lambda d: d.accept()). Register testIDs: auth-name-input / auth-email-input / auth-password-input / auth-submit-button. Shopping flow: shopping-add-button → shopping-pick-{id} → shopping-add-save → shopping-row-{id} → purchase-sheet (purchase-amount-input, purchase-log-button, purchase-skip-button). Digest card testIDs: digest-share-card, digest-create-link-button, digest-share-url, digest-copy-button, digest-revoke-button. Profile delete entry: delete-account-link → /delete-account (delete-account-password, delete-account-confirm, delete-account-error).",
+  "rca_of_issue": "N/A — iteration 9 features all pass."
+}

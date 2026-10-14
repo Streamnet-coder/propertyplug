@@ -58,6 +58,8 @@ class Project(BaseDocument):
     comparables: List[Comparable] = []
     share_token: Optional[str] = None
     share_origin: Optional[str] = None
+    digest_token: Optional[str] = None
+    digest_origin: Optional[str] = None
 
 
 class LineItem(BaseDocument):
@@ -95,6 +97,8 @@ class Receipt(BaseDocument):
     category: str = "Hard Cost"
     supplier: str = ""
     storage_path: Optional[str] = None
+    shopping_item_id: Optional[str] = None
+    line_item_id: Optional[str] = None
     created_at: str = Field(default_factory=now_iso)
 
 

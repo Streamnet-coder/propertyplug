@@ -1,10 +1,11 @@
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, SectionList, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api, gbp, ShoppingItem } from "@/src/api";
+import { PurchaseSheet } from "@/src/components/purchase-sheet";
 import { Button, EmptyState, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { invalidate, useShopping } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -17,9 +18,11 @@ export default function Shopping() {
   const { colors } = useTheme();
   const toast = useToast();
   const q = useShopping();
+  const [buying, setBuying] = useState<ShoppingItem | null>(null);
   const all = useMemo(() => q.data ?? [], [q.data]);
   const done = all.filter((x) => x.checked).length;
   const left = all.filter((x) => !x.checked).reduce((a, x) => a + x.est_cost, 0);
+  const paid = all.reduce((a, x) => a + (x.actual_cost ?? 0), 0);
 
   const sections = useMemo(() => {
     const by: Record<string, ShoppingItem[]> = {};
@@ -31,7 +34,7 @@ export default function Shopping() {
 
   const toggle = useMutation({
     mutationFn: (x: ShoppingItem) => api(`/shopping/${x.id}`, { method: "PUT", body: { checked: !x.checked } }),
-    onSuccess: () => invalidate("shopping"),
+    onSuccess: () => invalidate("shopping", "receipts", "project", "digest"),
   });
   const remove = useMutation({
     mutationFn: (id: string) => api(`/shopping/${id}`, { method: "DELETE" }),
@@ -59,7 +62,7 @@ export default function Shopping() {
         </View>
         <View style={s.summary} testID="shopping-summary">
           <Text style={s.sumBig}>{all.length - done} to buy</Text>
-          <Text style={s.muted}>{done} of {all.length} ticked · about {gbp(left)} left to spend</Text>
+          <Text style={s.muted}>{done} of {all.length} ticked · about {gbp(left)} left to spend{paid ? ` · ${gbp(paid, 2)} logged` : ""}</Text>
         </View>
       </View>
       {q.isLoading ? (
@@ -85,13 +88,13 @@ export default function Shopping() {
             </View>
           )}
           renderItem={({ item }) => (
-            <Pressable testID={`shopping-row-${item.id}`} onPress={() => { tap(); toggle.mutate(item); }} style={[s.card, item.checked && { opacity: 0.55 }]}>
+            <Pressable testID={`shopping-row-${item.id}`} onPress={() => { tap(); if (item.checked) toggle.mutate(item); else setBuying(item); }} style={[s.card, item.checked && { opacity: 0.55 }]}>
               <View style={[s.check, item.checked && { backgroundColor: colors.success, borderColor: colors.success }]}>
                 {item.checked && <Icon name="check" size={14} color={colors.onSuccess} />}
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={[s.name, item.checked && { textDecorationLine: "line-through" }]} numberOfLines={2}>{item.name}</Text>
-                <Text style={s.muted}>{[item.qty && `Qty ${item.qty}`, item.est_cost ? `~${gbp(item.est_cost)}` : "", item.line_item_id ? "From budget" : ""].filter(Boolean).join(" · ") || "One-off item"}</Text>
+                <Text style={s.muted}>{[item.qty && `Qty ${item.qty}`, item.actual_cost ? `Paid ${gbp(item.actual_cost, 2)}` : item.est_cost ? `~${gbp(item.est_cost)}` : "", item.line_item_id ? "From budget" : ""].filter(Boolean).join(" · ") || "One-off item"}</Text>
               </View>
               <Pressable testID={`shopping-delete-${item.id}`} onPress={() => { tap(); remove.mutate(item.id); }} hitSlop={10} style={s.del}>
                 <Icon name="x" size={16} color={colors.muted} />
@@ -100,6 +103,7 @@ export default function Shopping() {
           )}
         />
       )}
+      <PurchaseSheet item={buying} onClose={() => setBuying(null)} />
       <View style={[s.cta, { bottom: insets.bottom + space.lg }]}>
         <Button title="Add items" icon="plus" onPress={() => router.push("/shopping-add")} testID="shopping-add-button" />
       </View>

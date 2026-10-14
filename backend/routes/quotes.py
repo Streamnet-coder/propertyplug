@@ -130,7 +130,7 @@ async def public_quote_form(token: str):
         return page("Not found", "<div class='card'><h2>This quote link is no longer active</h2></div>")
     p = await db.projects.find_one({"_id": ObjectId(q.project_id)}) or {}
     closed = e.status in ("accepted", "declined")
-    body = brand_block(await owner_branding(q.user_id), f"/api/q/{E(token)}/logo") + f"""<div class='hdr'><div class='brand'>MY BUILDER <b>APP</b> · QUOTE REQUEST</div><h1>{E(q.title)}</h1>
+    body = brand_block(await owner_branding(q.user_id), f"/api/q/{E(token)}/logo") + f"""<div class='hdr'><div class='brand'>BUILDER <b>ASSIST</b> · QUOTE REQUEST</div><h1>{E(q.title)}</h1>
 <div>For {E(e.name)} · {E(p.get('address', ''))}</div></div>
 <div class='card'><h2>Job description</h2><div style='white-space:pre-wrap;line-height:1.5'>{E(q.description)}</div></div>"""
     if closed:

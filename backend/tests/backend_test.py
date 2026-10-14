@@ -1,4 +1,4 @@
-"""Backend API tests for My Builder App."""
+"""Backend API tests for Builder Assist."""
 import os
 import io
 import uuid

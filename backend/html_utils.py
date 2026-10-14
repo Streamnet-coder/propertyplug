@@ -42,7 +42,7 @@ def page(title: str, body: str, ref: Optional[str] = None, by: Optional[str] = N
            f"30 days free, no card needed.</p></div><a href='/api/join?ref={E(ref)}&by={E(by or '')}' id='start-trial-link'>Start free trial</a></div>") if ref else ""
     return HTMLResponse(f"<!DOCTYPE html><html><head><meta charset='utf-8'/><meta name='viewport' content='width=device-width,initial-scale=1'/>"
                         f"<title>{E(title)}</title><style>{PAGE_CSS}{CTA_CSS}</style></head><body><div class='wrap'>{body}{cta}"
-                        f"<div class='foot'>Powered by My Builder App</div></div></body></html>")
+                        f"<div class='foot'>Powered by Builder Assist</div></div></body></html>")
 
 
 async def owner_branding(uid: str) -> Branding:

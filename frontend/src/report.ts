@@ -87,7 +87,7 @@ figcaption{font-size:10px;color:${colors.muted};margin-top:4px}
 .foot{margin-top:28px;color:${colors.muted};font-size:10px;text-align:center;border-top:1px solid ${colors.border};padding-top:10px}
 </style></head><body>
 ${brandHtml}
-<div class="hdr"><div class="brand">MY BUILDER <b>APP</b> · PROGRESS REPORT</div><h1>${esc(p.name)}</h1><p>${esc(p.address)}</p>
+<div class="hdr"><div class="brand">BUILDER <b>ASSIST</b> · PROGRESS REPORT</div><h1>${esc(p.name)}</h1><p>${esc(p.address)}</p>
 <p style="margin-top:6px;font-size:11px">${esc(p.target_type)} · ${esc(p.finish_type)} · ${new Date().toLocaleDateString("en-GB")}</p></div>
 <div class="kpis">
 <div class="kpi"><span>Purchase</span><div>${gbp(p.purchase_price)}</div></div>
@@ -110,7 +110,7 @@ ${items.map((i) => `<tr><td>${esc(i.name)}</td><td>${i.category}</td><td>${esc(i
 ${receipts.map((r) => `<tr><td>${r.date}</td><td>${esc(r.title)}</td><td>${esc(r.supplier)}</td><td class="n">${gbp(r.amount, 2)}</td></tr>`).join("")}
 </table>
 ${photoSection ? `<h2>Before &amp; after photos</h2>${photoSection}` : ""}
-<div class="foot">Generated with My Builder App · ${new Date().toLocaleString("en-GB")} · Figures are owner-reported</div>
+<div class="foot">Generated with Builder Assist · ${new Date().toLocaleString("en-GB")} · Figures are owner-reported</div>
 </body></html>`;
 }
 

@@ -1,16 +1,15 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { api, gbp, Project } from "@/src/api";
+import { api, gbp } from "@/src/api";
 import { Button, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { queryClient } from "@/src/query-client";
+import { useProjects } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
-
-type ProjectRow = Project & { active: boolean };
 
 export default function Projects() {
   const s = useStyles();
@@ -19,7 +18,7 @@ export default function Projects() {
   const toast = useToast();
   const insets = useSafeAreaInsets();
   const [confirm, setConfirm] = useState<string | null>(null);
-  const q = useQuery({ queryKey: ["projects"], queryFn: () => api<ProjectRow[]>("/projects") });
+  const q = useProjects();
 
   const activate = useMutation({
     mutationFn: (id: string) => api(`/projects/${id}/activate`, { method: "POST" }),

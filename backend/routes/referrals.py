@@ -12,7 +12,7 @@ from seed import create_user
 router = APIRouter()
 
 
-JOIN_FORM = """<div class='hdr'><div class='brand'>MY BUILDER <b>APP</b></div><h1>Start your 30-day free trial</h1>
+JOIN_FORM = """<div class='hdr'><div class='brand'>BUILDER <b>ASSIST</b></div><h1>Start your 30-day free trial</h1>
 <div>Track refurb budgets, milestones, trades & BRRR numbers in one app. No card required.</div></div>
 <form class='card' method='post' id='join-form'><input type='hidden' name='ref' value='{ref}'/><input type='hidden' name='by' value='{by}'/>{err}
 <label>Full name</label><input name='name' required value='{name}'/>
@@ -62,7 +62,7 @@ async def join_submit(name: str = Form(...), email: str = Form(...), password: s
         err = f"<p class='over' id='join-error'>{E(str(e.detail))}</p>"
         return page("Start free trial", JOIN_FORM.format(ref=E(src), by=E(by), err=err, name=E(name), email=E(email)))
     await credit_referrer(by, nu, src)
-    return page("Welcome", f"""<div class='hdr'><div class='brand'>MY BUILDER <b>APP</b></div><h1>You're in! 🎉</h1>
+    return page("Welcome", f"""<div class='hdr'><div class='brand'>BUILDER <b>ASSIST</b></div><h1>You're in! 🎉</h1>
 <div>Your 30-day free trial has started.</div></div><div class='card' id='join-success'><h2>Next steps</h2>
-<p>1. Open <b>My Builder App</b> on your phone.</p><p>2. Tap <b>Sign in</b> and use <b>{E(email.strip().lower())}</b>.</p>
+<p>1. Open <b>Builder Assist</b> on your phone.</p><p>2. Tap <b>Sign in</b> and use <b>{E(email.strip().lower())}</b>.</p>
 <p>3. Your first sample project is already loaded so you can explore straight away.</p></div>""")

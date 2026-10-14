@@ -25,7 +25,7 @@ export function BrandLogo() {
       <BrandMark size={38} />
       <View>
         <Text style={{ fontFamily: fonts.extrabold, fontSize: 17, color: colors.onSurface, letterSpacing: -0.3 }}>
-          MY BUILDER <Text style={{ color: colors.brandPrimary }}>APP</Text>
+          BUILDER <Text style={{ color: colors.brandPrimary }}>ASSIST</Text>
         </Text>
         <Text style={{ fontFamily: fonts.semibold, fontSize: 9, color: colors.muted, letterSpacing: 1.2 }}>RENOVATION & BRRR</Text>
       </View>

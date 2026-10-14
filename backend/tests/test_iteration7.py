@@ -13,7 +13,6 @@ from datetime import datetime, timedelta, timezone
 import pytest
 import requests
 from pymongo import MongoClient
-from bson import ObjectId
 
 BASE_URL = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "https://dev-budget-tracker-2.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"

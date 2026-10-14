@@ -17,7 +17,7 @@ for m in (auth, projects, budget, contacts, media, ai, payments, trades, milesto
 
 @api.get("/")
 async def root():
-    return {"message": "My Builder App API"}
+    return {"message": "Builder Assist API"}
 
 
 @app.get("/health")
@@ -48,6 +48,10 @@ async def startup():
         if not await db.milestones.find_one({"project_id": str(pr["_id"])}, {"_id": 1}):
             await seed_milestones(pr["user_id"], str(pr["_id"]))
     await db.quote_requests.create_index("quotes.token")
+    for coll in (db.line_items, db.receipts, db.milestones, db.snags, db.stage_payments, db.shopping_items, db.media):
+        await coll.create_index("project_id")
+    await db.projects.create_index("user_id")
+    await db.projects.create_index("digest_token", sparse=True)
     try:
         init_storage()
     except Exception as e:

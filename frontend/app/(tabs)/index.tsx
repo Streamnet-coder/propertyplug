@@ -1,6 +1,7 @@
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { useEffect } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -10,7 +11,7 @@ import { useAuth } from "@/src/auth";
 import { BrandLogo } from "@/src/components/brand";
 import { Button, Card, fonts, Icon, IconName, ProBadge, radius, SectionTitle, space, tap } from "@/src/components/ui";
 import { usesNativeTabs } from "@/src/navigation";
-import { invalidate, useDigest, useProject, useReceipts } from "@/src/queries";
+import { invalidate, prefetchProjects, useDigest, useProject, useReceipts } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
 
 const HERO = "https://images.unsplash.com/photo-1714259830228-893a69a2d45b?crop=entropy&cs=srgb&fm=jpg&ixlib=rb-4.1.0&q=85&w=1200";
@@ -25,6 +26,7 @@ export default function Home() {
   const project = useProject();
   const receipts = useReceipts();
   const digest = useDigest(0);
+  useEffect(() => { prefetchProjects(); }, []);
   const p = project.data;
   const isPro = user?.plan === "pro";
 

@@ -5,7 +5,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { gbp } from "@/src/api";
 import { Button, Card, fonts, Icon, IconName, radius, SectionTitle, space, tap } from "@/src/components/ui";
-import { useDigest } from "@/src/queries";
+import { DigestShareCard } from "@/src/components/digest-share-card";
+import { useDigest, useProject } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
 
 const fmt = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
@@ -17,6 +18,7 @@ export default function DigestScreen() {
   const { colors } = useTheme();
   const [week, setWeek] = useState(0);
   const q = useDigest(week);
+  const project = useProject();
   const d = q.data;
   const diff = d ? d.spend.total - d.prev_spend : 0;
 
@@ -127,6 +129,8 @@ export default function DigestScreen() {
               )) : <Text style={[s.muted, s.empty]}>No snags fixed this week{d.snags_opened ? ` · ${d.snags_opened} new logged` : ""}</Text>}
             </Card>
           </View>
+
+          <DigestShareCard projectName={project.data?.name} />
         </ScrollView>
       )}
     </View>

@@ -16,25 +16,37 @@ async def get_project(user: User = Depends(current_user)):
 
 
 async def project_summary(p: Project) -> dict:
-    items = await db.line_items.find({"project_id": p.id}).to_list(1000)
-    receipts = await db.receipts.find({"project_id": p.id}).to_list(1000)
-    spent = {"hard": 0.0, "soft": 0.0, "contingency": 0.0}
+    return (await project_summaries([p]))[0]
+
+
+async def project_summaries(projects: list) -> list:
+    """Summaries for many projects using 3 aggregate queries in total (no per-project fan-out)."""
+    pids = [p.id for p in projects]
     key = {"Hard Cost": "hard", "Soft Cost": "soft", "Contingency": "contingency"}
-    for i in items:
-        spent[key[i["category"]]] += i.get("actual", 0)
-    for r in receipts:
-        spent[key.get(r.get("category"), "hard")] += r.get("amount", 0)
-    out = p.out()
-    out.pop("comparables", None)
-    total_budget = p.budget.hard + p.budget.soft + p.budget.contingency
-    total_spent = sum(spent.values())
-    ms = await db.milestones.find({"project_id": p.id}).sort("order", 1).to_list(200)
-    current = next((m for m in ms if m["status"] == "in_progress"), None) or next((m for m in ms if m["status"] == "todo"), None)
-    out.update({"spent": spent, "total_budget": total_budget, "total_spent": round(total_spent, 2),
-                "line_item_count": len(items), "receipt_count": len(receipts),
-                "milestones_total": len(ms), "milestones_done": sum(1 for m in ms if m["status"] == "done"),
-                "current_stage": current["name"] if current else ("Complete" if ms else None),
-                "rent_yield": rent_yield(p, total_budget)})
+    spent = {pid: {"hard": 0.0, "soft": 0.0, "contingency": 0.0} for pid in pids}
+    counts = {pid: {"items": 0, "receipts": 0} for pid in pids}
+    for coll, field, kind in ((db.line_items, "$actual", "items"), (db.receipts, "$amount", "receipts")):
+        async for g in coll.aggregate([{"$match": {"project_id": {"$in": pids}}},
+                                       {"$group": {"_id": {"p": "$project_id", "c": "$category"}, "sum": {"$sum": {"$ifNull": [field, 0]}}, "n": {"$sum": 1}}}]):
+            pid = g["_id"]["p"]
+            spent[pid][key.get(g["_id"].get("c"), "hard")] += g["sum"]
+            counts[pid][kind] += g["n"]
+    ms_by: dict = {pid: [] for pid in pids}
+    async for m in db.milestones.find({"project_id": {"$in": pids}}, {"project_id": 1, "status": 1, "name": 1, "order": 1}).sort("order", 1):
+        ms_by[m["project_id"]].append(m)
+    out = []
+    for p in projects:
+        ms = ms_by[p.id]
+        o = p.out()
+        o.pop("comparables", None)
+        total_budget = p.budget.hard + p.budget.soft + p.budget.contingency
+        current = next((m for m in ms if m["status"] == "in_progress"), None) or next((m for m in ms if m["status"] == "todo"), None)
+        o.update({"spent": spent[p.id], "total_budget": total_budget, "total_spent": round(sum(spent[p.id].values()), 2),
+                  "line_item_count": counts[p.id]["items"], "receipt_count": counts[p.id]["receipts"],
+                  "milestones_total": len(ms), "milestones_done": sum(1 for m in ms if m["status"] == "done"),
+                  "current_stage": current["name"] if current else ("Complete" if ms else None),
+                  "rent_yield": rent_yield(p, total_budget)})
+        out.append(o)
     return out
 
 
@@ -93,12 +105,10 @@ class ProjectCreate(BaseModel):
 @router.get("/projects")
 async def list_projects(user: User = Depends(current_user)):
     pid = await active_pid(user)
-    docs = await db.projects.find({"user_id": user.id}).sort("_id", 1).to_list(200)
-    out = []
-    for d in docs:
-        s = await project_summary(Project.from_mongo(d))
+    docs = await db.projects.find({"user_id": user.id}, {"comparables": 0}).sort("_id", 1).to_list(500)
+    out = await project_summaries([Project.from_mongo(d) for d in docs])
+    for s in out:
         s["active"] = s["id"] == pid
-        out.append(s)
     return out
 
 

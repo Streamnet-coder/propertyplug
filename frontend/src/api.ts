@@ -115,7 +115,7 @@ export type Branding = { company_name: string; contact_name: string; phone: stri
 export type Comparable = { address: string; beds: number; price: number; distance: string; date: string };
 export type Estimate = { items: { name: string; category: string; low: number; high: number; supplier: string }[]; total_low: number; total_high: number; notes: string };
 export type RentYield = { gross_yield: number; yield_on_cost: number; invested: number; refinance_amount: number; cash_left_in: number; monthly_mortgage: number; monthly_cashflow: number };
-export type ShoppingItem = { id: string; line_item_id?: string | null; name: string; supplier: string; qty: string; est_cost: number; checked: boolean };
+export type ShoppingItem = { id: string; line_item_id?: string | null; name: string; supplier: string; qty: string; est_cost: number; checked: boolean; actual_cost?: number | null; receipt_id?: string | null };
 export type Digest = {
   week: number;
   week_start: string;

@@ -58,3 +58,12 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Rent Yield: Project.refinance_ltv (75) & refinance_rate (5.5); /api/project returns rent_yield {gross_yield, yield_on_cost, invested, refinance_amount, cash_left_in, monthly_mortgage, monthly_cashflow}; dashboard "Rent & refinance" card; edit fields in project-edit; share report #rent-yield card.
 - Weekly Digest: GET /api/digest?week=N (Mon–Sun UTC) → spend (receipts by date + paid stage payments), snags fixed, milestones done, next milestone; dashboard "This week" card + /digest screen with week navigation.
 - Shopping List: /api/shopping CRUD, POST /api/shopping/from-line-items, DELETE /api/shopping/checked; /shopping (grouped by merchant, tick off) + /shopping-add modal; entry banner on Budget tab.
+
+## Iteration 8 (Jun 2026)
+- /health + /api/health endpoints for deployment health checks.
+- Account deletion: DELETE /api/auth/account {password} (rate-limited 5 fails/15min) deletes all user data (projects, items, receipts, media, milestones, quotes, payments, snags, links, shopping, estimates, payment_transactions, files, referrals) then the user. UI: Profile → "Delete account" → /delete-account modal (password + confirm).
+- Faster projects list: project_summaries() batches with 3 aggregate queries; indexes on project_id/user_id; frontend prefetches projects on dashboard (staleTime 30s).
+- Shareable weekly digest: GET/POST/DELETE /api/digest/share; public page /api/d/{token}?week=N (prev/next nav, branding, trial CTA ref=digest). UI: DigestShareCard on /digest.
+- Shopping purchase logging: POST /api/shopping/{id}/purchase {amount} → ticks item + creates Receipt (category from linked line item); un-ticking deletes that receipt. UI: PurchaseSheet when ticking an item.
+
+- App renamed to **Builder Assist** (app.json name, in-app brand mark, PDF report, all public HTML pages, Stripe return page).

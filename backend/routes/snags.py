@@ -114,7 +114,7 @@ async def public_snags(token: str, done: Optional[str] = None):
     snags = await db.snags.find(assignee_query(link["project_id"], link["assignee"])).sort("created_at", 1).to_list(500)
     open_s = [x for x in snags if x["status"] == "open"]
     body = brand_block(await owner_branding(link["user_id"]), f"/api/s/{E(token)}/logo")
-    body += (f"<div class='hdr'><div class='brand'>MY BUILDER <b>APP</b> · SNAGGING LIST</div><h1>Snags for {E(link['assignee'])}</h1>"
+    body += (f"<div class='hdr'><div class='brand'>BUILDER <b>ASSIST</b> · SNAGGING LIST</div><h1>Snags for {E(link['assignee'])}</h1>"
              f"<div>{E(p.get('name', ''))} · {E(p.get('address', ''))}</div>"
              f"<div style='margin-top:6px;font-size:13px' id='snag-count'>{len(open_s)} open · {len(snags) - len(open_s)} fixed</div></div>")
     if done:

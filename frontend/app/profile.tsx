@@ -107,7 +107,7 @@ export default function Profile() {
           <View style={s.pro} testID="upgrade-card">
             <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
               <Icon name="crown" size={22} color={colors.brandPrimary} />
-              <Text style={s.proTitle}>My Builder Pro</Text>
+              <Text style={s.proTitle}>Builder Assist Pro</Text>
             </View>
             <Text style={s.proSub} testID="upgrade-card-subtitle">
               {isPro ? "You're previewing Pro on your trial. Keep it forever with a one-time £19 upgrade." : "Built for BRRR investors & developers. One-time £19 upgrade."}
@@ -198,7 +198,10 @@ export default function Profile() {
         </Card>
 
         <Button variant="danger" icon="log-out" title="Log out" onPress={async () => { await signOut(); router.replace("/welcome"); }} testID="logout-button" />
-        <Text style={[s.muted, { textAlign: "center" }]}>© 2026 My Builder App Ltd · Secure UK cloud storage</Text>
+        <Pressable testID="delete-account-link" onPress={() => router.push("/delete-account")} style={{ alignItems: "center", minHeight: 44, justifyContent: "center" }}>
+          <Text style={[s.muted, { color: colors.error, fontFamily: fonts.semibold }]}>Delete account</Text>
+        </Pressable>
+        <Text style={[s.muted, { textAlign: "center" }]}>© 2026 Builder Assist Ltd · Secure UK cloud storage</Text>
       </ScrollView>
     </View>
   );
