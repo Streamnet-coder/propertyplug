@@ -5,6 +5,7 @@ import re
 import uuid
 import pytest
 import requests
+from tests.cleanup import delete_test_user
 
 BASE_URL = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "https://dev-budget-tracker-2.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
@@ -212,19 +213,7 @@ class TestJoin:
 
     @staticmethod
     def _cleanup_user(uid):
-        # Direct Mongo cleanup via admin? We only have API; use motor via a mini helper is heavy.
-        # Instead, delete via internal endpoints is not available. Resort to Mongo through env.
-        try:
-            from pymongo import MongoClient
-            from bson import ObjectId
-            cli = MongoClient(os.environ.get("MONGO_URL", "mongodb://localhost:27017"))
-            db = cli[os.environ.get("DB_NAME", "test_database")]
-            for coll in ("line_items", "contacts", "receipts", "media", "milestones", "quote_requests", "projects"):
-                db[coll].delete_many({"user_id": uid})
-            db.users.delete_one({"_id": ObjectId(uid)})
-            cli.close()
-        except Exception as e:
-            print(f"cleanup user failed: {e}")
+        delete_test_user(uid)
 
 
 # ---------- Media with milestone_id ----------

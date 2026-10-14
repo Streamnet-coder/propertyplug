@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api, fileUrl, Snag } from "@/src/api";
 import { Button, Chip, EmptyState, fonts, Icon, radius, space, tap } from "@/src/components/ui";
+import { SnagShareSheet } from "@/src/components/snag-share-sheet";
 import { invalidate, useSnags } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
@@ -21,6 +22,7 @@ export default function Snags() {
   const q = useSnags();
   const [room, setRoom] = useState("All");
   const [showFixed, setShowFixed] = useState(true);
+  const [sharing, setSharing] = useState(false);
   const all = useMemo(() => q.data ?? [], [q.data]);
   const rooms = useMemo(() => ["All", ...Array.from(new Set(all.map((x) => x.room)))], [all]);
   const list = all.filter((x) => (room === "All" || x.room === room) && (showFixed || x.status === "open")).sort((a, b) => (a.status === b.status ? 0 : a.status === "open" ? -1 : 1));
@@ -42,7 +44,10 @@ export default function Snags() {
           <Pressable testID="snags-back-button" onPress={() => router.back()} style={s.back} hitSlop={10}>
             <Icon name="arrow-left" size={22} />
           </Pressable>
-          <Text style={s.headerTitle}>Snagging list</Text>
+          <Text style={[s.headerTitle, { flex: 1, marginLeft: space.md }]}>Snagging list</Text>
+          <Pressable testID="snags-share-button" onPress={() => { tap(); setSharing(true); }} style={s.back} hitSlop={10}>
+            <Icon name="send" size={20} color={colors.brand} />
+          </Pressable>
           <Pressable testID="snags-toggle-fixed" onPress={() => setShowFixed((v) => !v)} style={s.back} hitSlop={10}>
             <Icon name={showFixed ? "eye" : "eye-off"} size={20} color={colors.muted} />
           </Pressable>
@@ -85,8 +90,13 @@ export default function Snags() {
                     <View style={[s.dot, { backgroundColor: prio[item.priority] }]} />
                     <Text style={s.muted}>{item.room} · {item.priority}{item.assignee ? ` · ${item.assignee}` : ""}</Text>
                   </View>
+                  {item.fixed_by ? (
+                    <Text style={[s.muted, { color: colors.success, fontFamily: fonts.semibold }]} testID={`snag-fixed-by-${item.id}`}>
+                      Fixed by {item.fixed_by}{item.fix_photo_path ? " · photo" : ""}
+                    </Text>
+                  ) : null}
                 </View>
-                {item.storage_path ? <Image source={{ uri: fileUrl(item.storage_path) }} style={s.thumb} contentFit="cover" /> : null}
+                {item.fix_photo_path || item.storage_path ? <Image source={{ uri: fileUrl((item.fix_photo_path || item.storage_path)!) }} style={s.thumb} contentFit="cover" /> : null}
               </Pressable>
             </Animated.View>
           )}
@@ -95,6 +105,7 @@ export default function Snags() {
       <View style={[s.cta, { bottom: insets.bottom + space.lg }]}>
         <Button title="Log snag" icon="plus" onPress={() => router.push({ pathname: "/snag-form", params: room !== "All" ? { room } : {} })} testID="add-snag-button" />
       </View>
+      <SnagShareSheet visible={sharing} onClose={() => setSharing(false)} snags={all} />
     </View>
   );
 }
@@ -102,7 +113,7 @@ export default function Snags() {
 const useStyles = makeStyles((c) => ({
   root: { flex: 1, backgroundColor: c.surfaceSecondary },
   header: { paddingHorizontal: space.lg, paddingBottom: space.md, backgroundColor: c.surface, gap: space.md },
-  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  topRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
   back: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.surfaceTertiary, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontFamily: fonts.bold, fontSize: 17, color: c.onSurface },
   summary: { flexDirection: "row", alignItems: "baseline", gap: space.md },

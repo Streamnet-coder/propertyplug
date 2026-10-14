@@ -8,7 +8,7 @@ import { ActivityIndicator, Platform, Share, Text, View } from "react-native";
 import { api, BACKEND_URL } from "@/src/api";
 import { Button, Card, fonts, FormScreen, Icon, radius, space } from "@/src/components/ui";
 import { queryClient } from "@/src/query-client";
-import { useBranding, useProject } from "@/src/queries";
+import { useBranding, useProject, useReferrals } from "@/src/queries";
 import { shareProgressReport } from "@/src/report";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
@@ -19,6 +19,7 @@ export default function ShareReport() {
   const toast = useToast();
   const { data: project } = useProject();
   const branding = useBranding();
+  const referrals = useReferrals();
   const router = useRouter();
   const [pdfBusy, setPdfBusy] = useState(false);
   const link = useQuery({ queryKey: ["share-link"], queryFn: () => api<{ url: string | null }>("/project/share") });
@@ -62,6 +63,16 @@ export default function ShareReport() {
 
   return (
     <FormScreen title="Share progress report" testID="share-report-screen">
+      <View style={s.refer} testID="referral-prompt">
+        <View style={s.giftIcon}><Icon name="gift" size={22} color={colors.onBrandPrimary} /></View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.referTitle}>Invite a lender, get a free month</Text>
+          <Text style={s.referSub}>
+            Every lender or trade who starts a trial from your links adds 30 free days to your account.
+            {referrals.data ? ` You've earned ${referrals.data.months_earned} so far.` : ""}
+          </Text>
+        </View>
+      </View>
       <Card style={{ gap: space.md }}>
         <View style={s.row}>
           <View style={[s.icon, { backgroundColor: colors.surfaceTertiary }]}><Icon name="building-2" size={20} color={colors.onSurfaceSecondary} /></View>
@@ -121,4 +132,8 @@ const useStyles = makeStyles((c) => ({
   muted: { fontFamily: fonts.regular, fontSize: 13, color: c.muted, lineHeight: 18, marginTop: 2 },
   urlBox: { backgroundColor: c.surfaceSecondary, borderRadius: radius.md, borderWidth: 1, borderColor: c.border, padding: space.md },
   url: { fontFamily: fonts.medium, fontSize: 13, color: c.brand },
+  refer: { flexDirection: "row", gap: space.md, alignItems: "center", backgroundColor: c.orangeTint, borderWidth: 1, borderColor: c.orangeBorder, borderRadius: radius.lg, padding: space.lg },
+  giftIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.brandPrimary, alignItems: "center", justifyContent: "center" },
+  referTitle: { fontFamily: fonts.extrabold, fontSize: 16, color: c.onSurface },
+  referSub: { fontFamily: fonts.regular, fontSize: 12, color: c.onSurfaceTertiary, lineHeight: 17, marginTop: 2 },
 }));

@@ -7,7 +7,7 @@ import { ScrollView, Text, View } from "react-native";
 import { api, fileUrl, Snag } from "@/src/api";
 import { PhotoPicker, PickedAsset } from "@/src/components/photo-picker";
 import { Button, Chip, Field, fonts, FormScreen, radius, space } from "@/src/components/ui";
-import { invalidate, useSnags } from "@/src/queries";
+import { invalidate, useContacts, useSnags } from "@/src/queries";
 import { useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
 import { uploadAsset } from "@/src/upload";
@@ -22,6 +22,7 @@ export default function SnagForm() {
   const toast = useToast();
   const { colors } = useTheme();
   const { data } = useSnags();
+  const team = useContacts("trade");
   const existing = data?.find((x) => x.id === id);
   const [room, setRoom] = useState(params.room ?? "");
   const [desc, setDesc] = useState("");
@@ -100,6 +101,21 @@ export default function SnagForm() {
         </View>
       </View>
       <Field label="Assigned trade (optional)" value={assignee} onChangeText={setAssignee} placeholder="e.g. Sajid Khan" testID="snag-assignee-input" />
+      {(team.data ?? []).length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
+          {team.data!.map((c) => (
+            <Chip key={c.id} label={c.name} selected={assignee.toLowerCase() === c.name.toLowerCase()} onPress={() => setAssignee(c.name)} testID={`snag-assignee-chip-${c.id}`} />
+          ))}
+        </ScrollView>
+      )}
+      {existing?.fixed_by ? (
+        <View style={{ gap: space.sm }} testID="snag-fix-evidence">
+          <Text style={label}>Fixed by {existing.fixed_by}{existing.fix_note ? `: "${existing.fix_note}"` : ""}</Text>
+          {existing.fix_photo_path ? (
+            <Image source={{ uri: fileUrl(existing.fix_photo_path) }} style={{ width: "100%", height: 200, borderRadius: radius.lg }} contentFit="cover" testID="snag-fix-photo" />
+          ) : null}
+        </View>
+      ) : null}
       {error ? <Text style={{ color: colors.error, fontFamily: fonts.medium }} testID="snag-form-error">{error}</Text> : null}
     </FormScreen>
   );

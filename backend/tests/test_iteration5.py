@@ -19,6 +19,7 @@ import requests
 from datetime import datetime, timezone, timedelta
 from pymongo import MongoClient
 from bson import ObjectId
+from tests.cleanup import delete_test_user
 
 BASE_URL = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "https://dev-budget-tracker-2.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
@@ -54,11 +55,12 @@ def original_trial_ends(demo_user_id):
     cli, db = _db()
     try:
         u = db.users.find_one({"_id": ObjectId(demo_user_id)}, {"trial_ends": 1, "referral_count": 1})
+        existing = {r["_id"] for r in db.referrals.find({"referrer_id": demo_user_id}, {"_id": 1})}
         yield u["trial_ends"]
-        # Restore
+        # Restore: only remove referrals created during this test run
         db.users.update_one({"_id": ObjectId(demo_user_id)},
-                            {"$set": {"trial_ends": u["trial_ends"], "referral_count": 0}})
-        db.referrals.delete_many({"referrer_id": demo_user_id})
+                            {"$set": {"trial_ends": u["trial_ends"], "referral_count": u.get("referral_count", 0)}})
+        db.referrals.delete_many({"referrer_id": demo_user_id, "_id": {"$nin": list(existing)}})
     finally:
         cli.close()
 
@@ -185,15 +187,7 @@ class TestReferrals:
 
     @staticmethod
     def _cleanup_user(uid):
-        try:
-            cli, db = _db()
-            for coll in ("line_items", "contacts", "receipts", "media", "milestones",
-                         "quote_requests", "projects", "snags", "stage_payments"):
-                db[coll].delete_many({"user_id": uid})
-            db.users.delete_one({"_id": ObjectId(uid)})
-            cli.close()
-        except Exception as e:
-            print(f"cleanup user failed: {e}")
+        delete_test_user(uid)
 
 
 # ---------- Stage Payments ----------

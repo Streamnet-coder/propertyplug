@@ -42,6 +42,13 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Stage payment schedule vs accepted quotes (overpay blocked), paid sums sync line item actuals
 - Snagging list per room with photo/priority/assignee, tick off; snag summary on live report
 
+## Iteration 6 (2026-06)
+- Snag share links per assigned trade (/api/snag-links, public /api/s/{token}) — trades mark fixed with photo + note; fix evidence shown in app
+- Referral prompt card on Share screen
+
 ## Backlog
 - P1: Lender comments on live report, snag share link for trades, split server.py into routers
 - P2: Supplier price benchmark lookup, stakeholder share link, milestones/timeline
+
+## Maintenance (Jun 2026)
+- Test cleanup now guarded: tests/cleanup.py only deletes TEST_-prefixed users and their data; demo referrals/count restored instead of wiped.

@@ -101,7 +101,7 @@ export type Contract = {
   unscheduled: number;
   payments: StagePayment[];
 };
-export type Snag = { id: string; room: string; description: string; priority: "low" | "medium" | "high"; status: "open" | "fixed"; storage_path?: string | null; assignee: string; created_at: string };
+export type Snag = { id: string; room: string; description: string; priority: "low" | "medium" | "high"; status: "open" | "fixed"; storage_path?: string | null; assignee: string; created_at: string; fix_photo_path?: string | null; fixed_by?: string | null; fix_note?: string };
 export type Referrals = { count: number; months_earned: number; trial_ends: string; recent: { name: string; source: string; date: string }[] };
 export type LineItem = { id: string; category: Category; name: string; budgeted: number; actual: number; supplier: string; status: string };
 export type ContactKind = "trade" | "subcontractor" | "stakeholder";
