@@ -10,7 +10,9 @@ from typing import Annotated, Optional, List, Literal
 from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 from pathlib import Path
-import os, json, re, uuid, logging, math, time
+import os, json, re, uuid, logging, math, time, secrets, html
+from fastapi import Form
+from fastapi.responses import RedirectResponse
 import bcrypt, jwt, requests
 
 ROOT_DIR = Path(__file__).parent
@@ -98,6 +100,8 @@ class Project(BaseDocument):
     monthly_rent: float = 0
     budget: Budget = Budget()
     comparables: List[Comparable] = []
+    share_token: Optional[str] = None
+    share_origin: Optional[str] = None
 
 
 class LineItem(BaseDocument):
@@ -244,6 +248,7 @@ async def seed_user_data(uid: str):
         Media(user_id=uid, project_id=pid, title="Bathroom Plumbing Installed", phase="after", url="https://placehold.co/600x400/f97316/ffffff.png?text=Bathroom+Plumbing", date="2026-06-20"),
     ]
     await db.media.insert_many([m.to_mongo() for m in media])
+    await seed_milestones(uid, pid, demo=True)
 
 
 @api.post("/auth/register")
@@ -323,8 +328,12 @@ async def project_summary(p: Project) -> dict:
     out.pop("comparables", None)
     total_budget = p.budget.hard + p.budget.soft + p.budget.contingency
     total_spent = sum(spent.values())
+    ms = await db.milestones.find({"project_id": p.id}).sort("order", 1).to_list(200)
+    current = next((m for m in ms if m["status"] == "in_progress"), None) or next((m for m in ms if m["status"] == "todo"), None)
     out.update({"spent": spent, "total_budget": total_budget, "total_spent": round(total_spent, 2),
-                "line_item_count": len(items), "receipt_count": len(receipts)})
+                "line_item_count": len(items), "receipt_count": len(receipts),
+                "milestones_total": len(ms), "milestones_done": sum(1 for m in ms if m["status"] == "done"),
+                "current_stage": current["name"] if current else ("Complete" if ms else None)})
     return out
 
 
@@ -382,6 +391,7 @@ async def create_project(body: ProjectCreate, user: User = Depends(current_user)
         raise HTTPException(400, "Project name is required")
     p = Project(user_id=user.id, **body.model_dump())
     p.id = str((await db.projects.insert_one(p.to_mongo())).inserted_id)
+    await seed_milestones(user.id, p.id)
     await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"active_project_id": p.id}})
     return await project_summary(p)
 
@@ -402,7 +412,7 @@ async def delete_project(pid: str, user: User = Depends(current_user)):
     r = await db.projects.delete_one({"_id": oid(pid), "user_id": user.id})
     if not r.deleted_count:
         raise HTTPException(404, "Project not found")
-    for coll in (db.line_items, db.contacts, db.receipts, db.media):
+    for coll in (db.line_items, db.contacts, db.receipts, db.media, db.milestones, db.quote_requests):
         await coll.delete_many({"user_id": user.id, "project_id": pid})
     if user.active_project_id == pid:
         await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"active_project_id": None}})
@@ -826,6 +836,376 @@ async def trades_search(postcode: str, trade: str = "electrician", user: User = 
     return {"postcode": norm, "trade": trade, "results": results, "attribution": "© OpenStreetMap contributors"}
 
 
+# ---------------- Milestones ----------------
+DEFAULT_MILESTONES = ["Purchase complete", "Strip-out", "Structural & roofing", "First fix (electrics & plumbing)",
+                      "Plastering", "Second fix", "Kitchen & bathroom install", "Decoration & flooring",
+                      "Final inspection & sign-off", "Refinance / let"]
+
+
+class Milestone(BaseDocument):
+    user_id: str
+    project_id: str
+    name: str
+    status: Literal["todo", "in_progress", "done"] = "todo"
+    target_date: Optional[str] = None
+    notes: str = ""
+    order: int = 0
+    completed_at: Optional[str] = None
+
+
+async def seed_milestones(uid: str, pid: str, demo: bool = False):
+    start = datetime(2026, 5, 18, tzinfo=timezone.utc)
+    docs = []
+    for i, n in enumerate(DEFAULT_MILESTONES):
+        st = ("done" if i < 3 else "in_progress" if i == 3 else "todo") if demo else "todo"
+        docs.append(Milestone(user_id=uid, project_id=pid, name=n, status=st, order=i,
+                              target_date=(start + timedelta(days=14 * i)).date().isoformat() if demo else None,
+                              completed_at=now_iso() if st == "done" else None).to_mongo())
+    await db.milestones.insert_many(docs)
+
+
+class MilestoneIn(BaseModel):
+    name: str
+    target_date: Optional[str] = None
+
+
+class MilestoneUpdate(BaseModel):
+    name: Optional[str] = None
+    status: Optional[Literal["todo", "in_progress", "done"]] = None
+    target_date: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@api.get("/milestones")
+async def list_milestones(user: User = Depends(current_user)):
+    docs = await db.milestones.find({"user_id": user.id, "project_id": await active_pid(user)}).sort("order", 1).to_list(200)
+    return [Milestone.from_mongo(d).out() for d in docs]
+
+
+@api.post("/milestones")
+async def create_milestone(body: MilestoneIn, user: User = Depends(current_user)):
+    if not body.name.strip():
+        raise HTTPException(400, "Stage name is required")
+    pid = await active_pid(user)
+    last = await db.milestones.find_one({"project_id": pid}, sort=[("order", -1)])
+    m = Milestone(user_id=user.id, project_id=pid, name=body.name.strip(), target_date=body.target_date or None,
+                  order=(last["order"] + 1) if last else 0)
+    m.id = str((await db.milestones.insert_one(m.to_mongo())).inserted_id)
+    return m.out()
+
+
+@api.put("/milestones/{mid}")
+async def update_milestone(mid: str, body: MilestoneUpdate, user: User = Depends(current_user)):
+    upd = body.model_dump(exclude_unset=True)
+    if "status" in upd:
+        upd["completed_at"] = now_iso() if upd["status"] == "done" else None
+    if "target_date" in upd and not upd["target_date"]:
+        upd["target_date"] = None
+    r = await db.milestones.update_one({"_id": oid(mid), "user_id": user.id}, {"$set": upd})
+    if not r.matched_count:
+        raise HTTPException(404, "Not found")
+    return Milestone.from_mongo(await db.milestones.find_one({"_id": oid(mid)})).out()
+
+
+@api.delete("/milestones/{mid}")
+async def delete_milestone(mid: str, user: User = Depends(current_user)):
+    await db.milestones.delete_one({"_id": oid(mid), "user_id": user.id})
+    return {"ok": True}
+
+
+# ---------------- Public HTML helpers ----------------
+E = html.escape
+PAGE_CSS = """*{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;margin:0;background:#f8fafc;color:#0f172a}
+.wrap{max-width:820px;margin:0 auto;padding:20px}.hdr{background:#0f766e;color:#fff;border-radius:16px;padding:22px}
+.brand{font-size:11px;letter-spacing:1.5px;font-weight:700;opacity:.85}.brand b{color:#f97316}h1{margin:8px 0 4px;font-size:24px}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin-top:14px}h2{font-size:15px;color:#0f766e;margin:0 0 10px}
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}@media(min-width:600px){.kpis{grid-template-columns:repeat(4,1fr)}}
+.kpi{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px}.kpi span{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.6px}
+.kpi div{font-size:18px;font-weight:800;margin-top:4px}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #f1f5f9}
+th{font-size:10px;color:#64748b;text-transform:uppercase}.n{text-align:right}.over{color:#ef4444;font-weight:700}.under{color:#10b981;font-weight:700}
+.bar{height:8px;background:#f1f5f9;border-radius:4px;overflow:hidden;margin-top:8px}.bar i{display:block;height:8px;background:#f97316}
+.ms{display:flex;gap:10px;align-items:center;padding:7px 0}.dot{width:14px;height:14px;border-radius:7px;border:2px solid #cbd5e1;flex-shrink:0}
+.dot.done{background:#10b981;border-color:#10b981}.dot.in_progress{background:#f97316;border-color:#f97316}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}@media(min-width:600px){.grid{grid-template-columns:repeat(3,1fr)}}
+.grid img{width:100%;height:140px;object-fit:cover;border-radius:10px;background:#f1f5f9}.cap{font-size:11px;color:#64748b;margin-top:4px}
+.tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:#f0fdf4;color:#0f766e}
+.foot{text-align:center;color:#64748b;font-size:11px;margin:24px 0}label{display:block;font-size:13px;font-weight:600;margin:12px 0 6px;color:#334155}
+input,textarea{width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:10px;font-size:15px;background:#f8fafc}
+button{margin-top:16px;width:100%;padding:14px;border:0;border-radius:12px;background:#f97316;color:#fff;font-size:16px;font-weight:700}"""
+
+
+def page(title: str, body: str) -> HTMLResponse:
+    return HTMLResponse(f"<!DOCTYPE html><html><head><meta charset='utf-8'/><meta name='viewport' content='width=device-width,initial-scale=1'/>"
+                        f"<title>{E(title)}</title><style>{PAGE_CSS}</style></head><body><div class='wrap'>{body}"
+                        f"<div class='foot'>Powered by My Builder App</div></div></body></html>")
+
+
+def money(n, d=0):
+    return f"£{n:,.{d}f}"
+
+
+# ---------------- Lender share link ----------------
+class ShareIn(BaseModel):
+    origin_url: str
+
+
+def share_url(p: Project):
+    return f"{p.share_origin.rstrip('/')}/api/share/{p.share_token}" if p.share_token and p.share_origin else None
+
+
+@api.get("/project/share")
+async def get_share(user: User = Depends(current_user)):
+    return {"url": share_url(await get_project_doc(user))}
+
+
+@api.post("/project/share")
+async def create_share(body: ShareIn, user: User = Depends(current_user)):
+    p = await get_project_doc(user)
+    token = p.share_token or secrets.token_urlsafe(16)
+    await db.projects.update_one({"_id": ObjectId(p.id)}, {"$set": {"share_token": token, "share_origin": body.origin_url}})
+    p.share_token, p.share_origin = token, body.origin_url
+    return {"url": share_url(p)}
+
+
+@api.delete("/project/share")
+async def revoke_share(user: User = Depends(current_user)):
+    p = await get_project_doc(user)
+    await db.projects.update_one({"_id": ObjectId(p.id)}, {"$set": {"share_token": None}})
+    return {"url": None}
+
+
+@api.get("/share/{token}", response_class=HTMLResponse)
+async def public_report(token: str):
+    doc = await db.projects.find_one({"share_token": token}) if token else None
+    if not doc:
+        return page("Link expired", "<div class='card'><h2>This report link is no longer active</h2><p>Ask the project owner for a new link.</p></div>")
+    p = Project.from_mongo(doc)
+    s = await project_summary(p)
+    items = await db.line_items.find({"project_id": p.id}).sort("created_at", -1).to_list(500)
+    receipts = await db.receipts.find({"project_id": p.id}).sort("date", -1).to_list(500)
+    media = await db.media.find({"project_id": p.id}).sort("created_at", 1).to_list(60)
+    ms = await db.milestones.find({"project_id": p.id}).sort("order", 1).to_list(200)
+    pct = round(s["total_spent"] / s["total_budget"] * 100) if s["total_budget"] else 0
+    rem = s["total_budget"] - s["total_spent"]
+    cats = [("Hard costs", p.budget.hard, s["spent"]["hard"]), ("Soft costs", p.budget.soft, s["spent"]["soft"]),
+            ("Contingency", p.budget.contingency, s["spent"]["contingency"])]
+    body = f"""<div class='hdr'><div class='brand'>MY BUILDER <b>APP</b> · LIVE PROJECT REPORT</div><h1>{E(p.name)}</h1>
+<div>{E(p.address)}</div><div style='font-size:12px;opacity:.85;margin-top:6px'>{E(p.target_type)} · {E(p.finish_type)} · Updated {datetime.now(timezone.utc).strftime('%d %b %Y %H:%M')} UTC</div></div>
+<div class='kpis' style='margin-top:14px'><div class='kpi'><span>Purchase</span><div>{money(p.purchase_price)}</div></div>
+<div class='kpi'><span>Est. valuation</span><div>{money(p.estimated_valuation)}</div></div><div class='kpi'><span>Budget</span><div>{money(s['total_budget'])}</div></div>
+<div class='kpi'><span>Spent</span><div>{money(s['total_spent'])}</div></div></div>
+<div class='card'><b>{pct}% of budget used</b> · {money(rem) + ' remaining' if rem >= 0 else "<span class='over'>" + money(-rem) + ' over budget</span>'}
+<div class='bar'><i style='width:{min(100, pct)}%'></i></div></div>"""
+    if ms:
+        body += f"<div class='card'><h2>Milestones · {s['milestones_done']}/{s['milestones_total']} complete</h2>" + "".join(
+            f"<div class='ms'><div class='dot {m['status']}'></div><div style='flex:1'>{E(m['name'])}</div>"
+            f"<div class='cap'>{'Done' if m['status'] == 'done' else 'In progress' if m['status'] == 'in_progress' else (m.get('target_date') or '')}</div></div>"
+            for m in ms) + "</div>"
+    body += "<div class='card'><h2>Budget breakdown</h2><table><tr><th>Category</th><th class='n'>Budget</th><th class='n'>Spent</th><th class='n'>Variance</th></tr>" + "".join(
+        f"<tr><td>{l}</td><td class='n'>{money(b)}</td><td class='n'>{money(sp)}</td><td class='n {'over' if b - sp < 0 else 'under'}'>{money(b - sp)}</td></tr>"
+        for l, b, sp in cats) + "</table></div>"
+    body += f"<div class='card'><h2>Line items ({len(items)})</h2><table><tr><th>Item</th><th>Status</th><th class='n'>Budget</th><th class='n'>Actual</th></tr>" + "".join(
+        f"<tr><td>{E(i['name'])}<div class='cap'>{E(i.get('supplier', ''))}</div></td><td><span class='tag'>{E(i.get('status', ''))}</span></td>"
+        f"<td class='n'>{money(i.get('budgeted', 0))}</td><td class='n'>{money(i.get('actual', 0))}</td></tr>" for i in items) + "</table></div>"
+    body += f"<div class='card'><h2>Receipts ({len(receipts)}) · {money(sum(r['amount'] for r in receipts), 2)}</h2><table>" + "".join(
+        f"<tr><td>{E(r['date'])}</td><td>{E(r['title'])}</td><td class='n'>{money(r['amount'], 2)}</td></tr>" for r in receipts) + "</table></div>"
+    if media:
+        body += "<div class='card'><h2>Site photos</h2><div class='grid'>" + "".join(
+            f"<div><img loading='lazy' src='/api/share/{E(token)}/photo/{m['_id']}'/><div class='cap'><span class='tag'>{E(m['phase'].upper())}</span> {E(m['title'])}</div></div>"
+            for m in media) + "</div></div>"
+    return page(f"{p.name} · Project report", body)
+
+
+@api.get("/share/{token}/photo/{mid}")
+async def public_photo(token: str, mid: str):
+    doc = await db.projects.find_one({"share_token": token}) if token else None
+    if not doc:
+        raise HTTPException(404, "Not found")
+    m = await db.media.find_one({"_id": oid(mid), "project_id": str(doc["_id"])})
+    if not m:
+        raise HTTPException(404, "Not found")
+    if m.get("storage_path"):
+        data, ctype = await run_in_threadpool(get_object, m["storage_path"])
+        return Response(content=data, media_type=ctype, headers={"Cache-Control": "public, max-age=3600"})
+    return RedirectResponse(m["url"])
+
+
+# ---------------- Quote requests ----------------
+class QuoteEntry(BaseModel):
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex)
+    token: str = Field(default_factory=lambda: secrets.token_urlsafe(12))
+    contact_id: Optional[str] = None
+    name: str
+    role: str = ""
+    phone: str = ""
+    email: str = ""
+    status: Literal["requested", "received", "accepted", "declined"] = "requested"
+    sent: bool = False
+    amount: Optional[float] = None
+    days: Optional[int] = None
+    notes: str = ""
+    responded_at: Optional[str] = None
+
+
+class QuoteRequest(BaseDocument):
+    user_id: str
+    project_id: str
+    title: str
+    description: str
+    trade: str = ""
+    origin: str = ""
+    quotes: List[QuoteEntry] = []
+    added_line_item_id: Optional[str] = None
+    created_at: str = Field(default_factory=now_iso)
+
+
+def quote_out(q: QuoteRequest):
+    d = q.out()
+    for e in d["quotes"]:
+        e["link"] = f"{q.origin.rstrip('/')}/api/q/{e['token']}"
+    return d
+
+
+class QuoteCreate(BaseModel):
+    title: str
+    description: str
+    trade: str = ""
+    contact_ids: List[str]
+    origin_url: str
+
+
+class EntryUpdate(BaseModel):
+    amount: Optional[float] = None
+    days: Optional[int] = None
+    notes: Optional[str] = None
+    sent: Optional[bool] = None
+    status: Optional[Literal["requested", "received", "declined"]] = None
+
+
+async def load_quote(qid: str, user: User) -> QuoteRequest:
+    q = QuoteRequest.from_mongo(await db.quote_requests.find_one({"_id": oid(qid), "user_id": user.id}))
+    if not q:
+        raise HTTPException(404, "Quote request not found")
+    return q
+
+
+@api.get("/quotes")
+async def list_quotes(user: User = Depends(current_user)):
+    docs = await db.quote_requests.find({"user_id": user.id, "project_id": await active_pid(user)}).sort("created_at", -1).to_list(200)
+    return [quote_out(QuoteRequest.from_mongo(d)) for d in docs]
+
+
+@api.post("/quotes")
+async def create_quote(body: QuoteCreate, user: User = Depends(current_user)):
+    if not body.title.strip() or not body.description.strip():
+        raise HTTPException(400, "Title and job description are required")
+    ids = [oid(c) for c in body.contact_ids]
+    contacts = await db.contacts.find({"_id": {"$in": ids}, "user_id": user.id}).to_list(50)
+    if not contacts:
+        raise HTTPException(400, "Choose at least one tradesperson")
+    q = QuoteRequest(user_id=user.id, project_id=await active_pid(user), title=body.title.strip(), description=body.description.strip(),
+                     trade=body.trade, origin=body.origin_url,
+                     quotes=[QuoteEntry(contact_id=str(c["_id"]), name=c["name"], role=c.get("role", ""), phone=c.get("phone", ""),
+                                        email=c.get("email", "")) for c in contacts])
+    q.id = str((await db.quote_requests.insert_one(q.to_mongo())).inserted_id)
+    return quote_out(q)
+
+
+@api.get("/quotes/{qid}")
+async def get_quote(qid: str, user: User = Depends(current_user)):
+    return quote_out(await load_quote(qid, user))
+
+
+@api.put("/quotes/{qid}/entries/{eid}")
+async def update_entry(qid: str, eid: str, body: EntryUpdate, user: User = Depends(current_user)):
+    q = await load_quote(qid, user)
+    e = next((x for x in q.quotes if x.id == eid), None)
+    if not e:
+        raise HTTPException(404, "Quote not found")
+    upd = body.model_dump(exclude_unset=True)
+    for k, v in upd.items():
+        setattr(e, k, v)
+    if body.amount is not None and e.status == "requested":
+        e.status, e.responded_at = "received", now_iso()
+    await db.quote_requests.update_one({"_id": ObjectId(q.id)}, {"$set": {"quotes": [x.model_dump() for x in q.quotes]}})
+    return quote_out(q)
+
+
+class AcceptIn(BaseModel):
+    add_to_budget: bool = True
+
+
+@api.post("/quotes/{qid}/entries/{eid}/accept")
+async def accept_entry(qid: str, eid: str, body: AcceptIn, user: User = Depends(current_user)):
+    q = await load_quote(qid, user)
+    e = next((x for x in q.quotes if x.id == eid), None)
+    if not e:
+        raise HTTPException(404, "Quote not found")
+    if e.amount is None:
+        raise HTTPException(400, "This quote has no price yet")
+    for x in q.quotes:
+        x.status = "accepted" if x.id == eid else ("declined" if x.status in ("received", "accepted", "requested") else x.status)
+    upd = {"quotes": [x.model_dump() for x in q.quotes]}
+    if body.add_to_budget:
+        if q.added_line_item_id:
+            await db.line_items.delete_one({"_id": oid(q.added_line_item_id), "user_id": user.id})
+        li = LineItem(user_id=user.id, project_id=q.project_id, category="Hard Cost", name=q.title, budgeted=e.amount,
+                      actual=0, supplier=e.name, status="Quoted")
+        upd["added_line_item_id"] = q.added_line_item_id = str((await db.line_items.insert_one(li.to_mongo())).inserted_id)
+    await db.quote_requests.update_one({"_id": ObjectId(q.id)}, {"$set": upd})
+    return quote_out(q)
+
+
+@api.delete("/quotes/{qid}")
+async def delete_quote(qid: str, user: User = Depends(current_user)):
+    await db.quote_requests.delete_one({"_id": oid(qid), "user_id": user.id})
+    return {"ok": True}
+
+
+async def find_entry(token: str):
+    doc = await db.quote_requests.find_one({"quotes.token": token})
+    if not doc:
+        return None, None
+    q = QuoteRequest.from_mongo(doc)
+    return q, next(x for x in q.quotes if x.token == token)
+
+
+@api.get("/q/{token}", response_class=HTMLResponse)
+async def public_quote_form(token: str):
+    q, e = await find_entry(token)
+    if not q:
+        return page("Not found", "<div class='card'><h2>This quote link is no longer active</h2></div>")
+    p = await db.projects.find_one({"_id": ObjectId(q.project_id)}) or {}
+    closed = e.status in ("accepted", "declined")
+    body = f"""<div class='hdr'><div class='brand'>MY BUILDER <b>APP</b> · QUOTE REQUEST</div><h1>{E(q.title)}</h1>
+<div>For {E(e.name)} · {E(p.get('address', ''))}</div></div>
+<div class='card'><h2>Job description</h2><div style='white-space:pre-wrap;line-height:1.5'>{E(q.description)}</div></div>"""
+    if closed:
+        body += f"<div class='card'><h2>This job has been {'awarded to you 🎉' if e.status == 'accepted' else 'awarded to another trade'}</h2><p>Thanks for quoting.</p></div>"
+    else:
+        body += f"""<form class='card' method='post'><h2>{'Update your quote' if e.amount is not None else 'Submit your quote'}</h2>
+<label>Total price (£, inc. materials)</label><input name='amount' type='number' step='0.01' min='1' required value='{e.amount if e.amount is not None else ''}'/>
+<label>Time to complete (working days)</label><input name='days' type='number' min='0' value='{e.days if e.days is not None else ''}'/>
+<label>Notes (what's included, availability)</label><textarea name='notes' rows='4'>{E(e.notes)}</textarea>
+<button type='submit'>Send quote</button></form>"""
+    return page(f"Quote: {q.title}", body)
+
+
+@api.post("/q/{token}", response_class=HTMLResponse)
+async def public_quote_submit(token: str, amount: float = Form(...), days: Optional[str] = Form(None), notes: str = Form("")):
+    q, e = await find_entry(token)
+    if not q:
+        return page("Not found", "<div class='card'><h2>This quote link is no longer active</h2></div>")
+    if e.status in ("accepted", "declined"):
+        return page("Closed", "<div class='card'><h2>This job is already closed</h2></div>")
+    if amount <= 0:
+        return page("Invalid", "<div class='card'><h2>Please enter a valid price</h2></div>")
+    e.amount, e.notes, e.status, e.responded_at = float(amount), notes.strip()[:2000], "received", now_iso()
+    e.days = int(days) if days and days.strip().isdigit() else None
+    await db.quote_requests.update_one({"_id": ObjectId(q.id)}, {"$set": {"quotes": [x.model_dump() for x in q.quotes]}})
+    return page("Quote sent", f"<div class='card'><h2>Thanks {E(e.name)} — your quote of {money(e.amount, 2)} was sent</h2><p>The project owner will be in touch. You can reopen this link to update your quote.</p></div>")
+
+
 @api.get("/")
 async def root():
     return {"message": "My Builder App API"}
@@ -849,6 +1229,10 @@ async def startup():
             await coll.update_many({"user_id": uid, "$or": [{"project_id": {"$exists": False}}, {"project_id": None}]}, {"$set": {"project_id": fpid}})
         if not u.get("active_project_id"):
             await db.users.update_one({"_id": u["_id"]}, {"$set": {"active_project_id": fpid}})
+    async for pr in db.projects.find({}, {"_id": 1, "user_id": 1}):
+        if not await db.milestones.find_one({"project_id": str(pr["_id"])}, {"_id": 1}):
+            await seed_milestones(pr["user_id"], str(pr["_id"]))
+    await db.quote_requests.create_index("quotes.token")
     try:
         init_storage()
     except Exception as e:

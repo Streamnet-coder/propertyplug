@@ -1,7 +1,6 @@
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -12,9 +11,7 @@ import { BrandLogo } from "@/src/components/brand";
 import { Button, Card, fonts, Icon, IconName, ProBadge, radius, SectionTitle, space, tap } from "@/src/components/ui";
 import { usesNativeTabs } from "@/src/navigation";
 import { invalidate, useProject, useReceipts } from "@/src/queries";
-import { shareProgressReport } from "@/src/report";
 import { makeStyles, useTheme } from "@/src/theme";
-import { useToast } from "@/src/toast";
 
 const HERO = "https://images.unsplash.com/photo-1714259830228-893a69a2d45b?crop=entropy&cs=srgb&fm=jpg&ixlib=rb-4.1.0&q=85&w=1200";
 
@@ -25,7 +22,6 @@ export default function Home() {
   const s = useStyles();
   const { colors } = useTheme();
   const { user } = useAuth();
-  const toast = useToast();
   const project = useProject();
   const receipts = useReceipts();
   const p = project.data;
@@ -42,22 +38,12 @@ export default function Home() {
       ]
     : [];
 
-  const [reporting, setReporting] = useState(false);
-  const makeReport = async () => {
-    setReporting(true);
-    try {
-      await shareProgressReport();
-    } catch (e: any) {
-      toast(e?.message ?? "Could not create report", "error");
-    } finally {
-      setReporting(false);
-    }
-  };
+  const msPct = p && p.milestones_total ? Math.round((p.milestones_done / p.milestones_total) * 100) : 0;
 
   const actions: { icon: IconName; label: string; onPress: () => void; pro?: boolean; id: string }[] = [
     { id: "ai", icon: "sparkles", label: "AI cost", onPress: () => router.push("/ai-estimate") },
     { id: "brrr", icon: "calculator", label: "BRRR", onPress: () => router.push("/brrr"), pro: true },
-    { id: "report", icon: "file-text", label: "Report", onPress: makeReport },
+    { id: "report", icon: "share-2", label: "Share", onPress: () => router.push("/share-report") },
     { id: "receipt", icon: "receipt", label: "Receipt", onPress: () => router.push("/receipt-form") },
     { id: "edit", icon: "pencil", label: "Edit", onPress: () => router.push("/project-edit") },
   ];
@@ -136,11 +122,7 @@ export default function Home() {
               <Animated.View key={a.id} entering={FadeInDown.delay(80 + i * 60)} style={{ flex: 1 }}>
                 <Pressable testID={`quick-action-${a.id}`} onPress={() => { tap(); a.onPress(); }} style={({ pressed }) => [s.action, pressed && { transform: [{ scale: 0.96 }] }]}>
                   <View style={[s.actionIcon, a.pro && { backgroundColor: colors.orangeTint }]}>
-                    {a.id === "report" && reporting ? (
-                      <ActivityIndicator color={colors.brand} testID="report-generating" />
-                    ) : (
-                      <Icon name={a.icon} size={20} color={a.pro ? colors.brandPrimary : colors.brand} />
-                    )}
+                    <Icon name={a.icon} size={20} color={a.pro ? colors.brandPrimary : colors.brand} />
                   </View>
                   <Text style={s.actionLabel} numberOfLines={1}>{a.label}</Text>
                   {a.pro && !isPro && <View style={{ position: "absolute", top: 6, right: 6 }}><ProBadge locked /></View>}
@@ -148,6 +130,26 @@ export default function Home() {
               </Animated.View>
             ))}
           </View>
+
+          <Pressable testID="timeline-card" onPress={() => { tap(); router.push("/timeline"); }} style={({ pressed }) => [s.timeline, pressed && { opacity: 0.9 }]}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+              <View style={s.tlIcon}><Icon name="milestone" size={20} color={colors.brand} /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.rowLabel}>Milestones</Text>
+                <Text style={s.muted} numberOfLines={1} testID="timeline-current-stage">
+                  {p.current_stage ? `Now: ${p.current_stage}` : "Add your first stage"}
+                </Text>
+              </View>
+              <Text style={s.rowVal} testID="timeline-card-progress">{p.milestones_done}/{p.milestones_total}</Text>
+              <Icon name="chevron-right" size={18} color={colors.muted} />
+            </View>
+            <View style={s.segRow}>
+              {Array.from({ length: p.milestones_total }).map((_, i) => (
+                <View key={i} style={[s.seg, { backgroundColor: i < p.milestones_done ? colors.success : i === p.milestones_done ? colors.brandPrimary : colors.surfaceTertiary }]} />
+              ))}
+            </View>
+            <Text style={s.muted}>{msPct}% of stages complete</Text>
+          </Pressable>
 
           <View>
             <SectionTitle title="Budget breakdown" action="Details" onAction={() => router.push("/(tabs)/budget")} testID="budget-details-link" />
@@ -289,6 +291,10 @@ const useStyles = makeStyles((c) => ({
   },
   actionIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: c.brandTertiary, alignItems: "center", justifyContent: "center" },
   actionLabel: { fontFamily: fonts.semibold, fontSize: 11, color: c.onSurfaceSecondary },
+  timeline: { backgroundColor: c.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: c.border, padding: space.lg, gap: space.md },
+  tlIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: c.brandTertiary, alignItems: "center", justifyContent: "center" },
+  segRow: { flexDirection: "row", gap: 4 },
+  seg: { flex: 1, height: 8, borderRadius: 4 },
   rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   rowLabel: { fontFamily: fonts.semibold, fontSize: 14, color: c.onSurfaceSecondary },
   rowVal: { fontFamily: fonts.bold, fontSize: 14, color: c.onSurface },

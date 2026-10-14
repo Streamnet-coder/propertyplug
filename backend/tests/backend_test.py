@@ -405,3 +405,233 @@ class TestTradesFinder:
         assert r2.status_code == 200
         assert r2.json()["results"] == body["results"]
         assert elapsed < 3.0, f"Second call not cached (took {elapsed:.2f}s)"
+
+
+# ---------- Milestones (Iteration 3) ----------
+class TestMilestones:
+    def test_demo_has_seeded_milestones(self, demo_token):
+        r = requests.get(f"{API}/milestones", headers=auth(demo_token), timeout=15)
+        assert r.status_code == 200
+        ms = r.json()
+        assert len(ms) == 10, f"Expected 10 default milestones, got {len(ms)}"
+        done = [m for m in ms if m["status"] == "done"]
+        inprog = [m for m in ms if m["status"] == "in_progress"]
+        assert len(done) == 3, f"Expected first 3 done, got {len(done)}"
+        assert len(inprog) == 1, f"Expected 1 in_progress, got {len(inprog)}"
+        assert inprog[0]["name"] == "First fix (electrics & plumbing)"
+
+    def test_project_summary_includes_milestone_counts(self, demo_token):
+        p = requests.get(f"{API}/project", headers=auth(demo_token), timeout=15).json()
+        assert p.get("milestones_total") == 10
+        assert p.get("milestones_done") == 3
+        assert p.get("current_stage") == "First fix (electrics & plumbing)"
+
+    def test_milestone_create_update_status_cycle_delete(self, demo_token):
+        # Create
+        r = requests.post(f"{API}/milestones", json={"name": "TEST Stage", "target_date": "2026-07-01"},
+                          headers=auth(demo_token), timeout=15)
+        assert r.status_code == 200
+        m = r.json()
+        mid = m["id"]
+        assert m["name"] == "TEST Stage"
+        assert m["status"] == "todo"
+        try:
+            # Cycle status: todo -> in_progress
+            r2 = requests.put(f"{API}/milestones/{mid}", json={"status": "in_progress"},
+                              headers=auth(demo_token), timeout=15)
+            assert r2.status_code == 200 and r2.json()["status"] == "in_progress"
+            assert r2.json().get("completed_at") is None
+            # -> done sets completed_at
+            r3 = requests.put(f"{API}/milestones/{mid}", json={"status": "done"},
+                              headers=auth(demo_token), timeout=15)
+            assert r3.status_code == 200 and r3.json()["status"] == "done"
+            assert r3.json().get("completed_at")
+            # -> back to todo clears completed_at
+            r4 = requests.put(f"{API}/milestones/{mid}", json={"status": "todo", "notes": "note"},
+                              headers=auth(demo_token), timeout=15)
+            assert r4.status_code == 200
+            assert r4.json()["status"] == "todo"
+            assert r4.json().get("completed_at") is None
+            assert r4.json()["notes"] == "note"
+        finally:
+            d = requests.delete(f"{API}/milestones/{mid}", headers=auth(demo_token), timeout=15)
+            assert d.status_code == 200
+        lst = requests.get(f"{API}/milestones", headers=auth(demo_token), timeout=15).json()
+        assert not any(x["id"] == mid for x in lst)
+
+    def test_milestone_blank_name_400(self, demo_token):
+        r = requests.post(f"{API}/milestones", json={"name": "   "}, headers=auth(demo_token), timeout=15)
+        assert r.status_code == 400
+
+
+# ---------- Share link (Iteration 3) ----------
+class TestShare:
+    def test_share_create_fetch_revoke(self, demo_token):
+        origin = BASE_URL
+        # Initially get -> may be None
+        g0 = requests.get(f"{API}/project/share", headers=auth(demo_token), timeout=15)
+        assert g0.status_code == 200
+        # Create
+        r = requests.post(f"{API}/project/share", json={"origin_url": origin},
+                          headers=auth(demo_token), timeout=15)
+        assert r.status_code == 200
+        url = r.json()["url"]
+        assert url and "/api/share/" in url
+        token = url.rsplit("/", 1)[-1]
+        # Verify get returns it
+        g1 = requests.get(f"{API}/project/share", headers=auth(demo_token), timeout=15)
+        assert g1.json()["url"] == url
+        # Public page returns HTML, no auth required
+        html = requests.get(url, timeout=30)
+        assert html.status_code == 200
+        assert "text/html" in html.headers.get("Content-Type", "")
+        body = html.text
+        # Content must include milestones, budget, project header
+        assert "Milestones" in body
+        assert "Nottingham" in body or "LIVE PROJECT REPORT" in body
+        assert "£" in body  # money rendered
+        # photo endpoint should resolve to an image (either direct bytes or redirect)
+        import re
+        m = re.search(r"/api/share/" + re.escape(token) + r"/photo/([a-f0-9]+)", body)
+        if m:
+            mid = m.group(1)
+            p_resp = requests.get(f"{BASE_URL}/api/share/{token}/photo/{mid}", timeout=30,
+                                  allow_redirects=True)
+            assert p_resp.status_code == 200
+            assert p_resp.headers.get("Content-Type", "").startswith("image/")
+        # Revoke
+        d = requests.delete(f"{API}/project/share", headers=auth(demo_token), timeout=15)
+        assert d.status_code == 200
+        assert d.json()["url"] is None
+        # After revoke, visiting old URL should show "no longer active"
+        html2 = requests.get(url, timeout=30)
+        assert html2.status_code == 200
+        assert "no longer active" in html2.text.lower()
+
+
+# ---------- Quote requests (Iteration 3) ----------
+class TestQuotes:
+    @pytest.fixture
+    def trade_ids(self, demo_token):
+        trades = requests.get(f"{API}/contacts?kind=trade", headers=auth(demo_token), timeout=15).json()
+        assert len(trades) >= 2, "Need at least 2 trades on demo"
+        return [t["id"] for t in trades[:2]]
+
+    def test_quote_full_flow(self, demo_token, trade_ids):
+        origin = BASE_URL
+        # Create
+        payload = {"title": "TEST Kitchen fit", "description": "Install replacement kitchen units and worktops.",
+                   "contact_ids": trade_ids, "origin_url": origin, "trade": "carpenter"}
+        c = requests.post(f"{API}/quotes", json=payload, headers=auth(demo_token), timeout=15)
+        assert c.status_code == 200
+        q = c.json()
+        qid = q["id"]
+        try:
+            assert len(q["quotes"]) == len(trade_ids)
+            # Every entry has a link
+            for e in q["quotes"]:
+                assert e["link"].startswith(origin) and "/api/q/" in e["link"]
+                assert e["status"] == "requested"
+                assert e["amount"] is None
+            # List endpoint
+            lst = requests.get(f"{API}/quotes", headers=auth(demo_token), timeout=15).json()
+            assert any(x["id"] == qid for x in lst)
+            # Get
+            g = requests.get(f"{API}/quotes/{qid}", headers=auth(demo_token), timeout=15).json()
+            assert g["title"] == payload["title"]
+
+            # Owner PUT first entry with amount -> status becomes received
+            e1 = q["quotes"][0]
+            u1 = requests.put(f"{API}/quotes/{qid}/entries/{e1['id']}",
+                              json={"amount": 5000, "days": 7, "notes": "incl materials", "sent": True},
+                              headers=auth(demo_token), timeout=15)
+            assert u1.status_code == 200
+            e1b = next(x for x in u1.json()["quotes"] if x["id"] == e1["id"])
+            assert e1b["amount"] == 5000
+            assert e1b["status"] == "received"
+            assert e1b["sent"] is True
+            assert e1b["days"] == 7
+
+            # Public GET of 2nd entry's token returns form HTML
+            e2 = q["quotes"][1]
+            token2 = e2["link"].rsplit("/", 1)[-1]
+            html = requests.get(f"{BASE_URL}/api/q/{token2}", timeout=15)
+            assert html.status_code == 200
+            assert "text/html" in html.headers.get("Content-Type", "")
+            assert "Submit your quote" in html.text or "Update your quote" in html.text
+
+            # Public POST form-encoded sets amount, status received
+            resp = requests.post(f"{BASE_URL}/api/q/{token2}",
+                                 data={"amount": "4500.50", "days": "10", "notes": "ready next month"},
+                                 timeout=15)
+            assert resp.status_code == 200
+            assert "4,500" in resp.text or "Quote sent" in resp.text
+            gq = requests.get(f"{API}/quotes/{qid}", headers=auth(demo_token), timeout=15).json()
+            e2b = next(x for x in gq["quotes"] if x["id"] == e2["id"])
+            assert e2b["amount"] == 4500.50
+            assert e2b["status"] == "received"
+            assert e2b["days"] == 10
+
+            # Accept e1 -> creates a line item, others declined
+            a1 = requests.post(f"{API}/quotes/{qid}/entries/{e1['id']}/accept",
+                               json={"add_to_budget": True}, headers=auth(demo_token), timeout=15)
+            assert a1.status_code == 200
+            qa = a1.json()
+            accepted = [x for x in qa["quotes"] if x["status"] == "accepted"]
+            declined = [x for x in qa["quotes"] if x["status"] == "declined"]
+            assert len(accepted) == 1 and accepted[0]["id"] == e1["id"]
+            assert len(declined) == len(trade_ids) - 1
+            assert qa.get("added_line_item_id")
+            line_id_1 = qa["added_line_item_id"]
+            # Verify line item created in budget with amount
+            lis = requests.get(f"{API}/line-items", headers=auth(demo_token), timeout=15).json()
+            matched = [x for x in lis if x["id"] == line_id_1]
+            assert matched and matched[0]["budgeted"] == 5000
+
+            # Public GET of accepted entry's token should now be "closed" / "awarded"
+            tokenA = e1["link"].rsplit("/", 1)[-1]
+            closedh = requests.get(f"{BASE_URL}/api/q/{tokenA}", timeout=15)
+            assert "awarded" in closedh.text.lower() or "closed" in closedh.text.lower()
+
+            # Re-accept e2 -> replaces line item
+            a2 = requests.post(f"{API}/quotes/{qid}/entries/{e2['id']}/accept",
+                               json={"add_to_budget": True}, headers=auth(demo_token), timeout=15)
+            assert a2.status_code == 200
+            qa2 = a2.json()
+            line_id_2 = qa2.get("added_line_item_id")
+            assert line_id_2 and line_id_2 != line_id_1
+            lis2 = requests.get(f"{API}/line-items", headers=auth(demo_token), timeout=15).json()
+            assert not any(x["id"] == line_id_1 for x in lis2), "Old line item should be replaced"
+            matched2 = [x for x in lis2 if x["id"] == line_id_2]
+            assert matched2 and matched2[0]["budgeted"] == 4500.50
+        finally:
+            # Clean up: delete quote (which may leave line item orphaned if not cleaned by DELETE)
+            # Delete the created line item first if present
+            try:
+                gfin = requests.get(f"{API}/quotes/{qid}", headers=auth(demo_token), timeout=15).json()
+                lid = gfin.get("added_line_item_id")
+                if lid:
+                    requests.delete(f"{API}/line-items/{lid}", headers=auth(demo_token), timeout=15)
+            except Exception:
+                pass
+            d = requests.delete(f"{API}/quotes/{qid}", headers=auth(demo_token), timeout=15)
+            assert d.status_code == 200
+        lst2 = requests.get(f"{API}/quotes", headers=auth(demo_token), timeout=15).json()
+        assert not any(x["id"] == qid for x in lst2)
+
+    def test_quote_empty_title_400(self, demo_token, trade_ids):
+        r = requests.post(f"{API}/quotes",
+                          json={"title": " ", "description": "x", "contact_ids": trade_ids, "origin_url": BASE_URL},
+                          headers=auth(demo_token), timeout=15)
+        assert r.status_code == 400
+
+    def test_quote_no_contacts_400(self, demo_token):
+        r = requests.post(f"{API}/quotes",
+                          json={"title": "x", "description": "x", "contact_ids": [], "origin_url": BASE_URL},
+                          headers=auth(demo_token), timeout=15)
+        assert r.status_code in (400, 422)
+
+    def test_public_q_token_not_found(self):
+        r = requests.get(f"{BASE_URL}/api/q/notarealtoken_xxx", timeout=15)
+        assert r.status_code == 200
+        assert "no longer active" in r.text.lower()

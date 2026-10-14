@@ -55,6 +55,12 @@ export default function RootLayout() {
                 <Stack.Screen name="project-edit" options={{ presentation: "modal" }} />
                 <Stack.Screen name="projects" />
                 <Stack.Screen name="trades-finder" />
+                <Stack.Screen name="timeline" />
+                <Stack.Screen name="milestone-form" options={{ presentation: "modal" }} />
+                <Stack.Screen name="share-report" options={{ presentation: "modal" }} />
+                <Stack.Screen name="quotes/index" />
+                <Stack.Screen name="quotes/new" options={{ presentation: "modal" }} />
+                <Stack.Screen name="quotes/[id]" />
               </Stack>
             </ToastProvider>
           </AuthProvider>

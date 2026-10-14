@@ -27,6 +27,11 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Multiple projects: /api/projects list/create/activate/delete; all data scoped per active project; switcher on Home & Profile
 - Trades finder: postcodes.io + OpenStreetMap (Overpass with Nominatim fallback), 24h cache, call/WhatsApp/email invite + add to team
 
+## Iteration 3 (2026-06)
+- Milestone timeline: 10 default stages per project, status cycle, target dates/notes, Home progress card, included in PDF & live report
+- Lender share link: public live HTML report /api/share/{token} (revocable), copy/share/preview, PDF snapshot
+- Quote requests: one brief to multiple trades, private public quote form links /api/q/{token}, side-by-side compare (lowest/avg/spread), accept -> adds budget line item
+
 ## Backlog
-- P1: Milestone timeline, stakeholder share link for reports
+- P1: Report branding (logo/contact), push quote-received alerts, milestone photos
 - P2: Supplier price benchmark lookup, stakeholder share link, milestones/timeline

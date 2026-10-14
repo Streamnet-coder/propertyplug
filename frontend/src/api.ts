@@ -66,7 +66,28 @@ export type Project = {
   total_spent: number;
   line_item_count: number;
   receipt_count: number;
+  milestones_total: number;
+  milestones_done: number;
+  current_stage: string | null;
 };
+export type Milestone = { id: string; name: string; status: "todo" | "in_progress" | "done"; target_date?: string | null; notes: string; order: number; completed_at?: string | null };
+export type QuoteEntry = {
+  id: string;
+  token: string;
+  link: string;
+  contact_id?: string | null;
+  name: string;
+  role: string;
+  phone: string;
+  email: string;
+  status: "requested" | "received" | "accepted" | "declined";
+  sent: boolean;
+  amount?: number | null;
+  days?: number | null;
+  notes: string;
+  responded_at?: string | null;
+};
+export type QuoteRequest = { id: string; title: string; description: string; trade: string; quotes: QuoteEntry[]; created_at: string; added_line_item_id?: string | null };
 export type LineItem = { id: string; category: Category; name: string; budgeted: number; actual: number; supplier: string; status: string };
 export type ContactKind = "trade" | "subcontractor" | "stakeholder";
 export type Contact = { id: string; kind: ContactKind; name: string; role: string; phone: string; email: string; status: string; schedule: string; cost: string };

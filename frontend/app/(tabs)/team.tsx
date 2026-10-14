@@ -136,14 +136,24 @@ export default function Team() {
             seg.pro ? (
               <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}><ProBadge /><Text style={s.role}>Pro portal</Text></View>
             ) : (
-              <Pressable testID="trades-finder-banner" onPress={() => { tap(); router.push("/trades-finder"); }} style={s.finder}>
-                <View style={s.finderIcon}><Icon name="search" size={20} color={colors.onBrand} /></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.finderTitle}>Find local trades</Text>
-                  <Text style={s.finderSub}>Search electricians, plumbers & builders by postcode</Text>
-                </View>
-                <Icon name="chevron-right" size={20} color={colors.onBrand} />
-              </Pressable>
+              <View style={{ gap: space.md }}>
+                <Pressable testID="trades-finder-banner" onPress={() => { tap(); router.push("/trades-finder"); }} style={s.finder}>
+                  <View style={s.finderIcon}><Icon name="search" size={20} color={colors.onBrand} /></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.finderTitle}>Find local trades</Text>
+                    <Text style={s.finderSub}>Search electricians, plumbers & builders by postcode</Text>
+                  </View>
+                  <Icon name="chevron-right" size={20} color={colors.onBrand} />
+                </Pressable>
+                <Pressable testID="quote-requests-banner" onPress={() => { tap(); router.push("/quotes"); }} style={[s.finder, { backgroundColor: colors.surfaceInverse }]}>
+                  <View style={s.finderIcon}><Icon name="file-text" size={20} color={colors.onBrand} /></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.finderTitle}>Request & compare quotes</Text>
+                    <Text style={s.finderSub}>Send one brief to several trades, compare side by side</Text>
+                  </View>
+                  <Icon name="chevron-right" size={20} color={colors.onBrand} />
+                </Pressable>
+              </View>
             )
           }
           ListEmptyComponent={<EmptyState icon="hard-hat" title="No team members yet" subtitle="Add your first trade to call or WhatsApp them in one tap." testID="team-empty" />}

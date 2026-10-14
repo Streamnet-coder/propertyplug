@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 3 end-to-end tests (milestone timeline + lender share link + quote requests). Backend: 42/42 pytest tests pass (10 new iteration-3 tests). Milestones: demo project auto-seeded with 10 default stages (first 3 done, 4th in_progress 'First fix (electrics & plumbing)', others todo); /api/project exposes milestones_total=10, milestones_done=3, current_stage. POST/PUT/DELETE /api/milestones verified; status transitions to 'done' set completed_at, other statuses clear it; blank name -> 400. Share link: POST /api/project/share creates token + origin, GET returns url, public GET /api/share/{token} returns 200 HTML containing Milestones heading, project name, '£' sums and <img src=/api/share/{token}/photo/{mid}> entries which resolve to image/*; after DELETE the same URL returns 'This report link is no longer active'. Quotes: POST /api/quotes with 2 trade contact_ids creates entries each with a public /api/q/{token} link, status=requested, amount null; owner PUT with amount flips status to received; public GET /api/q/{token} returns a form HTML; public POST form-encoded persists amount/days/notes and flips status to received; accept endpoint marks target 'accepted', others 'declined', creates Hard Cost line item with budgeted=quote amount; re-accepting a different entry replaces the previous line item (old deleted, new created with new amount); public form shows 'awarded to another trade' for declined, 'awarded to you' for accepted; blank title/empty contacts -> 400; bad public token -> 'no longer active' HTML. Frontend (390x844, Expo web preview): sign-in with demo -> home shows timeline-card with timeline-card-progress '3/10' and timeline-current-stage 'Now: First fix (electrics & plumbing)'. Opening timeline-card shows 10 milestone-row-* nodes; add-milestone-button -> milestone-form-screen -> saving 'TEST Stage A' increased rows to 11; milestone-status-* cycle verified (3 clicks returned todo->in_progress->done->todo on 'Plastering'). quick-action-report opens share-report-screen; share-link-create-button produced a share-link-url containing /api/share/; share-link-copy/preview/revoke-button and share-pdf-button all present; revoke returned to the create state. Team tab trades segment surfaces quote-requests-banner -> /quotes -> new-quote-request-button -> quote-new-screen; filled quote-title-input/quote-description-input, picked 2 quote-recipient-*, quote-create-button -> quote-detail-screen; quote-enter-price-0 opened quote-price-modal, saving '£4500 / 5d' persisted quote-price-0; quote-stats row rendered; quote-accept-0 marks accepted; quote-delete-button + quote-delete-confirm removed the request and returned to quotes list. Profile links profile-link-timeline / profile-link-quotes / profile-link-share all present. Regression spot check (projects switch, budget, trades finder) remains green from iteration 2 (33 regression tests still pass).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "global", "issues": ["(Carried over) RN Web deprecation warning for shadow* style props still emitted."]}
+    ],
+    "react_native_issues": [
+      {"component": "StyleSheet shadow*", "issue": "Deprecated shadow* props still used in several Cards/Buttons; migrate to boxShadow. Non-blocking web warning."}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "No blocking issues introduced by iteration 3 — safe to proceed.",
+    "(Carried over) Migrate shadow* style props to boxShadow to silence RN Web deprecation warnings.",
+    "Minor: deleting a QuoteRequest via DELETE /api/quotes/{qid} does NOT delete the previously-added line item in budget (added_line_item_id orphan). Consider cascading, or at least documenting."
+  ],
+  "critical_code_review_comments": [
+    "server.py has grown to 1245 lines (iteration 3 added milestones, share, quotes HTML pages). Still single-file — recommend splitting into feature routers (projects/milestones/share/quotes/trades/payments/media) in a future refactor.",
+    "DELETE /api/quotes/{qid} does not clean up its added_line_item_id in db.line_items. The next-iteration refactor should cascade or at least offer the option.",
+    "public_quote_submit accepts `days` as str Form (OK) but silently drops non-numeric values; worth flagging the UI, though not a bug.",
+    "In accept_entry, declined status is applied only to entries whose status is in ('received','accepted','requested') — safe. Re-accept correctly deletes old line_item then creates new (verified in tests).",
+    "share_url builds the URL by stripping trailing / on share_origin and appending /api/share/{token} — origin_url is accepted blindly; worth validating/normalising in future.",
+    "public_report lazy-loads photos through /api/share/{token}/photo/{mid}, which does a DB lookup per image. Fine for 60 items but could be cached."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (42/42, incl 10 new iteration-3 tests)", "frontend": "100% of iteration-3 flows exercised"},
+  "seed_data_creation": "No persistent seeds. Backend tests cleanup after themselves (TEST milestone, TEST quote + added line item, share link revoke). Frontend run added one 'TEST Stage A' milestone which was deleted via API after the run; demo project ends with 10 milestones (3 done, 1 in_progress, 6 todo), stage 'First fix (electrics & plumbing)', budget £48,500, no share link, no test quotes/line items.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Everything from iterations 1-2 still applies. For iteration 3: Milestones live under /api/milestones (auth) with status cycle todo->in_progress->done (completed_at auto-managed). New users get 10 default milestones all 'todo'; demo seed has first 3 done + 4th in_progress. /api/project exposes milestones_total, milestones_done, current_stage. Share link: /api/project/share CRUD; public HTML at /api/share/{token} and photos at /api/share/{token}/photo/{mid}. Quote requests: owner POST /api/quotes (title, description, contact_ids, origin_url, trade?) creates one QuoteRequest with per-trade entries having unique id+token; owner PUT /api/quotes/{qid}/entries/{eid} (amount/days/notes/sent/status); public GET/POST /api/q/{token}; accept at /api/quotes/{qid}/entries/{eid}/accept creates Hard Cost line item from title+amount+supplier=trade name, re-accepting replaces. DELETE /api/quotes/{qid} does NOT delete added line item (minor). Frontend routes: /timeline, /milestone-form?id=..., /share-report, /quotes, /quotes/new, /quotes/[id]. All screens have testIDs matching the request spec. Auth now uses /auth route with testIDs auth-email-input / auth-password-input / auth-submit-button (not login/email-input).",
+  "rca_of_issue": "N/A — no bugs found. Iteration 3 passes backend + frontend tests. One minor non-blocking observation: deleting a quote does not cascade its added line item."
+}

@@ -2,7 +2,7 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
 
-import { api, fileUrl, gbp, LineItem, MediaItem, Project, Receipt } from "@/src/api";
+import { api, fileUrl, gbp, LineItem, MediaItem, Milestone, Project, Receipt } from "@/src/api";
 import { colors } from "@/src/theme";
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
@@ -21,7 +21,15 @@ async function toDataUri(url: string): Promise<string | null> {
   }
 }
 
-function buildHtml(p: Project, items: LineItem[], receipts: Receipt[], photos: { m: MediaItem; src: string | null }[]) {
+function buildHtml(p: Project, items: LineItem[], receipts: Receipt[], photos: { m: MediaItem; src: string | null }[], milestones: Milestone[]) {
+  const msHtml = milestones.length
+    ? `<h2>Milestones (${milestones.filter((m) => m.status === "done").length}/${milestones.length} complete)</h2><table>${milestones
+        .map(
+          (m) =>
+            `<tr><td>${esc(m.name)}</td><td class="n ${m.status === "done" ? "under" : ""}">${m.status === "done" ? "Done" : m.status === "in_progress" ? "In progress" : m.target_date ?? "To do"}</td></tr>`,
+        )
+        .join("")}</table>`
+    : "";
   const remaining = p.total_budget - p.total_spent;
   const pct = p.total_budget > 0 ? Math.round((p.total_spent / p.total_budget) * 100) : 0;
   const receiptsTotal = receipts.reduce((a, r) => a + r.amount, 0);
@@ -71,6 +79,7 @@ figcaption{font-size:10px;color:${colors.muted};margin-top:4px}
 <div class="kpi"><span>Spent</span><div>${gbp(p.total_spent)}</div></div>
 </div>
 <div><b>${pct}% of budget used</b> · ${remaining >= 0 ? `${gbp(remaining)} remaining` : `<span class="over">${gbp(-remaining)} over budget</span>`}<div class="bar"><i style="width:${Math.min(100, pct)}%"></i></div></div>
+${msHtml}
 <h2>Budget breakdown</h2>
 <table><tr><th>Category</th><th class="n">Budget</th><th class="n">Spent</th><th class="n">Variance</th></tr>
 ${cats.map(([l, b, s]) => `<tr><td>${l}</td><td class="n">${gbp(b)}</td><td class="n">${gbp(s)}</td><td class="n ${b - s < 0 ? "over" : "under"}">${gbp(b - s)}</td></tr>`).join("")}
@@ -89,11 +98,12 @@ ${photoSection ? `<h2>Before &amp; after photos</h2>${photoSection}` : ""}
 }
 
 export async function shareProgressReport() {
-  const [p, items, receipts, media] = await Promise.all([
+  const [p, items, receipts, media, milestones] = await Promise.all([
     api<Project>("/project"),
     api<LineItem[]>("/line-items"),
     api<Receipt[]>("/receipts"),
     api<MediaItem[]>("/media"),
+    api<Milestone[]>("/milestones"),
   ]);
   const photos = await Promise.all(
     media.slice(0, 12).map(async (m) => {
@@ -101,7 +111,7 @@ export async function shareProgressReport() {
       return { m, src: url ? await toDataUri(url) : null };
     }),
   );
-  const html = buildHtml(p, items, receipts, photos);
+  const html = buildHtml(p, items, receipts, photos, milestones);
   if (Platform.OS === "web") {
     await Print.printAsync({ html });
     return;
