@@ -60,6 +60,10 @@ class Project(BaseDocument):
     share_origin: Optional[str] = None
     digest_token: Optional[str] = None
     digest_origin: Optional[str] = None
+    digest_recipients: List[dict] = []
+    digest_auto: bool = False
+    digest_last_sent_week: Optional[str] = None
+    digest_last_sent_at: Optional[str] = None
 
 
 class LineItem(BaseDocument):

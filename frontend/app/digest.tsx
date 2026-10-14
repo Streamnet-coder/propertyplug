@@ -3,9 +3,12 @@ import { useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { gbp } from "@/src/api";
 import { Button, Card, fonts, Icon, IconName, radius, SectionTitle, space, tap } from "@/src/components/ui";
+import { DigestEmailCard } from "@/src/components/digest-email-card";
 import { DigestShareCard } from "@/src/components/digest-share-card";
+import { useQuery } from "@tanstack/react-query";
+
+import { api, gbp } from "@/src/api";
 import { useDigest, useProject } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
 
@@ -19,6 +22,7 @@ export default function DigestScreen() {
   const [week, setWeek] = useState(0);
   const q = useDigest(week);
   const project = useProject();
+  const link = useQuery({ queryKey: ["digest-link"], queryFn: () => api<{ url: string | null }>("/digest/share") });
   const d = q.data;
   const diff = d ? d.spend.total - d.prev_spend : 0;
 
@@ -131,6 +135,7 @@ export default function DigestScreen() {
           </View>
 
           <DigestShareCard projectName={project.data?.name} />
+          <DigestEmailCard hasLink={!!link.data?.url} />
         </ScrollView>
       )}
     </View>

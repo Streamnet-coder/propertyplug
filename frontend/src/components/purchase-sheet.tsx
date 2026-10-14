@@ -17,10 +17,16 @@ export function PurchaseSheet({ item, onClose }: { item: ShoppingItem | null; on
   const [amount, setAmount] = useState("");
   useEffect(() => { if (item) setAmount(item.est_cost ? String(item.est_cost) : ""); }, [item]);
 
-  const done = () => { invalidate("shopping", "receipts", "project", "digest"); onClose(); };
+  const done = () => { invalidate("shopping", "receipts", "project", "digest", "line-items"); onClose(); };
   const log = useMutation({
-    mutationFn: () => api(`/shopping/${item!.id}/purchase`, { body: { amount: Number(amount) } }),
-    onSuccess: () => { toast(`Logged ${gbp(Number(amount), 2)} against your budget`); done(); },
+    mutationFn: () => api<{ alert: { level: "over" | "near"; item: string; spent: number; budgeted: number } | null }>(`/shopping/${item!.id}/purchase`, { body: { amount: Number(amount) } }),
+    onSuccess: (r) => {
+      const a = r.alert;
+      if (a?.level === "over") toast(`Heads up: ${a.item} is now ${gbp(a.spent - a.budgeted, 2)} over budget`, "error");
+      else if (a?.level === "near") toast(`${a.item} has used ${Math.round((a.spent / a.budgeted) * 100)}% of its budget`, "info");
+      else toast(`Logged ${gbp(Number(amount), 2)} against your budget`);
+      done();
+    },
     onError: (e: Error) => toast(e.message, "error"),
   });
   const justTick = useMutation({

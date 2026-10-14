@@ -1,0 +1,29 @@
+{
+  "summary": "Iteration 10 features fully verified. Backend: 10/10 pytest tests PASS in /app/backend/tests/test_iteration10.py covering (a) GET /api/export — 401 unauth, 200 zip with Content-Disposition filename=builder-assist-export-*.zip, contains account.csv/projects.csv/line_items.csv/receipts.csv/contacts.csv/milestones.csv/snags.csv/shopping_items.csv/stage_payments.csv/quote_requests.csv/media.csv/README.txt, account.csv has user email + 'name,email,plan,created_at' header, and User A's export does NOT contain User B's project (data scoped to caller); (b) line_items variance — budgeted<=0 → alert null, actual=92/budgeted=100 → 'near', actual=150/budgeted=100 → 'over', linked_spend from receipts attached via shopping/purchase correctly inflates spent and flips alert to 'over'; (c) shopping purchase alert — pushes near line_item (92/100) with amount=20 returns alert {level:'over', item, spent:112.0, budgeted:100.0}; purchase on 0/1000 line_item returns alert null; (d) digest settings — GET returns {recipients,auto,last_sent_at,url}; PUT lowercases + de-dupes emails, >10 recipients → 422, invalid email → 422; (e) digest/send-now — 400 when no link, 400 when no recipients, 400 when link not https, success with delivered@resend.dev returns {sent:1,failed:0,last_sent_at}, immediate second call → 429 (2-min cooldown); (f) run_weekly_digests gating — only queries projects on Monday ≥08:00 Europe/London, query includes digest_auto=True, digest_token:{$ne:None}, and digest_last_sent_week:{$ne:...} once-per-ISO-week guard. Frontend (390x844 mobile): dashboard-pdf-button, budget-pdf-button, snags-pdf-button, brrr-pdf-button (after plan=pro) all visible and tap without error toast on web (expo-print opens print dialog). Budget tab: budget-filter-alerts/all, budget-variance-banner, 5 variance-over-/variance-near- pills; tapping banner switches filter (alerts chip stays visible/selected). Dashboard: variance-alert-card visible. Digest page: digest-share-card, digest-email-card, digest-auto-switch, digest-send-now, digest-recipient-name/email/add-recipient, digest-create-link-button all render; after creating link, digest-share-url + digest-whatsapp-button appear; adding delivered@resend.dev creates digest-recipient-delivered@resend.dev with digest-remove-delivered@resend.dev button that removes it; revoke button clears link. Delete-account: data-export-section + export-data-button + export-progress-pdf/budget-pdf/snags-pdf all visible. Cleanup: demo digest settings reset to recipients:[]/auto:false, digest share revoked, demo plan reset to basic, all TEST_ users deleted via DELETE /api/auth/account.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration10.py",
+    "/app/test_reports/pytest/pytest_iteration10.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor (carried over): server.py still uses deprecated FastAPI @app.on_event startup/shutdown hooks — migrate to lifespan context manager.",
+    "Minor (carried over): react-native-web emits a 'shadow* style props are deprecated. Use boxShadow.' warning on load — harmless but can be swept.",
+    "Note: tests/test_iteration10.py must be run serially (-o addopts='') because the digest/send-now cooldown test shares the demo account with the digest/settings test and parallel xdist execution causes a race on recipients state. Serial run passes 10/10 in ~11s. Could be isolated via a dedicated TEST_ user per test instead."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration10.py (new — Export, LineItemsVariance, DigestSettings, DigestSendNow, WeeklySchedulerGating)"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (PDF buttons on dashboard/budget/snags/brrr, variance pills+banner+alert-card, digest share/email flows, delete-account export section)"},
+  "seed_data_creation": "Short-lived TEST_ users (test_*@example.com, pw testpass1234) registered then deleted via DELETE /api/auth/account inside each test; demo account digest settings/plan were temporarily set and reset at the end (recipients=[], auto=false, digest share revoked, plan=basic).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Reuse /app/backend/tests/test_iteration10.py. Run serially: `pytest tests/test_iteration10.py -v -o addopts=''` (xdist in pytest.ini races on demo digest state). BASE_URL = frontend/.env EXPO_PUBLIC_BACKEND_URL. Delivery test strictly uses delivered@resend.dev. Welcome screen Sign in doesn't have a testID — use `page.get_by_text('Sign in', exact=True).first.click()`. BRRR screen requires plan=pro; set via `POST /api/auth/plan {plan:'pro'}` with demo bearer token; reset to 'basic' when done.",
+  "rca_of_issue": "N/A — all iteration 10 features pass."
+}

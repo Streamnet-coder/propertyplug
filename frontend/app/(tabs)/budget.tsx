@@ -6,11 +6,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Category, gbp, LineItem } from "@/src/api";
 import { Button, Chip, EmptyState, fonts, Icon, radius, space, tap } from "@/src/components/ui";
+import { PdfButton } from "@/src/components/pdf-button";
 import { usesNativeTabs } from "@/src/navigation";
+import { shareBudgetPdf } from "@/src/report";
 import { invalidate, useLineItems } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
 
-const FILTERS: ("All" | Category)[] = ["All", "Hard Cost", "Soft Cost", "Contingency"];
+const FILTERS: ("All" | Category | "Alerts")[] = ["All", "Hard Cost", "Soft Cost", "Contingency", "Alerts"];
 
 export default function Budget() {
   const insets = useSafeAreaInsets();
@@ -21,11 +23,14 @@ export default function Budget() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
   const q = useLineItems();
 
-  const items = useMemo(() => (q.data ?? []).filter((i) => filter === "All" || i.category === filter), [q.data, filter]);
-  const totals = items.reduce((a, i) => ({ b: a.b + i.budgeted, a: a.a + i.actual }), { b: 0, a: 0 });
+  const items = useMemo(() => (q.data ?? []).filter((i) => filter === "All" || (filter === "Alerts" ? !!i.alert : i.category === filter)), [q.data, filter]);
+  const totals = items.reduce((a, i) => ({ b: a.b + i.budgeted, a: a.a + i.spent }), { b: 0, a: 0 });
+  const over = (q.data ?? []).filter((i) => i.alert === "over");
+  const near = (q.data ?? []).filter((i) => i.alert === "near");
 
   const renderItem = ({ item, index }: { item: LineItem; index: number }) => {
-    const variance = item.budgeted - item.actual;
+    const variance = item.budgeted - item.spent;
+    const pct = item.budgeted > 0 ? Math.round((item.spent / item.budgeted) * 100) : 0;
     return (
       <Animated.View entering={FadeInDown.delay(Math.min(index, 8) * 40)}>
         <Pressable
@@ -39,9 +44,16 @@ export default function Budget() {
               <View style={s.tag}><Text style={s.tagText}>{item.category}</Text></View>
               <Text style={s.meta} numberOfLines={1}>{item.supplier || "No supplier"} · {item.status}</Text>
             </View>
+            {item.alert && (
+              <View style={[s.alertPill, { backgroundColor: item.alert === "over" ? colors.errorTint : colors.orangeTint }]} testID={`variance-${item.alert}-${item.id}`}>
+                <Icon name="triangle-alert" size={12} color={item.alert === "over" ? colors.error : colors.brandPrimary} />
+                <Text style={[s.alertPillText, { color: item.alert === "over" ? colors.error : colors.brandPrimary }]}>{item.alert === "over" ? `Over budget · ${pct}%` : `${pct}% of budget used`}</Text>
+              </View>
+            )}
+            {item.linked_spend > 0 && <Text style={s.meta}>Includes {gbp(item.linked_spend, 2)} from shopping receipts</Text>}
           </View>
           <View style={{ alignItems: "flex-end", gap: 2 }}>
-            <Text style={s.amt}>{gbp(item.actual)}</Text>
+            <Text style={s.amt}>{gbp(item.spent)}</Text>
             <Text style={s.meta}>of {gbp(item.budgeted)}</Text>
             <Text style={[s.variance, { color: variance < 0 ? colors.error : colors.success }]}>
               {variance < 0 ? "Over " : "Under "}{gbp(Math.abs(variance))}
@@ -55,8 +67,13 @@ export default function Budget() {
   return (
     <View style={s.root} testID="budget-screen">
       <View style={[s.header, { paddingTop: insets.top + space.sm }]}>
-        <Text style={s.title}>Budget</Text>
-        <Text style={s.sub}>Line items, suppliers & variance</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.title}>Budget</Text>
+            <Text style={s.sub}>Line items, suppliers & variance</Text>
+          </View>
+          <PdfButton onGenerate={shareBudgetPdf} testID="budget-pdf-button" />
+        </View>
       </View>
       <View style={s.chipRow}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
@@ -106,13 +123,23 @@ export default function Budget() {
                 </View>
                 <Icon name="chevron-right" size={18} color={colors.muted} />
               </Pressable>
+              {over.length + near.length > 0 && (
+                <Pressable testID="budget-variance-banner" onPress={() => { tap(); setFilter("Alerts"); }} style={[s.payCard, { borderColor: over.length ? colors.error : colors.brandPrimary }]}>
+                  <Icon name="triangle-alert" size={20} color={over.length ? colors.error : colors.brandPrimary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.itemName}>{over.length ? `${over.length} item${over.length === 1 ? "" : "s"} over budget` : `${near.length} item${near.length === 1 ? "" : "s"} near budget`}</Text>
+                    <Text style={s.meta} numberOfLines={2}>{[...over, ...near].map((i) => i.name).join(", ")}</Text>
+                  </View>
+                  <Text style={[s.meta, { color: colors.brand, fontFamily: fonts.semibold }]}>View</Text>
+                </Pressable>
+              )}
               <View style={s.summary} testID="budget-summary">
                 <View>
                   <Text style={s.meta}>Budgeted</Text>
                   <Text style={s.sumVal}>{gbp(totals.b)}</Text>
                 </View>
                 <View>
-                  <Text style={s.meta}>Actual</Text>
+                  <Text style={s.meta}>Spent</Text>
                   <Text style={s.sumVal}>{gbp(totals.a)}</Text>
                 </View>
                 <View>
@@ -133,6 +160,8 @@ export default function Budget() {
 }
 
 const useStyles = makeStyles((c) => ({
+  alertPill: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill },
+  alertPillText: { fontFamily: fonts.semibold, fontSize: 11 },
   root: { flex: 1, backgroundColor: c.surfaceSecondary },
   header: { paddingHorizontal: space.lg, paddingBottom: space.sm, backgroundColor: c.surface },
   title: { fontFamily: fonts.extrabold, fontSize: 28, color: c.onSurface, letterSpacing: -0.5 },

@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 
 from core import BaseDocument, db, now_iso, oid
 from deps import active_pid, current_user
-from models import Receipt, User
+from models import LineItem, Receipt, User
+from routes.budget import linked_spend, with_variance
 
 router = APIRouter()
 
@@ -117,7 +118,15 @@ async def purchase_shopping(sid: str, body: PurchaseIn, user: User = Depends(cur
     else:
         rid = str((await db.receipts.insert_one(Receipt(user_id=user.id, project_id=doc["project_id"], **rec).to_mongo())).inserted_id)
     await db.shopping_items.update_one({"_id": doc["_id"]}, {"$set": {"checked": True, "checked_at": now_iso(), "actual_cost": rec["amount"], "receipt_id": rid}})
-    return ShoppingItem.from_mongo(await db.shopping_items.find_one({"_id": doc["_id"]})).out()
+    out = ShoppingItem.from_mongo(await db.shopping_items.find_one({"_id": doc["_id"]})).out()
+    out["alert"] = None
+    if doc.get("line_item_id"):
+        li = await db.line_items.find_one({"_id": oid(doc["line_item_id"])})
+        if li:
+            o = with_variance(LineItem.from_mongo(li).out(), await linked_spend(doc["project_id"], doc["line_item_id"]))
+            if o["alert"]:
+                out["alert"] = {"level": o["alert"], "item": o["name"], "spent": o["spent"], "budgeted": o["budgeted"]}
+    return out
 
 
 @router.delete("/shopping/checked")

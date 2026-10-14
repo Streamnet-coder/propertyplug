@@ -8,7 +8,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api, fileUrl, Snag } from "@/src/api";
 import { Button, Chip, EmptyState, fonts, Icon, radius, space, tap } from "@/src/components/ui";
+import { PdfButton } from "@/src/components/pdf-button";
 import { SnagShareSheet } from "@/src/components/snag-share-sheet";
+import { shareSnagPdf } from "@/src/report";
 import { invalidate, useSnags } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
@@ -45,6 +47,7 @@ export default function Snags() {
             <Icon name="arrow-left" size={22} />
           </Pressable>
           <Text style={[s.headerTitle, { flex: 1, marginLeft: space.md }]}>Snagging list</Text>
+          <PdfButton onGenerate={shareSnagPdf} testID="snags-pdf-button" />
           <Pressable testID="snags-share-button" onPress={() => { tap(); setSharing(true); }} style={s.back} hitSlop={10}>
             <Icon name="send" size={20} color={colors.brand} />
           </Pressable>

@@ -11,7 +11,9 @@ import { useAuth } from "@/src/auth";
 import { BrandLogo } from "@/src/components/brand";
 import { Button, Card, fonts, Icon, IconName, ProBadge, radius, SectionTitle, space, tap } from "@/src/components/ui";
 import { usesNativeTabs } from "@/src/navigation";
-import { invalidate, prefetchProjects, useDigest, useProject, useReceipts } from "@/src/queries";
+import { PdfButton } from "@/src/components/pdf-button";
+import { invalidate, prefetchProjects, useDigest, useLineItems, useProject, useReceipts } from "@/src/queries";
+import { shareProgressReport } from "@/src/report";
 import { makeStyles, useTheme } from "@/src/theme";
 
 const HERO = "https://images.unsplash.com/photo-1714259830228-893a69a2d45b?crop=entropy&cs=srgb&fm=jpg&ixlib=rb-4.1.0&q=85&w=1200";
@@ -26,6 +28,9 @@ export default function Home() {
   const project = useProject();
   const receipts = useReceipts();
   const digest = useDigest(0);
+  const lineItems = useLineItems();
+  const over = (lineItems.data ?? []).filter((i) => i.alert === "over").length;
+  const near = (lineItems.data ?? []).filter((i) => i.alert === "near").length;
   useEffect(() => { prefetchProjects(); }, []);
   const p = project.data;
   const isPro = user?.plan === "pro";
@@ -55,6 +60,8 @@ export default function Home() {
     <View style={s.root} testID="home-screen">
       <View style={[s.header, { paddingTop: insets.top + space.sm }]}>
         <BrandLogo />
+        <View style={{ flex: 1 }} />
+        <PdfButton onGenerate={shareProgressReport} testID="dashboard-pdf-button" />
         <Pressable testID="profile-button" onPress={() => { tap(); router.push("/profile"); }} style={s.avatar}>
           <Text style={s.avatarText}>{user?.name?.charAt(0).toUpperCase()}</Text>
         </Pressable>
@@ -72,7 +79,7 @@ export default function Home() {
       ) : (
         <ScrollView
           contentContainerStyle={{ padding: space.lg, paddingBottom: bottomChrome + 100, gap: space.xl }}
-          refreshControl={<RefreshControl refreshing={project.isRefetching} onRefresh={() => invalidate("project", "receipts", "digest")} tintColor={colors.brand} />}
+          refreshControl={<RefreshControl refreshing={project.isRefetching} onRefresh={() => invalidate("project", "receipts", "digest", "line-items")} tintColor={colors.brand} />}
           showsVerticalScrollIndicator={false}
         >
           <Animated.View entering={FadeInDown.duration(400)} style={s.hero} testID="project-hero-card">
@@ -153,6 +160,17 @@ export default function Home() {
             </View>
             <Text style={s.muted}>{msPct}% of stages complete</Text>
           </Pressable>
+
+          {over + near > 0 && (
+            <Pressable testID="variance-alert-card" onPress={() => { tap(); router.push("/budget"); }} style={[s.alertCard, { borderColor: over ? colors.error : colors.brandPrimary }]}>
+              <Icon name="triangle-alert" size={20} color={over ? colors.error : colors.brandPrimary} />
+              <View style={{ flex: 1 }}>
+                <Text style={s.rowLabel}>Budget variance alert</Text>
+                <Text style={s.muted}>{[over && `${over} item${over === 1 ? "" : "s"} over budget`, near && `${near} at 90%+`].filter(Boolean).join(" · ")}</Text>
+              </View>
+              <Icon name="chevron-right" size={18} color={colors.muted} />
+            </Pressable>
+          )}
 
           <Pressable testID="digest-card" onPress={() => { tap(); router.push("/digest"); }} style={({ pressed }) => [s.timeline, pressed && { opacity: 0.9 }]}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
@@ -351,6 +369,7 @@ const useStyles = makeStyles((c) => ({
   actionLabel: { fontFamily: fonts.semibold, fontSize: 11, color: c.onSurfaceSecondary },
   timeline: { backgroundColor: c.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: c.border, padding: space.lg, gap: space.md },
   tlIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: c.brandTertiary, alignItems: "center", justifyContent: "center" },
+  alertCard: { flexDirection: "row", alignItems: "center", gap: space.md, padding: space.lg, borderRadius: radius.lg, borderWidth: 1.5, backgroundColor: c.surface },
   digestRow: { flexDirection: "row", gap: space.sm },
   digestCell: { flex: 1, backgroundColor: c.surfaceSecondary, borderRadius: radius.md, padding: space.sm, gap: 2 },
   segRow: { flexDirection: "row", gap: 4 },

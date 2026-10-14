@@ -1,13 +1,17 @@
+import asyncio
 import secrets
+from typing import List
+from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta, timezone
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 
-from core import E, db, money
+from core import E, db, logger, money
 from deps import active_pid, current_user, get_project_doc
+from email_service import EMAIL_FROM_NAME, EmailError, send_email
 from html_utils import brand_block, owner_branding, page, serve_logo
 from models import Project, User
 
@@ -132,3 +136,119 @@ async def digest_logo(token: str):
     if not doc:
         raise HTTPException(404, "Not found")
     return await serve_logo(doc["user_id"])
+
+
+# ---------- Email delivery (manual + automatic every Monday) ----------
+class Recipient(BaseModel):
+    name: str = Field("", max_length=80)
+    email: EmailStr
+
+
+class DigestSettingsIn(BaseModel):
+    recipients: List[Recipient] = Field(default_factory=list, max_length=10)
+    auto: bool = False
+
+
+def _settings(p: Project) -> dict:
+    return {"recipients": p.digest_recipients, "auto": p.digest_auto, "last_sent_at": p.digest_last_sent_at, "url": digest_url(p)}
+
+
+@router.get("/digest/settings")
+async def get_digest_settings(user: User = Depends(current_user)):
+    return _settings(await get_project_doc(user))
+
+
+@router.put("/digest/settings")
+async def put_digest_settings(body: DigestSettingsIn, user: User = Depends(current_user)):
+    p = await get_project_doc(user)
+    seen, recips = set(), []
+    for r in body.recipients:
+        e = r.email.lower()
+        if e not in seen:
+            seen.add(e)
+            recips.append({"name": r.name.strip(), "email": e})
+    await db.projects.update_one({"_id": ObjectId(p.id)}, {"$set": {"digest_recipients": recips, "digest_auto": body.auto}})
+    p.digest_recipients, p.digest_auto = recips, body.auto
+    return _settings(p)
+
+
+def digest_email_html(p: Project, owner: str, d: dict, url: str) -> str:
+    sp = d["spend"]
+    cell = "padding:12px;border:1px solid #e2e8f0;border-radius:8px;font-family:Arial,sans-serif"
+    ms = "".join(f"<li>{E(m['name'])}</li>" for m in d["milestones_done"]) or "<li>No stages completed</li>"
+    return (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0f172a">'
+            f'<p style="font-size:12px;letter-spacing:1px;color:#0f766e;font-weight:bold;margin:0">{E(EMAIL_FROM_NAME.upper())} · WEEKLY UPDATE</p>'
+            f'<h1 style="font-size:22px;margin:8px 0 4px">{E(p.name)}</h1>'
+            f'<p style="margin:0 0 16px;color:#64748b">{E(p.address)} · {_d(d["week_start"])} – {_d(d["week_end"])}</p>'
+            f'<p>Hi, here is {E(owner)}\'s progress update for last week.</p>'
+            f'<table role="presentation" width="100%" cellspacing="8"><tr>'
+            f'<td style="{cell}"><div style="font-size:11px;color:#64748b">SPENT</div><div style="font-size:18px;font-weight:bold">{money(sp["total"], 2)}</div></td>'
+            f'<td style="{cell}"><div style="font-size:11px;color:#64748b">SNAGS FIXED</div><div style="font-size:18px;font-weight:bold">{len(d["snags_fixed"])}</div></td>'
+            f'<td style="{cell}"><div style="font-size:11px;color:#64748b">STAGES DONE</div><div style="font-size:18px;font-weight:bold">{len(d["milestones_done"])}</div></td>'
+            f'</tr></table><p style="margin:16px 0 4px;font-weight:bold">Milestones hit</p><ul style="margin:0 0 16px">{ms}</ul>'
+            f'<p><a href="{E(url)}" style="display:inline-block;background:#0f766e;color:#ffffff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:bold">View the full weekly update</a></p>'
+            f'<p style="font-size:12px;color:#888;margin-top:24px">Sent by {E(EMAIL_FROM_NAME)} on behalf of {E(owner)}. This is a read-only project update; '
+            f'we never ask for your password or payment details by email.</p></td></tr></table>')
+
+
+async def send_digest_emails(p: Project, week: int = 1) -> dict:
+    """Email the weekly update link to the project's saved recipients. Returns {sent, failed}."""
+    url = digest_url(p)
+    owner = await db.users.find_one({"_id": ObjectId(p.user_id)}, {"name": 1, "email": 1})
+    d = await build_digest(p.id, week)
+    link = f"{url}?week={week}" if week else url
+    subject = f"{p.name}: weekly update {_d(d['week_start'])} – {_d(d['week_end'])}"
+    html = digest_email_html(p, owner["name"], d, link)
+    sent = failed = 0
+    for r in p.digest_recipients:
+        try:
+            await send_email(to=r["email"], subject=subject, html=html, reply_to=owner.get("email"))
+            sent += 1
+        except EmailError:
+            failed += 1
+    now = datetime.now(timezone.utc)
+    await db.projects.update_one({"_id": ObjectId(p.id)}, {"$set": {"digest_last_sent_at": now.isoformat(), "digest_last_sent_week": now.strftime("%G-W%V")}})
+    return {"sent": sent, "failed": failed}
+
+
+@router.post("/digest/send-now")
+async def digest_send_now(week: int = Query(0, ge=0, le=52), user: User = Depends(current_user)):
+    p = await get_project_doc(user)
+    if not p.digest_token or not digest_url(p):
+        raise HTTPException(400, "Create the weekly update link first")
+    if not p.digest_recipients:
+        raise HTTPException(400, "Add at least one email recipient")
+    if not digest_url(p).startswith("https://"):
+        raise HTTPException(400, "Update link must be https to email it")
+    if p.digest_last_sent_at and (datetime.now(timezone.utc) - datetime.fromisoformat(p.digest_last_sent_at)).total_seconds() < 120:
+        raise HTTPException(429, "Just sent — try again in a couple of minutes")
+    res = await send_digest_emails(p, week)
+    if not res["sent"]:
+        raise HTTPException(503, "Email is temporarily unavailable. Please try again later")
+    return {**res, "last_sent_at": datetime.now(timezone.utc).isoformat()}
+
+
+async def run_weekly_digests():
+    """Every Monday from 08:00 UK time, email last week's update once per project with auto-send on."""
+    now = datetime.now(ZoneInfo("Europe/London"))
+    if now.weekday() != 0 or now.hour < 8:
+        return
+    week_key = datetime.now(timezone.utc).strftime("%G-W%V")
+    q = {"digest_auto": True, "digest_token": {"$ne": None}, "digest_recipients.0": {"$exists": True}, "digest_last_sent_week": {"$ne": week_key}}
+    async for doc in db.projects.find(q):
+        p = Project.from_mongo(doc)
+        if (digest_url(p) or "").startswith("https://"):
+            try:
+                res = await send_digest_emails(p, 1)
+                logger.info(f"Weekly digest for project {p.id}: {res}")
+            except Exception as e:
+                logger.error(f"Weekly digest failed for {p.id}: {e}")
+
+
+async def digest_scheduler():
+    while True:
+        try:
+            await run_weekly_digests()
+        except Exception as e:
+            logger.error(f"Digest scheduler error: {e}")
+        await asyncio.sleep(900)

@@ -67,3 +67,9 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Shopping purchase logging: POST /api/shopping/{id}/purchase {amount} → ticks item + creates Receipt (category from linked line item); un-ticking deletes that receipt. UI: PurchaseSheet when ticking an item.
 
 - App renamed to **Builder Assist** (app.json name, in-app brand mark, PDF report, all public HTML pages, Stripe return page).
+
+## Iteration 9 (Jun 2026)
+- PDF downloads (expo-print): Dashboard progress report (dashboard-pdf-button), Budget estimate (budget-pdf-button), Snag report (snags-pdf-button), BRRR analysis (brrr-pdf-button, Pro). src/report.ts printPdf/brandHeader/doc helpers.
+- Data export: GET /api/export → ZIP of CSVs (account + 10 data types). Delete-account screen has "Download all data (ZIP)" + Progress/Budget/Snags PDF buttons. src/export.ts (expo-file-system File.downloadFileAsync on native, blob download on web).
+- Budget variance alerts: /api/line-items returns linked_spend (receipts linked to line item, e.g. shopping purchases), spent, alert ('over' >100%, 'near' >=90%). Budget tab pills + banner + "Alerts" filter; dashboard variance-alert-card; purchase endpoint returns alert → toast.
+- Weekly digest email (Emergent managed Resend, EMAIL_FROM_NAME=Builder Assist): GET/PUT /api/digest/settings {recipients ≤10, auto}, POST /api/digest/send-now (2-min cooldown), background scheduler every 15 min sends last week's update Mondays ≥08:00 Europe/London once per ISO week. WhatsApp: wa.me share button on DigestShareCard.

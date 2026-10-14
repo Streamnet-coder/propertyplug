@@ -19,8 +19,29 @@ class LineItemIn(BaseModel):
 
 @router.get("/line-items")
 async def list_items(user: User = Depends(current_user)):
-    docs = await db.line_items.find({"user_id": user.id, "project_id": await active_pid(user)}).sort("created_at", -1).to_list(1000)
-    return [LineItem.from_mongo(d).out() for d in docs]
+    pid = await active_pid(user)
+    docs = await db.line_items.find({"user_id": user.id, "project_id": pid}).sort("created_at", -1).to_list(1000)
+    linked = await linked_spend(pid)
+    return [with_variance(LineItem.from_mongo(d).out(), linked) for d in docs]
+
+
+async def linked_spend(pid: str, line_item_id: str | None = None) -> dict:
+    """Receipts logged against a specific line item (e.g. shopping purchases), summed per line item."""
+    match = {"project_id": pid, "line_item_id": line_item_id or {"$ne": None}}
+    return {g["_id"]: g["sum"] async for g in db.receipts.aggregate([{"$match": match}, {"$group": {"_id": "$line_item_id", "sum": {"$sum": "$amount"}}}])}
+
+
+def variance_level(spent: float, budgeted: float):
+    if budgeted <= 0:
+        return None
+    return "over" if spent > budgeted else "near" if spent >= 0.9 * budgeted else None
+
+
+def with_variance(o: dict, linked: dict) -> dict:
+    o["linked_spend"] = round(linked.get(o["id"], 0), 2)
+    o["spent"] = round(o["actual"] + o["linked_spend"], 2)
+    o["alert"] = variance_level(o["spent"], o["budgeted"])
+    return o
 
 
 @router.post("/line-items")

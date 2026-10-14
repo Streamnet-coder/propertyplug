@@ -106,7 +106,8 @@ export type Contract = {
 };
 export type Snag = { id: string; room: string; description: string; priority: "low" | "medium" | "high"; status: "open" | "fixed"; storage_path?: string | null; assignee: string; created_at: string; fix_photo_path?: string | null; fixed_by?: string | null; fix_note?: string };
 export type Referrals = { count: number; months_earned: number; trial_ends: string; recent: { name: string; source: string; date: string }[] };
-export type LineItem = { id: string; category: Category; name: string; budgeted: number; actual: number; supplier: string; status: string };
+export type VarianceAlert = "over" | "near" | null;
+export type LineItem = { id: string; category: Category; name: string; budgeted: number; actual: number; supplier: string; status: string; linked_spend: number; spent: number; alert: VarianceAlert };
 export type ContactKind = "trade" | "subcontractor" | "stakeholder";
 export type Contact = { id: string; kind: ContactKind; name: string; role: string; phone: string; email: string; status: string; schedule: string; cost: string };
 export type Receipt = { id: string; title: string; amount: number; date: string; category: string; supplier: string; storage_path?: string | null };
@@ -128,3 +129,4 @@ export type Digest = {
   milestones_done: { id: string; name: string; completed_at: string }[];
   next_milestone: { name: string; target_date?: string | null; status: string } | null;
 };
+export type DigestSettings = { recipients: { name: string; email: string }[]; auto: boolean; last_sent_at: string | null; url: string | null };

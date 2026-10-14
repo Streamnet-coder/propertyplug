@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
-import { ActivityIndicator, Platform, Share, Text, View } from "react-native";
+import { ActivityIndicator, Linking, Platform, Share, Text, View } from "react-native";
 
 import { api, BACKEND_URL } from "@/src/api";
 import { Button, Card, fonts, Icon, radius, space } from "@/src/components/ui";
@@ -33,6 +33,9 @@ export function DigestShareCard({ projectName }: { projectName?: string }) {
     await Share.share({ message: `Weekly update for ${projectName ?? "our project"}: ${url}`, url: url! });
   };
 
+  const whatsapp = () =>
+    Linking.openURL(`https://wa.me/?text=${encodeURIComponent(`Weekly update for ${projectName ?? "our project"}: ${url}`)}`).catch(() => toast("Couldn't open WhatsApp", "error"));
+
   return (
     <Card style={{ gap: space.md }} testID="digest-share-card">
       <View style={{ flexDirection: "row", gap: space.md, alignItems: "flex-start" }}>
@@ -51,6 +54,7 @@ export function DigestShareCard({ projectName }: { projectName?: string }) {
             <Button small variant="secondary" icon="share-2" title="Share" onPress={share} style={{ flex: 1 }} testID="digest-share-button" />
             <Button small variant="outline" icon="copy" title="Copy" onPress={copy} style={{ flex: 1 }} testID="digest-copy-button" />
           </View>
+          <Button small variant="secondary" icon="message-circle" title="Send on WhatsApp" onPress={whatsapp} testID="digest-whatsapp-button" />
           <Button small variant="ghost" icon="external-link" title="Preview what partners see" onPress={() => WebBrowser.openBrowserAsync(url)} testID="digest-preview-button" />
           <Button small variant="danger" icon="link-2-off" title="Turn off link" loading={revoke.isPending} onPress={() => revoke.mutate()} testID="digest-revoke-button" />
         </>

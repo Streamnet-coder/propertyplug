@@ -2,7 +2,7 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
 
-import { api, Branding, fileUrl, gbp, LineItem, MediaItem, Milestone, Project, Receipt } from "@/src/api";
+import { api, Branding, Comparable, fileUrl, gbp, LineItem, MediaItem, Milestone, Project, Receipt, Snag } from "@/src/api";
 import { colors } from "@/src/theme";
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
@@ -20,6 +20,24 @@ async function toDataUri(url: string): Promise<string | null> {
     return null;
   }
 }
+
+const CSS = `*{box-sizing:border-box} body{font-family:-apple-system,Helvetica,Arial,sans-serif;color:${colors.onSurface};margin:0;padding:28px;font-size:12px}
+.hdr{background:${colors.brand};color:${colors.onBrand};padding:22px;border-radius:14px}
+.bb{display:flex;gap:14px;align-items:center;border:1px solid ${colors.border};border-radius:14px;padding:14px;margin-bottom:12px}
+.bb img{width:56px;height:56px;object-fit:contain} .bc{font-size:16px;font-weight:800} .bd{font-size:11px;color:${colors.muted};margin-top:2px}
+.hdr .brand{font-size:11px;letter-spacing:1.5px;font-weight:700;opacity:.85} .hdr .brand b{color:${colors.brandPrimary}}
+.hdr h1{margin:8px 0 4px;font-size:24px} .hdr p{margin:0;opacity:.9}
+.kpis{display:flex;gap:10px;margin:18px 0} .kpi{flex:1;border:1px solid ${colors.border};border-radius:10px;padding:12px}
+.kpi span{color:${colors.muted};font-size:10px;text-transform:uppercase;letter-spacing:.6px} .kpi div{font-size:17px;font-weight:800;margin-top:4px}
+h2{font-size:15px;margin:22px 0 8px;color:${colors.brand}} h3{font-size:13px;margin:14px 0 6px}
+table{width:100%;border-collapse:collapse} th,td{text-align:left;padding:7px 8px;border-bottom:1px solid ${colors.divider}}
+th{background:${colors.surfaceSecondary};font-size:10px;text-transform:uppercase;color:${colors.muted}} td.n,th.n{text-align:right}
+.over{color:${colors.error};font-weight:700} .under{color:${colors.success};font-weight:700}
+.bar{height:8px;background:${colors.surfaceTertiary};border-radius:4px;overflow:hidden;margin-top:6px} .bar i{display:block;height:8px;background:${colors.brandPrimary}}
+.grid{display:flex;flex-wrap:wrap;gap:10px} figure{margin:0;width:31%;page-break-inside:avoid} figure img{width:100%;height:120px;object-fit:cover;border-radius:8px}
+figcaption{font-size:10px;color:${colors.muted};margin-top:4px}
+.foot{margin-top:28px;color:${colors.muted};font-size:10px;text-align:center;border-top:1px solid ${colors.border};padding-top:10px}
+`;
 
 function buildHtml(
   p: Project,
@@ -69,22 +87,7 @@ function buildHtml(
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
 <style>
-*{box-sizing:border-box} body{font-family:-apple-system,Helvetica,Arial,sans-serif;color:${colors.onSurface};margin:0;padding:28px;font-size:12px}
-.hdr{background:${colors.brand};color:${colors.onBrand};padding:22px;border-radius:14px}
-.bb{display:flex;gap:14px;align-items:center;border:1px solid ${colors.border};border-radius:14px;padding:14px;margin-bottom:12px}
-.bb img{width:56px;height:56px;object-fit:contain} .bc{font-size:16px;font-weight:800} .bd{font-size:11px;color:${colors.muted};margin-top:2px}
-.hdr .brand{font-size:11px;letter-spacing:1.5px;font-weight:700;opacity:.85} .hdr .brand b{color:${colors.brandPrimary}}
-.hdr h1{margin:8px 0 4px;font-size:24px} .hdr p{margin:0;opacity:.9}
-.kpis{display:flex;gap:10px;margin:18px 0} .kpi{flex:1;border:1px solid ${colors.border};border-radius:10px;padding:12px}
-.kpi span{color:${colors.muted};font-size:10px;text-transform:uppercase;letter-spacing:.6px} .kpi div{font-size:17px;font-weight:800;margin-top:4px}
-h2{font-size:15px;margin:22px 0 8px;color:${colors.brand}} h3{font-size:13px;margin:14px 0 6px}
-table{width:100%;border-collapse:collapse} th,td{text-align:left;padding:7px 8px;border-bottom:1px solid ${colors.divider}}
-th{background:${colors.surfaceSecondary};font-size:10px;text-transform:uppercase;color:${colors.muted}} td.n,th.n{text-align:right}
-.over{color:${colors.error};font-weight:700} .under{color:${colors.success};font-weight:700}
-.bar{height:8px;background:${colors.surfaceTertiary};border-radius:4px;overflow:hidden;margin-top:6px} .bar i{display:block;height:8px;background:${colors.brandPrimary}}
-.grid{display:flex;flex-wrap:wrap;gap:10px} figure{margin:0;width:31%;page-break-inside:avoid} figure img{width:100%;height:120px;object-fit:cover;border-radius:8px}
-figcaption{font-size:10px;color:${colors.muted};margin-top:4px}
-.foot{margin-top:28px;color:${colors.muted};font-size:10px;text-align:center;border-top:1px solid ${colors.border};padding-top:10px}
+${CSS}
 </style></head><body>
 ${brandHtml}
 <div class="hdr"><div class="brand">BUILDER <b>ASSIST</b> · PROGRESS REPORT</div><h1>${esc(p.name)}</h1><p>${esc(p.address)}</p>
@@ -130,13 +133,97 @@ export async function shareProgressReport() {
       return { m, src: url ? await toDataUri(url) : null };
     }),
   );
-  const html = buildHtml(p, items, receipts, photos, milestones, { b, logo });
+  await printPdf(buildHtml(p, items, receipts, photos, milestones, { b, logo }), `${p.name} progress report`);
+}
+
+export async function printPdf(html: string, title: string) {
   if (Platform.OS === "web") {
     await Print.printAsync({ html });
     return;
   }
   const { uri } = await Print.printToFileAsync({ html });
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, { mimeType: "application/pdf", UTI: "com.adobe.pdf", dialogTitle: `${p.name} progress report` });
+    await Sharing.shareAsync(uri, { mimeType: "application/pdf", UTI: "com.adobe.pdf", dialogTitle: title });
   }
+}
+
+async function brandHeader(kind: string, p: Project) {
+  const b = await api<Branding>("/branding");
+  const logo = b.logo_path ? await toDataUri(fileUrl(b.logo_path)) : null;
+  const contacts = [b.contact_name, b.phone, b.email, b.website].filter(Boolean).map((x) => esc(x)).join(" · ");
+  const bb = b.company_name || logo
+    ? `<div class="bb">${logo ? `<img src="${logo}"/>` : ""}<div><div class="bc">${esc(b.company_name)}</div>${b.tagline ? `<div class="bd">${esc(b.tagline)}</div>` : ""}<div class="bd">${contacts}</div></div></div>`
+    : "";
+  return `${bb}<div class="hdr"><div class="brand">BUILDER <b>ASSIST</b> · ${kind}</div><h1>${esc(p.name)}</h1><p>${esc(p.address)}</p>
+<p style="margin-top:6px;font-size:11px">${new Date().toLocaleDateString("en-GB")}</p></div>`;
+}
+
+const doc = (body: string) =>
+  `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><style>${CSS}
+.warn{color:${colors.brandPrimary};font-weight:700} .pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700}
+.alerts{border:1px solid ${colors.border};border-radius:10px;padding:12px;margin-top:14px}</style></head><body>${body}
+<div class="foot">Generated with Builder Assist · ${new Date().toLocaleString("en-GB")} · Figures are owner-reported</div></body></html>`;
+
+const kpis = (rows: [string, string][]) => `<div class="kpis">${rows.map(([l, v]) => `<div class="kpi"><span>${l}</span><div>${v}</div></div>`).join("")}</div>`;
+
+export async function shareBudgetPdf() {
+  const [p, items] = await Promise.all([api<Project>("/project"), api<LineItem[]>("/line-items")]);
+  const cats = ["Hard Cost", "Soft Cost", "Contingency"] as const;
+  const key = { "Hard Cost": "hard", "Soft Cost": "soft", Contingency: "contingency" } as const;
+  const flagged = items.filter((i) => i.alert);
+  const alerts = flagged.length
+    ? `<div class="alerts"><b>Variance alerts</b><table>${flagged.map((i) => `<tr><td>${esc(i.name)}</td><td class="n ${i.alert === "over" ? "over" : "warn"}">${i.alert === "over" ? `Over by ${gbp(i.spent - i.budgeted)}` : `${Math.round((i.spent / i.budgeted) * 100)}% used`}</td></tr>`).join("")}</table></div>`
+    : "";
+  const sections = cats
+    .map((c) => {
+      const list = items.filter((i) => i.category === c);
+      const b = list.reduce((a, i) => a + i.budgeted, 0);
+      const sp = list.reduce((a, i) => a + i.spent, 0);
+      return `<h2>${c} · allowance ${gbp(p.budget[key[c]])}</h2><table><tr><th>Item</th><th>Supplier</th><th>Status</th><th class="n">Estimate</th><th class="n">Spent</th><th class="n">Variance</th></tr>
+${list.map((i) => `<tr><td>${esc(i.name)}</td><td>${esc(i.supplier)}</td><td>${esc(i.status)}</td><td class="n">${gbp(i.budgeted)}</td><td class="n">${gbp(i.spent)}</td><td class="n ${i.alert === "over" ? "over" : i.alert === "near" ? "warn" : "under"}">${gbp(i.budgeted - i.spent)}</td></tr>`).join("") || `<tr><td colspan="6">No items</td></tr>`}
+<tr><th>Total</th><th></th><th></th><th class="n">${gbp(b)}</th><th class="n">${gbp(sp)}</th><th class="n">${gbp(b - sp)}</th></tr></table>`;
+    })
+    .join("");
+  const est = items.reduce((a, i) => a + i.budgeted, 0);
+  const html = doc(`${await brandHeader("BUDGET ESTIMATE", p)}
+${kpis([["Total budget", gbp(p.total_budget)], ["Itemised estimate", gbp(est)], ["Spent to date", gbp(p.total_spent)], ["Remaining", gbp(p.total_budget - p.total_spent)]])}
+${alerts}${sections}`);
+  await printPdf(html, `${p.name} budget estimate`);
+}
+
+export async function shareSnagPdf() {
+  const [p, snags] = await Promise.all([api<Project>("/project"), api<Snag[]>("/snags")]);
+  const photos = await Promise.all(snags.map(async (x) => {
+    const path = x.fix_photo_path || x.storage_path;
+    return path ? await toDataUri(fileUrl(path)) : null;
+  }));
+  const open = snags.filter((x) => x.status === "open").length;
+  const rooms = Array.from(new Set(snags.map((x) => x.room)));
+  const rows = rooms
+    .map((r) => `<h2>${esc(r)}</h2><table><tr><th>Defect</th><th>Priority</th><th>Assigned</th><th>Status</th><th>Photo</th></tr>${snags
+      .map((x, i) => [x, i] as const)
+      .filter(([x]) => x.room === r)
+      .map(([x, i]) => `<tr><td>${esc(x.description)}${x.fix_note ? `<div class="bd">${esc(x.fix_note)}</div>` : ""}</td><td>${x.priority}</td><td>${esc(x.assignee || "-")}</td><td class="${x.status === "fixed" ? "under" : "over"}">${x.status === "fixed" ? `Fixed${x.fixed_by ? ` by ${esc(x.fixed_by)}` : ""}` : "Open"}</td><td>${photos[i] ? `<img src="${photos[i]}" style="width:70px;height:52px;object-fit:cover;border-radius:6px"/>` : ""}</td></tr>`)
+      .join("")}</table>`)
+    .join("");
+  const html = doc(`${await brandHeader("SNAGGING REPORT", p)}
+${kpis([["Total snags", String(snags.length)], ["Open", String(open)], ["Fixed", String(snags.length - open)], ["Rooms", String(rooms.length)]])}
+${rows || "<p>No snags logged.</p>"}`);
+  await printPdf(html, `${p.name} snagging report`);
+}
+
+export type BrrrFigures = { purchase: number; fees: number; refurb: number; valuation: number; ltv: number; rate: number; rent: number; costs: number;
+  invested: number; refi: number; leftIn: number; mortgage: number; cashflow: number; roi: number; yieldPct: number; equity: number };
+
+export async function shareBrrrPdf(f: BrrrFigures, comps: Comparable[]) {
+  const p = await api<Project>("/project");
+  const row = (l: string, v: string) => `<tr><td>${l}</td><td class="n">${v}</td></tr>`;
+  const avg = comps.length ? comps.reduce((a, c) => a + c.price, 0) / comps.length : 0;
+  const html = doc(`${await brandHeader("BRRR ANALYSIS", p)}
+${kpis([["Money left in", f.leftIn <= 0 ? `${gbp(-f.leftIn)} out` : gbp(f.leftIn)], ["Cash-on-cash ROI", Number.isFinite(f.roi) ? `${f.roi.toFixed(1)}%` : "Infinite"], ["Cashflow / mo", gbp(f.cashflow)], ["Gross yield", `${f.yieldPct.toFixed(1)}%`]])}
+<h2>Buy &amp; refurbish</h2><table>${row("Purchase price", gbp(f.purchase))}${row("Fees &amp; SDLT", gbp(f.fees))}${row("Refurb budget", gbp(f.refurb))}${row("<b>Total invested</b>", `<b>${gbp(f.invested)}</b>`)}</table>
+<h2>Refinance</h2><table>${row("End valuation (GDV)", gbp(f.valuation))}${row(`Refinance at ${f.ltv}% LTV`, gbp(f.refi))}${row("Equity retained", gbp(f.equity))}${row(`Mortgage (${f.rate}% interest-only)`, `${gbp(f.mortgage)}/mo`)}</table>
+<h2>Rent</h2><table>${row("Monthly rent", gbp(f.rent))}${row("Monthly costs", gbp(f.costs))}${row("<b>Monthly cashflow</b>", `<b class="${f.cashflow < 0 ? "over" : "under"}">${gbp(f.cashflow)}</b>`)}${row("Annual cashflow", gbp(f.cashflow * 12))}</table>
+${comps.length ? `<h2>1/4 mile comparables · average ${gbp(avg)}</h2><table><tr><th>Address</th><th>Beds</th><th>Date</th><th class="n">Sold</th></tr>${comps.map((c) => `<tr><td>${esc(c.address)}</td><td>${c.beds}</td><td>${esc(c.date)}</td><td class="n">${gbp(c.price)}</td></tr>`).join("")}</table>` : ""}`);
+  await printPdf(html, `${p.name} BRRR analysis`);
 }

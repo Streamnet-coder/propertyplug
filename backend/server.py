@@ -4,14 +4,16 @@ from starlette.middleware.cors import CORSMiddleware
 from core import client, db, logger
 from seed import seed_milestones
 from storage import init_storage
-from routes import (ai, auth, branding, budget, contacts, digest, media, milestones, payments, projects, quotes,
+import asyncio
+
+from routes import (ai, auth, branding, budget, contacts, digest, export, media, milestones, payments, projects, quotes,
                     referrals, share, shopping, snags, stage_payments, trades)
 
 app = FastAPI()
 api = APIRouter(prefix="/api")
 
 for m in (auth, projects, budget, contacts, media, ai, payments, trades, milestones, branding, referrals, share, quotes,
-          stage_payments, snags, shopping, digest):
+          stage_payments, snags, shopping, digest, export):
     api.include_router(m.router)
 
 
@@ -52,6 +54,7 @@ async def startup():
         await coll.create_index("project_id")
     await db.projects.create_index("user_id")
     await db.projects.create_index("digest_token", sparse=True)
+    asyncio.create_task(digest.digest_scheduler())
     try:
         init_storage()
     except Exception as e:

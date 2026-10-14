@@ -6,7 +6,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { gbp } from "@/src/api";
 import { useAuth } from "@/src/auth";
+import { PdfButton } from "@/src/components/pdf-button";
 import { Card, fonts, Icon, LockedPro, radius, SectionTitle, space } from "@/src/components/ui";
+import { shareBrrrPdf } from "@/src/report";
 import { useComparables, useProject } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
 
@@ -60,7 +62,17 @@ export default function Brrr() {
           <Icon name="arrow-left" size={22} />
         </Pressable>
         <Text style={s.headerTitle}>BRRR calculator</Text>
-        <View style={{ width: 44 }} />
+        {isPro ? (
+          <PdfButton
+            testID="brrr-pdf-button"
+            onGenerate={() => {
+              const n = (k: keyof Inputs) => Number(v[k]) || 0;
+              return shareBrrrPdf({ purchase: n("purchase"), fees: n("fees"), refurb: n("refurb"), valuation: n("valuation"), ltv: n("ltv"), rate: n("rate"), rent: n("rent"), costs: n("costs"), ...r }, comps.data ?? []);
+            }}
+          />
+        ) : (
+          <View style={{ width: 44 }} />
+        )}
       </View>
       {!isPro ? (
         <View style={{ padding: space.lg }}>
