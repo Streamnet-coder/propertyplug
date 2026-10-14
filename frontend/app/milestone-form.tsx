@@ -5,6 +5,7 @@ import { ScrollView, Text, View } from "react-native";
 
 import { api, Milestone } from "@/src/api";
 import { Button, Chip, Field, fonts, FormScreen, space } from "@/src/components/ui";
+import { StagePhotos } from "@/src/components/stage-photos";
 import { invalidate, useMilestones } from "@/src/queries";
 import { useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
@@ -87,6 +88,7 @@ export default function MilestoneForm() {
         </ScrollView>
       </View>
       <Field label="Notes" value={notes} onChangeText={setNotes} multiline placeholder="Inspections booked, snagging, who's on site…" testID="milestone-notes-input" />
+      {id && existing ? <StagePhotos milestoneId={id} stage={existing.name} /> : null}
       {error ? <Text style={{ color: colors.error, fontFamily: fonts.medium }} testID="milestone-form-error">{error}</Text> : null}
     </FormScreen>
   );

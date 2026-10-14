@@ -32,6 +32,11 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Lender share link: public live HTML report /api/share/{token} (revocable), copy/share/preview, PDF snapshot
 - Quote requests: one brief to multiple trades, private public quote form links /api/q/{token}, side-by-side compare (lowest/avg/spread), accept -> adds budget line item
 
+## Iteration 4 (2026-06)
+- Report branding (logo + company/contact) on PDF, live share page and quote pages (/api/branding)
+- Stage photos: media.milestone_id, before/after per milestone, thumbnails on live report & timeline counts
+- Trial CTA on public share/quote pages -> public signup /api/join (signup_source tracked)
+
 ## Backlog
-- P1: Report branding (logo/contact), push quote-received alerts, milestone photos
+- P1: Payment schedule vs accepted quotes, referral rewards for /api/join signups, split server.py into routers
 - P2: Supplier price benchmark lookup, stakeholder share link, milestones/timeline

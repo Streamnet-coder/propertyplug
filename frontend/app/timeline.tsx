@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api, Milestone } from "@/src/api";
 import { Button, fonts, Icon, radius, space, tap } from "@/src/components/ui";
-import { invalidate, useMilestones } from "@/src/queries";
+import { invalidate, useMedia, useMilestones } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
@@ -22,6 +22,11 @@ export default function Timeline() {
   const { colors } = useTheme();
   const toast = useToast();
   const q = useMilestones();
+  const media = useMedia();
+  const photoCount = (media.data ?? []).reduce<Record<string, number>>((a, m) => {
+    if (m.milestone_id) a[m.milestone_id] = (a[m.milestone_id] ?? 0) + 1;
+    return a;
+  }, {});
   const list = q.data ?? [];
   const done = list.filter((m) => m.status === "done").length;
   const pct = list.length ? Math.round((done / list.length) * 100) : 0;
@@ -99,6 +104,12 @@ export default function Timeline() {
                           : "No target date"}
                     </Text>
                     {m.notes ? <Text style={s.notes} numberOfLines={2}>{m.notes}</Text> : null}
+                    {photoCount[m.id] ? (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }} testID={`milestone-photo-count-${m.id}`}>
+                        <Icon name="camera" size={12} color={colors.brand} />
+                        <Text style={[s.muted, { color: colors.brand }]}>{photoCount[m.id]} photo{photoCount[m.id] > 1 ? "s" : ""}</Text>
+                      </View>
+                    ) : null}
                   </View>
                   <View style={[s.pill, { backgroundColor: m.status === "done" ? colors.brandTertiary : m.status === "in_progress" ? colors.orangeTint : colors.surfaceTertiary }]}>
                     <Text style={[s.pillText, { color: m.status === "done" ? colors.brand : m.status === "in_progress" ? colors.brandPrimary : colors.muted }]}>{LABEL[m.status]}</Text>

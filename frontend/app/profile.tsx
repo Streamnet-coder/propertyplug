@@ -154,6 +154,7 @@ export default function Profile() {
             { icon: "milestone" as IconName, label: "Milestone timeline", onPress: () => router.push("/timeline"), id: "timeline" },
             { icon: "file-text" as IconName, label: "Quote requests", onPress: () => router.push("/quotes"), id: "quotes" },
             { icon: "share-2" as IconName, label: "Share report with lenders", onPress: () => router.push("/share-report"), id: "share" },
+            { icon: "building-2" as IconName, label: "Report branding", onPress: () => router.push("/branding"), id: "branding" },
             { icon: "pencil" as IconName, label: "Edit project details", onPress: () => router.push("/project-edit"), id: "edit-project" },
             { icon: "calculator" as IconName, label: "BRRR calculator", onPress: () => router.push("/brrr"), id: "brrr" },
             { icon: "sparkles" as IconName, label: "AI cost estimate", onPress: () => router.push("/ai-estimate"), id: "ai" },

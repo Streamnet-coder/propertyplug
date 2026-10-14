@@ -64,6 +64,16 @@ def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
+class Branding(BaseModel):
+    company_name: str = ""
+    contact_name: str = ""
+    phone: str = ""
+    email: str = ""
+    website: str = ""
+    tagline: str = ""
+    logo_path: Optional[str] = None
+
+
 class User(BaseDocument):
     name: str
     email: str
@@ -72,6 +82,8 @@ class User(BaseDocument):
     paid_pro: bool = False
     trial_ends: str
     active_project_id: Optional[str] = None
+    branding: Branding = Branding()
+    signup_source: Optional[str] = None
     created_at: str = Field(default_factory=now_iso)
 
 
@@ -145,6 +157,7 @@ class Receipt(BaseDocument):
 class Media(BaseDocument):
     user_id: str
     project_id: Optional[str] = None
+    milestone_id: Optional[str] = None
     title: str
     phase: Literal["before", "progress", "after"] = "progress"
     url: Optional[str] = None
@@ -251,19 +264,24 @@ async def seed_user_data(uid: str):
     await seed_milestones(uid, pid, demo=True)
 
 
-@api.post("/auth/register")
-async def register(body: RegisterIn):
-    email = body.email.lower()
-    if len(body.password) < 6:
+async def create_user(name: str, email: str, password: str, source: Optional[str] = None) -> User:
+    email = email.lower().strip()
+    if len(password) < 6:
         raise HTTPException(400, "Password must be at least 6 characters")
     if await db.users.find_one({"email": email}):
         raise HTTPException(409, "Email already registered")
-    u = User(name=body.name.strip() or "Builder", email=email,
-             password_hash=bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode(),
+    u = User(name=name.strip() or "Builder", email=email, signup_source=source,
+             password_hash=bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode(),
              trial_ends=(datetime.now(timezone.utc) + timedelta(days=30)).isoformat())
     res = await db.users.insert_one(u.to_mongo())
     u.id = str(res.inserted_id)
     await seed_user_data(u.id)
+    return u
+
+
+@api.post("/auth/register")
+async def register(body: RegisterIn):
+    u = await create_user(body.name, body.email, body.password)
     return {"access_token": make_token(u.id), "user": user_out(u)}
 
 
@@ -601,6 +619,7 @@ class MediaIn(BaseModel):
     storage_path: Optional[str] = None
     url: Optional[str] = None
     date: Optional[str] = None
+    milestone_id: Optional[str] = None
 
 
 @api.get("/media")
@@ -612,6 +631,7 @@ async def list_media(user: User = Depends(current_user)):
 @api.post("/media")
 async def create_media(body: MediaIn, user: User = Depends(current_user)):
     m = Media(user_id=user.id, project_id=await active_pid(user), title=body.title, phase=body.phase, storage_path=body.storage_path, url=body.url,
+              milestone_id=body.milestone_id or None,
               date=body.date or datetime.now(timezone.utc).date().isoformat())
     res = await db.media.insert_one(m.to_mongo())
     m.id = str(res.inserted_id)
@@ -929,15 +949,106 @@ th{font-size:10px;color:#64748b;text-transform:uppercase}.n{text-align:right}.ov
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}@media(min-width:600px){.grid{grid-template-columns:repeat(3,1fr)}}
 .grid img{width:100%;height:140px;object-fit:cover;border-radius:10px;background:#f1f5f9}.cap{font-size:11px;color:#64748b;margin-top:4px}
 .tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:#f0fdf4;color:#0f766e}
-.foot{text-align:center;color:#64748b;font-size:11px;margin:24px 0}label{display:block;font-size:13px;font-weight:600;margin:12px 0 6px;color:#334155}
+.foot{text-align:center;color:#64748b;font-size:11px;margin:24px 0}
+.msph{display:flex;gap:8px;margin:0 0 8px 24px;overflow-x:auto}.msph figure{margin:0;flex-shrink:0}.msph img{width:96px;height:72px;object-fit:cover;border-radius:8px;background:#f1f5f9}
+.msph figcaption{margin-top:2px}label{display:block;font-size:13px;font-weight:600;margin:12px 0 6px;color:#334155}
 input,textarea{width:100%;padding:12px;border:1px solid #e2e8f0;border-radius:10px;font-size:15px;background:#f8fafc}
 button{margin-top:16px;width:100%;padding:14px;border:0;border-radius:12px;background:#f97316;color:#fff;font-size:16px;font-weight:700}"""
 
 
-def page(title: str, body: str) -> HTMLResponse:
+CTA_CSS = """.cta{background:#1e293b;color:#f8fafc;border-radius:16px;padding:20px;margin-top:18px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.cta h3{margin:0 0 4px;font-size:17px}.cta p{margin:0;font-size:13px;opacity:.85}.cta a{display:inline-block;background:#f97316;color:#fff;text-decoration:none;
+font-weight:700;padding:12px 18px;border-radius:12px;white-space:nowrap}.cta .t{flex:1;min-width:200px}
+.bb{display:flex;gap:14px;align-items:center;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:14px;margin-bottom:12px}
+.bb img{width:56px;height:56px;object-fit:contain;border-radius:10px;background:#f8fafc}.bb .c{font-weight:800;font-size:16px}.bb .d{font-size:12px;color:#64748b;margin-top:2px}
+.bb a{color:#0f766e;text-decoration:none}"""
+
+
+def page(title: str, body: str, ref: Optional[str] = None) -> HTMLResponse:
+    cta = (f"<div class='cta' id='trial-cta'><div class='t'><h3>Run your own renovation like this</h3><p>Budgets, milestones, quotes & lender reports in one app. "
+           f"30 days free, no card needed.</p></div><a href='/api/join?ref={E(ref)}' id='start-trial-link'>Start free trial</a></div>") if ref else ""
     return HTMLResponse(f"<!DOCTYPE html><html><head><meta charset='utf-8'/><meta name='viewport' content='width=device-width,initial-scale=1'/>"
-                        f"<title>{E(title)}</title><style>{PAGE_CSS}</style></head><body><div class='wrap'>{body}"
+                        f"<title>{E(title)}</title><style>{PAGE_CSS}{CTA_CSS}</style></head><body><div class='wrap'>{body}{cta}"
                         f"<div class='foot'>Powered by My Builder App</div></div></body></html>")
+
+
+async def owner_branding(uid: str) -> Branding:
+    doc = await db.users.find_one({"_id": ObjectId(uid)}, {"branding": 1})
+    return Branding(**((doc or {}).get("branding") or {}))
+
+
+def brand_block(b: Branding, logo_src: str) -> str:
+    if not (b.company_name or b.logo_path):
+        return ""
+    contacts = " · ".join(x for x in [
+        E(b.contact_name) if b.contact_name else "",
+        f"<a href='tel:{E(b.phone)}'>{E(b.phone)}</a>" if b.phone else "",
+        f"<a href='mailto:{E(b.email)}'>{E(b.email)}</a>" if b.email else "",
+        f"<a href='{E(b.website if b.website.startswith('http') else 'https://' + b.website)}'>{E(b.website)}</a>" if b.website else ""] if x)
+    logo = f"<img src='{logo_src}' alt='logo'/>" if b.logo_path else ""
+    return (f"<div class='bb' id='brand-block'>{logo}<div><div class='c'>{E(b.company_name)}</div>"
+            f"{f'<div class=d>{E(b.tagline)}</div>' if b.tagline else ''}<div class='d'>{contacts}</div></div></div>")
+
+
+async def serve_logo(uid: str):
+    b = await owner_branding(uid)
+    if not b.logo_path:
+        raise HTTPException(404, "No logo")
+    data, ctype = await run_in_threadpool(get_object, b.logo_path)
+    return Response(content=data, media_type=ctype, headers={"Cache-Control": "public, max-age=3600"})
+
+
+# ---------------- Branding ----------------
+@api.get("/branding")
+async def get_branding(user: User = Depends(current_user)):
+    return user.branding.model_dump()
+
+
+@api.put("/branding")
+async def put_branding(body: Branding, user: User = Depends(current_user)):
+    if body.logo_path and not await db.files.find_one({"storage_path": body.logo_path, "owner_id": user.id}):
+        raise HTTPException(400, "Invalid logo")
+    await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"branding": body.model_dump()}})
+    return body.model_dump()
+
+
+@api.get("/share/{token}/logo")
+async def share_logo(token: str):
+    doc = await db.projects.find_one({"share_token": token}) if token else None
+    if not doc:
+        raise HTTPException(404, "Not found")
+    return await serve_logo(doc["user_id"])
+
+
+# ---------------- Public trial signup ----------------
+JOIN_FORM = """<div class='hdr'><div class='brand'>MY BUILDER <b>APP</b></div><h1>Start your 30-day free trial</h1>
+<div>Track refurb budgets, milestones, trades & BRRR numbers in one app. No card required.</div></div>
+<form class='card' method='post' id='join-form'><input type='hidden' name='ref' value='{ref}'/>{err}
+<label>Full name</label><input name='name' required value='{name}'/>
+<label>Email</label><input name='email' type='email' required value='{email}'/>
+<label>Password (min 6 characters)</label><input name='password' type='password' minlength='6' required/>
+<button type='submit' id='join-submit'>Create free account</button></form>"""
+
+
+@api.get("/join", response_class=HTMLResponse)
+async def join_page(ref: str = "direct"):
+    return page("Start free trial", JOIN_FORM.format(ref=E(ref), err="", name="", email=""))
+
+
+@api.post("/join", response_class=HTMLResponse)
+async def join_submit(name: str = Form(...), email: str = Form(...), password: str = Form(...), ref: str = Form("direct")):
+    src = re.sub(r"[^a-z_]", "", ref.lower())[:20] or "direct"
+    try:
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email.strip()):
+            raise HTTPException(400, "Please enter a valid email")
+        await create_user(name, email, password, source=src)
+    except HTTPException as e:
+        err = f"<p class='over' id='join-error'>{E(str(e.detail))}</p>"
+        return page("Start free trial", JOIN_FORM.format(ref=E(src), err=err, name=E(name), email=E(email)))
+    return page("Welcome", f"""<div class='hdr'><div class='brand'>MY BUILDER <b>APP</b></div><h1>You're in! 🎉</h1>
+<div>Your 30-day free trial has started.</div></div><div class='card' id='join-success'><h2>Next steps</h2>
+<p>1. Open <b>My Builder App</b> on your phone.</p><p>2. Tap <b>Sign in</b> and use <b>{E(email.strip().lower())}</b>.</p>
+<p>3. Your first sample project is already loaded so you can explore straight away.</p></div>""")
 
 
 def money(n, d=0):
@@ -987,9 +1098,14 @@ async def public_report(token: str):
     ms = await db.milestones.find({"project_id": p.id}).sort("order", 1).to_list(200)
     pct = round(s["total_spent"] / s["total_budget"] * 100) if s["total_budget"] else 0
     rem = s["total_budget"] - s["total_spent"]
+    brand = brand_block(await owner_branding(p.user_id), f"/api/share/{E(token)}/logo")
+    by_ms: dict = {}
+    for m in media:
+        if m.get("milestone_id"):
+            by_ms.setdefault(m["milestone_id"], []).append(m)
     cats = [("Hard costs", p.budget.hard, s["spent"]["hard"]), ("Soft costs", p.budget.soft, s["spent"]["soft"]),
             ("Contingency", p.budget.contingency, s["spent"]["contingency"])]
-    body = f"""<div class='hdr'><div class='brand'>MY BUILDER <b>APP</b> · LIVE PROJECT REPORT</div><h1>{E(p.name)}</h1>
+    body = brand + f"""<div class='hdr'><div class='brand'>MY BUILDER <b>APP</b> · LIVE PROJECT REPORT</div><h1>{E(p.name)}</h1>
 <div>{E(p.address)}</div><div style='font-size:12px;opacity:.85;margin-top:6px'>{E(p.target_type)} · {E(p.finish_type)} · Updated {datetime.now(timezone.utc).strftime('%d %b %Y %H:%M')} UTC</div></div>
 <div class='kpis' style='margin-top:14px'><div class='kpi'><span>Purchase</span><div>{money(p.purchase_price)}</div></div>
 <div class='kpi'><span>Est. valuation</span><div>{money(p.estimated_valuation)}</div></div><div class='kpi'><span>Budget</span><div>{money(s['total_budget'])}</div></div>
@@ -1000,6 +1116,9 @@ async def public_report(token: str):
         body += f"<div class='card'><h2>Milestones · {s['milestones_done']}/{s['milestones_total']} complete</h2>" + "".join(
             f"<div class='ms'><div class='dot {m['status']}'></div><div style='flex:1'>{E(m['name'])}</div>"
             f"<div class='cap'>{'Done' if m['status'] == 'done' else 'In progress' if m['status'] == 'in_progress' else (m.get('target_date') or '')}</div></div>"
+            + ("<div class='msph'>" + "".join(
+                f"<figure><img loading='lazy' src='/api/share/{E(token)}/photo/{ph['_id']}'/><figcaption><span class='tag'>{E(ph['phase'].upper())}</span></figcaption></figure>"
+                for ph in by_ms.get(str(m["_id"]), [])) + "</div>" if by_ms.get(str(m["_id"])) else "")
             for m in ms) + "</div>"
     body += "<div class='card'><h2>Budget breakdown</h2><table><tr><th>Category</th><th class='n'>Budget</th><th class='n'>Spent</th><th class='n'>Variance</th></tr>" + "".join(
         f"<tr><td>{l}</td><td class='n'>{money(b)}</td><td class='n'>{money(sp)}</td><td class='n {'over' if b - sp < 0 else 'under'}'>{money(b - sp)}</td></tr>"
@@ -1013,7 +1132,7 @@ async def public_report(token: str):
         body += "<div class='card'><h2>Site photos</h2><div class='grid'>" + "".join(
             f"<div><img loading='lazy' src='/api/share/{E(token)}/photo/{m['_id']}'/><div class='cap'><span class='tag'>{E(m['phase'].upper())}</span> {E(m['title'])}</div></div>"
             for m in media) + "</div></div>"
-    return page(f"{p.name} · Project report", body)
+    return page(f"{p.name} · Project report", body, ref="share")
 
 
 @api.get("/share/{token}/photo/{mid}")
@@ -1177,7 +1296,7 @@ async def public_quote_form(token: str):
         return page("Not found", "<div class='card'><h2>This quote link is no longer active</h2></div>")
     p = await db.projects.find_one({"_id": ObjectId(q.project_id)}) or {}
     closed = e.status in ("accepted", "declined")
-    body = f"""<div class='hdr'><div class='brand'>MY BUILDER <b>APP</b> · QUOTE REQUEST</div><h1>{E(q.title)}</h1>
+    body = brand_block(await owner_branding(q.user_id), f"/api/q/{E(token)}/logo") + f"""<div class='hdr'><div class='brand'>MY BUILDER <b>APP</b> · QUOTE REQUEST</div><h1>{E(q.title)}</h1>
 <div>For {E(e.name)} · {E(p.get('address', ''))}</div></div>
 <div class='card'><h2>Job description</h2><div style='white-space:pre-wrap;line-height:1.5'>{E(q.description)}</div></div>"""
     if closed:
@@ -1188,7 +1307,15 @@ async def public_quote_form(token: str):
 <label>Time to complete (working days)</label><input name='days' type='number' min='0' value='{e.days if e.days is not None else ''}'/>
 <label>Notes (what's included, availability)</label><textarea name='notes' rows='4'>{E(e.notes)}</textarea>
 <button type='submit'>Send quote</button></form>"""
-    return page(f"Quote: {q.title}", body)
+    return page(f"Quote: {q.title}", body, ref="quote")
+
+
+@api.get("/q/{token}/logo")
+async def quote_logo(token: str):
+    q, _ = await find_entry(token)
+    if not q:
+        raise HTTPException(404, "Not found")
+    return await serve_logo(q.user_id)
 
 
 @api.post("/q/{token}", response_class=HTMLResponse)
@@ -1203,7 +1330,7 @@ async def public_quote_submit(token: str, amount: float = Form(...), days: Optio
     e.amount, e.notes, e.status, e.responded_at = float(amount), notes.strip()[:2000], "received", now_iso()
     e.days = int(days) if days and days.strip().isdigit() else None
     await db.quote_requests.update_one({"_id": ObjectId(q.id)}, {"$set": {"quotes": [x.model_dump() for x in q.quotes]}})
-    return page("Quote sent", f"<div class='card'><h2>Thanks {E(e.name)} — your quote of {money(e.amount, 2)} was sent</h2><p>The project owner will be in touch. You can reopen this link to update your quote.</p></div>")
+    return page("Quote sent", f"<div class='card'><h2>Thanks {E(e.name)} — your quote of {money(e.amount, 2)} was sent</h2><p>The project owner will be in touch. You can reopen this link to update your quote.</p></div>", ref="quote")
 
 
 @api.get("/")

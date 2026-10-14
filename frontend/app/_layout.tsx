@@ -58,6 +58,7 @@ export default function RootLayout() {
                 <Stack.Screen name="timeline" />
                 <Stack.Screen name="milestone-form" options={{ presentation: "modal" }} />
                 <Stack.Screen name="share-report" options={{ presentation: "modal" }} />
+                <Stack.Screen name="branding" options={{ presentation: "modal" }} />
                 <Stack.Screen name="quotes/index" />
                 <Stack.Screen name="quotes/new" options={{ presentation: "modal" }} />
                 <Stack.Screen name="quotes/[id]" />

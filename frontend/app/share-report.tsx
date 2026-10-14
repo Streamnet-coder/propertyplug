@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
+import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
 import { ActivityIndicator, Platform, Share, Text, View } from "react-native";
@@ -7,7 +8,7 @@ import { ActivityIndicator, Platform, Share, Text, View } from "react-native";
 import { api, BACKEND_URL } from "@/src/api";
 import { Button, Card, fonts, FormScreen, Icon, radius, space } from "@/src/components/ui";
 import { queryClient } from "@/src/query-client";
-import { useProject } from "@/src/queries";
+import { useBranding, useProject } from "@/src/queries";
 import { shareProgressReport } from "@/src/report";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
@@ -17,6 +18,8 @@ export default function ShareReport() {
   const { colors } = useTheme();
   const toast = useToast();
   const { data: project } = useProject();
+  const branding = useBranding();
+  const router = useRouter();
   const [pdfBusy, setPdfBusy] = useState(false);
   const link = useQuery({ queryKey: ["share-link"], queryFn: () => api<{ url: string | null }>("/project/share") });
   const url = link.data?.url ?? null;
@@ -59,6 +62,18 @@ export default function ShareReport() {
 
   return (
     <FormScreen title="Share progress report" testID="share-report-screen">
+      <Card style={{ gap: space.md }}>
+        <View style={s.row}>
+          <View style={[s.icon, { backgroundColor: colors.surfaceTertiary }]}><Icon name="building-2" size={20} color={colors.onSurfaceSecondary} /></View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.title}>Your branding</Text>
+            <Text style={s.muted} testID="share-branding-summary">
+              {branding.data?.company_name ? `${branding.data.company_name}${branding.data.logo_path ? " · logo added" : ""}` : "Add your logo & contact details to every report"}
+            </Text>
+          </View>
+        </View>
+        <Button small variant="outline" icon="pencil" title={branding.data?.company_name ? "Edit branding" : "Add branding"} onPress={() => router.push("/branding")} testID="share-branding-button" />
+      </Card>
       <Card style={{ gap: space.md }}>
         <View style={s.row}>
           <View style={s.icon}><Icon name="link" size={20} color={colors.brand} /></View>

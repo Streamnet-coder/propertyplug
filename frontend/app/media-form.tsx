@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 
@@ -18,18 +18,19 @@ const PHASES = [
 ] as const;
 
 export default function MediaForm() {
+  const params = useLocalSearchParams<{ milestone_id?: string; phase?: string; stage?: string }>();
   const router = useRouter();
   const toast = useToast();
   const { colors } = useTheme();
-  const [title, setTitle] = useState("");
-  const [phase, setPhase] = useState<"before" | "progress" | "after">("progress");
+  const [title, setTitle] = useState(params.stage ?? "");
+  const [phase, setPhase] = useState<"before" | "progress" | "after">((params.phase as "before" | "progress" | "after") || "progress");
   const [photo, setPhoto] = useState<PickedAsset | null>(null);
   const [error, setError] = useState("");
 
   const save = useMutation({
     mutationFn: async () => {
       const storage_path = await uploadAsset(photo!);
-      return api("/media", { body: { title: title.trim() || "Site photo", phase, storage_path } });
+      return api("/media", { body: { title: title.trim() || "Site photo", phase, storage_path, milestone_id: params.milestone_id ?? null } });
     },
     onSuccess: async () => {
       await invalidate("media");
@@ -41,7 +42,7 @@ export default function MediaForm() {
 
   return (
     <FormScreen
-      title="Upload site photo"
+      title={params.stage ? `Photo: ${params.stage}` : "Upload site photo"}
       testID="media-form-screen"
       footer={<Button title="Upload photo" icon="upload" loading={save.isPending} onPress={() => (photo ? save.mutate() : setError("Please choose a photo first"))} testID="media-form-save-button" />}
     >

@@ -2,7 +2,7 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
 
-import { api, fileUrl, gbp, LineItem, MediaItem, Milestone, Project, Receipt } from "@/src/api";
+import { api, Branding, fileUrl, gbp, LineItem, MediaItem, Milestone, Project, Receipt } from "@/src/api";
 import { colors } from "@/src/theme";
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
@@ -21,7 +21,21 @@ async function toDataUri(url: string): Promise<string | null> {
   }
 }
 
-function buildHtml(p: Project, items: LineItem[], receipts: Receipt[], photos: { m: MediaItem; src: string | null }[], milestones: Milestone[]) {
+function buildHtml(
+  p: Project,
+  items: LineItem[],
+  receipts: Receipt[],
+  photos: { m: MediaItem; src: string | null }[],
+  milestones: Milestone[],
+  brand: { b: Branding; logo: string | null },
+) {
+  const stageName = Object.fromEntries(milestones.map((m) => [m.id, m.name]));
+  const { b, logo } = brand;
+  const contacts = [b.contact_name, b.phone, b.email, b.website].filter(Boolean).map((x) => esc(x)).join(" · ");
+  const brandHtml =
+    b.company_name || logo
+      ? `<div class="bb">${logo ? `<img src="${logo}"/>` : ""}<div><div class="bc">${esc(b.company_name)}</div>${b.tagline ? `<div class="bd">${esc(b.tagline)}</div>` : ""}<div class="bd">${contacts}</div></div></div>`
+      : "";
   const msHtml = milestones.length
     ? `<h2>Milestones (${milestones.filter((m) => m.status === "done").length}/${milestones.length} complete)</h2><table>${milestones
         .map(
@@ -48,7 +62,7 @@ function buildHtml(p: Project, items: LineItem[], receipts: Receipt[], photos: {
       const list = photos.filter((x) => x.m.phase === k && x.src);
       if (!list.length) return "";
       return `<h3>${label}</h3><div class="grid">${list
-        .map((x) => `<figure><img src="${x.src}" /><figcaption>${esc(x.m.title)} · ${x.m.date}</figcaption></figure>`)
+        .map((x) => `<figure><img src="${x.src}" /><figcaption>${x.m.milestone_id && stageName[x.m.milestone_id] ? `<b>${esc(stageName[x.m.milestone_id])}</b> · ` : ""}${esc(x.m.title)} · ${x.m.date}</figcaption></figure>`)
         .join("")}</div>`;
     })
     .join("");
@@ -57,6 +71,8 @@ function buildHtml(p: Project, items: LineItem[], receipts: Receipt[], photos: {
 <style>
 *{box-sizing:border-box} body{font-family:-apple-system,Helvetica,Arial,sans-serif;color:${colors.onSurface};margin:0;padding:28px;font-size:12px}
 .hdr{background:${colors.brand};color:${colors.onBrand};padding:22px;border-radius:14px}
+.bb{display:flex;gap:14px;align-items:center;border:1px solid ${colors.border};border-radius:14px;padding:14px;margin-bottom:12px}
+.bb img{width:56px;height:56px;object-fit:contain} .bc{font-size:16px;font-weight:800} .bd{font-size:11px;color:${colors.muted};margin-top:2px}
 .hdr .brand{font-size:11px;letter-spacing:1.5px;font-weight:700;opacity:.85} .hdr .brand b{color:${colors.brandPrimary}}
 .hdr h1{margin:8px 0 4px;font-size:24px} .hdr p{margin:0;opacity:.9}
 .kpis{display:flex;gap:10px;margin:18px 0} .kpi{flex:1;border:1px solid ${colors.border};border-radius:10px;padding:12px}
@@ -70,6 +86,7 @@ th{background:${colors.surfaceSecondary};font-size:10px;text-transform:uppercase
 figcaption{font-size:10px;color:${colors.muted};margin-top:4px}
 .foot{margin-top:28px;color:${colors.muted};font-size:10px;text-align:center;border-top:1px solid ${colors.border};padding-top:10px}
 </style></head><body>
+${brandHtml}
 <div class="hdr"><div class="brand">MY BUILDER <b>APP</b> · PROGRESS REPORT</div><h1>${esc(p.name)}</h1><p>${esc(p.address)}</p>
 <p style="margin-top:6px;font-size:11px">${esc(p.target_type)} · ${esc(p.finish_type)} · ${new Date().toLocaleDateString("en-GB")}</p></div>
 <div class="kpis">
@@ -105,13 +122,15 @@ export async function shareProgressReport() {
     api<MediaItem[]>("/media"),
     api<Milestone[]>("/milestones"),
   ]);
+  const b = await api<Branding>("/branding");
+  const logo = b.logo_path ? await toDataUri(fileUrl(b.logo_path)) : null;
   const photos = await Promise.all(
     media.slice(0, 12).map(async (m) => {
       const url = m.storage_path ? fileUrl(m.storage_path) : m.url;
       return { m, src: url ? await toDataUri(url) : null };
     }),
   );
-  const html = buildHtml(p, items, receipts, photos, milestones);
+  const html = buildHtml(p, items, receipts, photos, milestones, { b, logo });
   if (Platform.OS === "web") {
     await Print.printAsync({ html });
     return;
