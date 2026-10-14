@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { api, Branding, Comparable, Contact, ContactKind, Contract, LineItem, MediaItem, Milestone, Project, QuoteRequest, Receipt, Referrals, Snag } from "@/src/api";
+import { api, Branding, Comparable, Contact, ContactKind, Contract, Digest, LineItem, MediaItem, Milestone, Project, QuoteRequest, Receipt, Referrals, ShoppingItem, Snag } from "@/src/api";
 import { queryClient } from "@/src/query-client";
 
 export const useProject = () => useQuery({ queryKey: ["project"], queryFn: () => api<Project>("/project") });
@@ -19,5 +19,8 @@ export const useReferrals = () => useQuery({ queryKey: ["referrals"], queryFn: (
 export const useQuotes = () => useQuery({ queryKey: ["quotes"], queryFn: () => api<QuoteRequest[]>("/quotes") });
 export const useQuote = (id: string) =>
   useQuery({ queryKey: ["quotes", id], queryFn: () => api<QuoteRequest>(`/quotes/${id}`), refetchInterval: 10000 });
+
+export const useShopping = () => useQuery({ queryKey: ["shopping"], queryFn: () => api<ShoppingItem[]>("/shopping") });
+export const useDigest = (week: number) => useQuery({ queryKey: ["digest", week], queryFn: () => api<Digest>(`/digest?week=${week}`) });
 
 export const invalidate = (...keys: string[]) => Promise.all(keys.map((k) => queryClient.invalidateQueries({ queryKey: [k] })));

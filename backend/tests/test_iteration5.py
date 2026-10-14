@@ -16,7 +16,7 @@ import re
 import uuid
 import pytest
 import requests
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from pymongo import MongoClient
 from bson import ObjectId
 from tests.cleanup import delete_test_user

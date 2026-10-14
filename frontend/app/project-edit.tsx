@@ -19,7 +19,7 @@ export default function ProjectEdit() {
   const toast = useToast();
   const { colors } = useTheme();
   const { data: p } = useProject();
-  const [f, setF] = useState({ name: "", address: "", purchase_price: "", estimated_valuation: "", monthly_rent: "", hard: "", soft: "", contingency: "", finish_type: "Medium Finish" });
+  const [f, setF] = useState({ name: "", address: "", purchase_price: "", estimated_valuation: "", monthly_rent: "", refinance_ltv: "75", refinance_rate: "5.5", hard: "", soft: "", contingency: "", finish_type: "Medium Finish" });
   const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }));
 
   useEffect(() => {
@@ -30,6 +30,8 @@ export default function ProjectEdit() {
         purchase_price: String(p.purchase_price),
         estimated_valuation: String(p.estimated_valuation),
         monthly_rent: String(p.monthly_rent),
+        refinance_ltv: String(p.refinance_ltv),
+        refinance_rate: String(p.refinance_rate),
         hard: String(p.budget.hard),
         soft: String(p.budget.soft),
         contingency: String(p.budget.contingency),
@@ -48,6 +50,8 @@ export default function ProjectEdit() {
           purchase_price: Number(f.purchase_price) || 0,
           estimated_valuation: Number(f.estimated_valuation) || 0,
           monthly_rent: Number(f.monthly_rent) || 0,
+          refinance_ltv: Number(f.refinance_ltv) || 0,
+          refinance_rate: Number(f.refinance_rate) || 0,
           budget: { hard: Number(f.hard) || 0, soft: Number(f.soft) || 0, contingency: Number(f.contingency) || 0 },
         },
       }),
@@ -79,6 +83,10 @@ export default function ProjectEdit() {
         <View style={{ flex: 1 }}><Field label="Valuation (£)" value={f.estimated_valuation} onChangeText={set("estimated_valuation")} {...num} testID="project-valuation-input" /></View>
       </View>
       <Field label="Expected monthly rent (£)" value={f.monthly_rent} onChangeText={set("monthly_rent")} {...num} testID="project-rent-input" />
+      <View style={{ flexDirection: "row", gap: space.md }}>
+        <View style={{ flex: 1 }}><Field label="Refinance LTV (%)" value={f.refinance_ltv} onChangeText={set("refinance_ltv")} {...num} testID="project-ltv-input" /></View>
+        <View style={{ flex: 1 }}><Field label="Mortgage rate (%)" value={f.refinance_rate} onChangeText={set("refinance_rate")} {...num} testID="project-rate-input" /></View>
+      </View>
       <Text style={{ fontFamily: fonts.bold, fontSize: 16, color: colors.onSurface, marginTop: space.sm }}>Budget</Text>
       <View style={{ flexDirection: "row", gap: space.md }}>
         <View style={{ flex: 1 }}><Field label="Hard (£)" value={f.hard} onChangeText={set("hard")} {...num} testID="project-hard-input" /></View>

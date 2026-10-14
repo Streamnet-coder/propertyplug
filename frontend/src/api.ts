@@ -60,6 +60,9 @@ export type Project = {
   purchase_price: number;
   estimated_valuation: number;
   monthly_rent: number;
+  refinance_ltv: number;
+  refinance_rate: number;
+  rent_yield: RentYield;
   budget: { hard: number; soft: number; contingency: number };
   spent: { hard: number; soft: number; contingency: number };
   total_budget: number;
@@ -111,3 +114,17 @@ export type MediaItem = { id: string; title: string; phase: "before" | "progress
 export type Branding = { company_name: string; contact_name: string; phone: string; email: string; website: string; tagline: string; logo_path?: string | null };
 export type Comparable = { address: string; beds: number; price: number; distance: string; date: string };
 export type Estimate = { items: { name: string; category: string; low: number; high: number; supplier: string }[]; total_low: number; total_high: number; notes: string };
+export type RentYield = { gross_yield: number; yield_on_cost: number; invested: number; refinance_amount: number; cash_left_in: number; monthly_mortgage: number; monthly_cashflow: number };
+export type ShoppingItem = { id: string; line_item_id?: string | null; name: string; supplier: string; qty: string; est_cost: number; checked: boolean };
+export type Digest = {
+  week: number;
+  week_start: string;
+  week_end: string;
+  spend: { total: number; receipts_total: number; receipts_count: number; payments_total: number; payments_count: number; top: { title: string; supplier: string; amount: number; date: string }[] };
+  prev_spend: number;
+  snags_fixed: { id: string; room: string; description: string; fixed_by?: string | null }[];
+  snags_opened: number;
+  snags_open_now: number;
+  milestones_done: { id: string; name: string; completed_at: string }[];
+  next_milestone: { name: string; target_date?: string | null; status: string } | null;
+};

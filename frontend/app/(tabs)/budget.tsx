@@ -98,6 +98,14 @@ export default function Budget() {
                 </View>
                 <Icon name="chevron-right" size={18} color={colors.muted} />
               </Pressable>
+              <Pressable testID="shopping-list-banner" onPress={() => { tap(); router.push("/shopping"); }} style={s.payCard}>
+                <Icon name="shopping-cart" size={20} color={colors.brand} />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.itemName}>Shopping list</Text>
+                  <Text style={s.meta}>Turn line items into a checklist for the merchant</Text>
+                </View>
+                <Icon name="chevron-right" size={18} color={colors.muted} />
+              </Pressable>
               <View style={s.summary} testID="budget-summary">
                 <View>
                   <Text style={s.meta}>Budgeted</Text>

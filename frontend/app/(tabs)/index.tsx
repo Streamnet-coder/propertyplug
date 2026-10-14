@@ -10,7 +10,7 @@ import { useAuth } from "@/src/auth";
 import { BrandLogo } from "@/src/components/brand";
 import { Button, Card, fonts, Icon, IconName, ProBadge, radius, SectionTitle, space, tap } from "@/src/components/ui";
 import { usesNativeTabs } from "@/src/navigation";
-import { invalidate, useProject, useReceipts } from "@/src/queries";
+import { invalidate, useDigest, useProject, useReceipts } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
 
 const HERO = "https://images.unsplash.com/photo-1714259830228-893a69a2d45b?crop=entropy&cs=srgb&fm=jpg&ixlib=rb-4.1.0&q=85&w=1200";
@@ -24,6 +24,7 @@ export default function Home() {
   const { user } = useAuth();
   const project = useProject();
   const receipts = useReceipts();
+  const digest = useDigest(0);
   const p = project.data;
   const isPro = user?.plan === "pro";
 
@@ -69,7 +70,7 @@ export default function Home() {
       ) : (
         <ScrollView
           contentContainerStyle={{ padding: space.lg, paddingBottom: bottomChrome + 100, gap: space.xl }}
-          refreshControl={<RefreshControl refreshing={project.isRefetching} onRefresh={() => invalidate("project", "receipts")} tintColor={colors.brand} />}
+          refreshControl={<RefreshControl refreshing={project.isRefetching} onRefresh={() => invalidate("project", "receipts", "digest")} tintColor={colors.brand} />}
           showsVerticalScrollIndicator={false}
         >
           <Animated.View entering={FadeInDown.duration(400)} style={s.hero} testID="project-hero-card">
@@ -151,6 +152,31 @@ export default function Home() {
             <Text style={s.muted}>{msPct}% of stages complete</Text>
           </Pressable>
 
+          <Pressable testID="digest-card" onPress={() => { tap(); router.push("/digest"); }} style={({ pressed }) => [s.timeline, pressed && { opacity: 0.9 }]}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+              <View style={s.tlIcon}><Icon name="calendar-days" size={20} color={colors.brand} /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.rowLabel}>This week</Text>
+                <Text style={s.muted}>Spend, snags fixed & stages hit</Text>
+              </View>
+              <Icon name="chevron-right" size={18} color={colors.muted} />
+            </View>
+            <View style={s.digestRow}>
+              <View style={s.digestCell}>
+                <Text style={s.statVal} testID="digest-card-spend">{gbp(digest.data?.spend.total ?? 0)}</Text>
+                <Text style={s.muted}>spent</Text>
+              </View>
+              <View style={s.digestCell}>
+                <Text style={s.statVal} testID="digest-card-snags">{digest.data?.snags_fixed.length ?? 0}</Text>
+                <Text style={s.muted}>snags fixed</Text>
+              </View>
+              <View style={s.digestCell}>
+                <Text style={s.statVal} testID="digest-card-milestones">{digest.data?.milestones_done.length ?? 0}</Text>
+                <Text style={s.muted}>stages done</Text>
+              </View>
+            </View>
+          </Pressable>
+
           <View>
             <SectionTitle title="Budget breakdown" action="Details" onAction={() => router.push("/(tabs)/budget")} testID="budget-details-link" />
             <Card style={{ gap: space.lg }}>
@@ -194,6 +220,36 @@ export default function Home() {
                 <Text style={s.statVal} numberOfLines={1}>{p.finish_type}</Text>
               </Card>
             </View>
+          </View>
+
+          <View>
+            <SectionTitle title="Rent & refinance" action="Edit" onAction={() => router.push("/project-edit")} testID="rent-yield-edit" />
+            {p.monthly_rent > 0 ? (
+              <Card style={{ gap: space.md }} testID="rent-yield-card">
+                <View style={s.rowBetween}>
+                  <View>
+                    <Text style={s.statLabel}>Gross yield</Text>
+                    <Text style={[s.statVal, { color: colors.brand, fontSize: 24 }]} testID="rent-gross-yield">{p.rent_yield.gross_yield.toFixed(1)}%</Text>
+                  </View>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={s.statLabel}>{p.rent_yield.cash_left_in > 0 ? "Cash left in deal" : "Cash pulled out"}</Text>
+                    <Text style={[s.statVal, { fontSize: 24, color: p.rent_yield.cash_left_in > 0 ? colors.onSurface : colors.success }]} testID="rent-cash-left-in">{gbp(Math.abs(p.rent_yield.cash_left_in))}</Text>
+                  </View>
+                </View>
+                <View style={s.digestRow}>
+                  <View style={s.digestCell}><Text style={s.rowVal}>{gbp(p.monthly_rent)}</Text><Text style={s.muted}>rent / mo</Text></View>
+                  <View style={s.digestCell}><Text style={s.rowVal} testID="rent-refi-amount">{gbp(p.rent_yield.refinance_amount)}</Text><Text style={s.muted}>refi at {p.refinance_ltv}% LTV</Text></View>
+                  <View style={s.digestCell}><Text style={[s.rowVal, { color: p.rent_yield.monthly_cashflow < 0 ? colors.error : colors.success }]}>{gbp(p.rent_yield.monthly_cashflow)}</Text><Text style={s.muted}>cashflow / mo</Text></View>
+                </View>
+                <Text style={s.muted}>Yield on cost {p.rent_yield.yield_on_cost.toFixed(1)}% · {gbp(p.rent_yield.invested)} in (purchase + budget) · {p.refinance_rate}% interest-only</Text>
+              </Card>
+            ) : (
+              <Pressable testID="rent-yield-empty" onPress={() => router.push("/project-edit")} style={s.trial}>
+                <Icon name="house" size={18} color={colors.brandPrimary} />
+                <Text style={s.trialText}>Add your expected rent to see yield and cash left in after refinance</Text>
+                <Icon name="chevron-right" size={18} color={colors.brandPrimary} />
+              </Pressable>
+            )}
           </View>
 
           <View>
@@ -293,6 +349,8 @@ const useStyles = makeStyles((c) => ({
   actionLabel: { fontFamily: fonts.semibold, fontSize: 11, color: c.onSurfaceSecondary },
   timeline: { backgroundColor: c.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: c.border, padding: space.lg, gap: space.md },
   tlIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: c.brandTertiary, alignItems: "center", justifyContent: "center" },
+  digestRow: { flexDirection: "row", gap: space.sm },
+  digestCell: { flex: 1, backgroundColor: c.surfaceSecondary, borderRadius: radius.md, padding: space.sm, gap: 2 },
   segRow: { flexDirection: "row", gap: 4 },
   seg: { flex: 1, height: 8, borderRadius: 4 },
   rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },

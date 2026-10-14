@@ -62,6 +62,9 @@ export default function RootLayout() {
                 <Stack.Screen name="payments" />
                 <Stack.Screen name="snags" />
                 <Stack.Screen name="snag-form" options={{ presentation: "modal" }} />
+                <Stack.Screen name="shopping" />
+                <Stack.Screen name="shopping-add" options={{ presentation: "modal" }} />
+                <Stack.Screen name="digest" />
                 <Stack.Screen name="quotes/index" />
                 <Stack.Screen name="quotes/new" options={{ presentation: "modal" }} />
                 <Stack.Screen name="quotes/[id]" />

@@ -1,7 +1,6 @@
 """Iteration 4 backend tests: Branding, public brand block + trial CTA, /api/join signup, media milestone_id."""
 import os
 import io
-import re
 import uuid
 import pytest
 import requests

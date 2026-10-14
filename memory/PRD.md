@@ -52,3 +52,9 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 
 ## Maintenance (Jun 2026)
 - Test cleanup now guarded: tests/cleanup.py only deletes TEST_-prefixed users and their data; demo referrals/count restored instead of wiped.
+
+## Iteration 7 (Jun 2026)
+- Backend refactor: server.py split into core.py, models.py, deps.py, storage.py, html_utils.py, seed.py and routes/* (auth, projects, budget, contacts, media, ai, payments, trades, milestones, branding, referrals, share, quotes, stage_payments, snags, shopping, digest). Same API surface.
+- Rent Yield: Project.refinance_ltv (75) & refinance_rate (5.5); /api/project returns rent_yield {gross_yield, yield_on_cost, invested, refinance_amount, cash_left_in, monthly_mortgage, monthly_cashflow}; dashboard "Rent & refinance" card; edit fields in project-edit; share report #rent-yield card.
+- Weekly Digest: GET /api/digest?week=N (Mon–Sun UTC) → spend (receipts by date + paid stage payments), snags fixed, milestones done, next milestone; dashboard "This week" card + /digest screen with week navigation.
+- Shopping List: /api/shopping CRUD, POST /api/shopping/from-line-items, DELETE /api/shopping/checked; /shopping (grouped by merchant, tick off) + /shopping-add modal; entry banner on Budget tab.
