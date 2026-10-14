@@ -49,7 +49,7 @@ export function gbp(n: number, decimals = 0) {
   return `${neg ? "-" : ""}£${withCommas}${dec ? "." + dec : ""}`;
 }
 
-export type User = { id: string; name: string; email: string; plan: "basic" | "pro"; paid_pro: boolean; trial_ends: string };
+export type User = { id: string; name: string; email: string; plan: "basic" | "pro"; paid_pro: boolean; trial_ends: string; active_project_id?: string | null };
 export type Category = "Hard Cost" | "Soft Cost" | "Contingency";
 export type Project = {
   id: string;

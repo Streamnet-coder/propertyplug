@@ -22,6 +22,11 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - BRRR calculator (Pro) with 1/4 mile comparables
 - Profile: plan preview toggle, Stripe upgrade with polling, edit project, logout
 
+## Iteration 2 (2026-06)
+- PDF progress report (expo-print + expo-sharing): KPIs, budget breakdown, line items, receipts, before/progress/after photos
+- Multiple projects: /api/projects list/create/activate/delete; all data scoped per active project; switcher on Home & Profile
+- Trades finder: postcodes.io + OpenStreetMap (Overpass with Nominatim fallback), 24h cache, call/WhatsApp/email invite + add to team
+
 ## Backlog
-- P1: Before & After PDF report generator, local trades finder (search), multiple projects
+- P1: Milestone timeline, stakeholder share link for reports
 - P2: Supplier price benchmark lookup, stakeholder share link, milestones/timeline

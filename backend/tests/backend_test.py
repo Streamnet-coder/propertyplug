@@ -273,3 +273,135 @@ class TestPayments:
         assert s.status_code == 200
         js = s.json()
         assert "status" in js and "payment_status" in js
+
+
+
+# ---------- Projects (Iteration 2: multi-project) ----------
+class TestProjects:
+    def test_list_projects_has_active(self, demo_token):
+        r = requests.get(f"{API}/projects", headers=auth(demo_token), timeout=15)
+        assert r.status_code == 200
+        projs = r.json()
+        assert isinstance(projs, list) and len(projs) >= 1
+        actives = [p for p in projs if p.get("active")]
+        assert len(actives) == 1
+        for k in ("id", "name", "total_budget", "total_spent", "line_item_count", "receipt_count", "active"):
+            assert k in projs[0], f"missing {k} in list_projects result"
+
+    def test_create_activate_isolation_delete(self, demo_token):
+        # Snapshot original active project id (Nottingham)
+        before = requests.get(f"{API}/project", headers=auth(demo_token), timeout=15).json()
+        nottingham_id = before["id"]
+
+        # Create a brand new project
+        payload = {"name": "TEST Project Iso", "address": "1 Test Lane, London, EC1A 1BB",
+                   "purchase_price": 100000, "estimated_valuation": 150000, "monthly_rent": 950,
+                   "budget": {"hard": 10000, "soft": 2000, "contingency": 1000}}
+        c = requests.post(f"{API}/projects", json=payload, headers=auth(demo_token), timeout=20)
+        assert c.status_code == 200
+        new_proj = c.json()
+        new_id = new_proj["id"]
+        assert new_proj["name"] == "TEST Project Iso"
+        assert new_proj["total_budget"] == pytest.approx(13000.0)
+
+        try:
+            # New project should be active after creation
+            me_proj = requests.get(f"{API}/project", headers=auth(demo_token), timeout=15).json()
+            assert me_proj["id"] == new_id
+
+            # Data isolation: new project should have zero line-items / receipts / media / trade contacts
+            for ep in ("line-items", "receipts", "media"):
+                lst = requests.get(f"{API}/{ep}", headers=auth(demo_token), timeout=15).json()
+                assert lst == [], f"{ep} should be empty for new project, got {len(lst)}"
+            trades = requests.get(f"{API}/contacts?kind=trade", headers=auth(demo_token), timeout=15).json()
+            assert trades == [], "trade contacts should be empty for new project"
+
+            # Switch back to Nottingham via activate
+            a = requests.post(f"{API}/projects/{nottingham_id}/activate", headers=auth(demo_token), timeout=15)
+            assert a.status_code == 200
+            assert a.json()["id"] == nottingham_id
+
+            # Seeded data visible again on Nottingham
+            lis = requests.get(f"{API}/line-items", headers=auth(demo_token), timeout=15).json()
+            recs = requests.get(f"{API}/receipts", headers=auth(demo_token), timeout=15).json()
+            med = requests.get(f"{API}/media", headers=auth(demo_token), timeout=15).json()
+            trs = requests.get(f"{API}/contacts?kind=trade", headers=auth(demo_token), timeout=15).json()
+            assert len(lis) >= 6
+            assert len(recs) >= 3
+            assert len(med) >= 3
+            assert len(trs) >= 3
+
+            # /api/project reflects active (Nottingham)
+            cur = requests.get(f"{API}/project", headers=auth(demo_token), timeout=15).json()
+            assert cur["id"] == nottingham_id
+        finally:
+            # Clean up: delete the test project
+            d = requests.delete(f"{API}/projects/{new_id}", headers=auth(demo_token), timeout=15)
+            assert d.status_code in (200, 404)
+
+        # Verify deletion returned ok and project no longer in list
+        lst = requests.get(f"{API}/projects", headers=auth(demo_token), timeout=15).json()
+        assert not any(p["id"] == new_id for p in lst)
+
+    def test_delete_last_project_400(self, demo_token):
+        # Must not allow deletion when only 1 project exists.
+        # Confirm with demo (demo has 1 base project after any TEST cleanup)
+        projs = requests.get(f"{API}/projects", headers=auth(demo_token), timeout=15).json()
+        if len(projs) != 1:
+            pytest.skip(f"Need exactly 1 project to test last-delete guard, have {len(projs)}")
+        d = requests.delete(f"{API}/projects/{projs[0]['id']}", headers=auth(demo_token), timeout=15)
+        assert d.status_code == 400
+
+    def test_activate_nonexistent_404(self, demo_token):
+        from bson import ObjectId
+        fake = str(ObjectId())
+        r = requests.post(f"{API}/projects/{fake}/activate", headers=auth(demo_token), timeout=15)
+        assert r.status_code == 404
+
+    def test_create_project_blank_name_400(self, demo_token):
+        r = requests.post(f"{API}/projects", json={"name": "   "}, headers=auth(demo_token), timeout=15)
+        assert r.status_code == 400
+
+
+# ---------- Trades finder (Iteration 2) ----------
+class TestTradesFinder:
+    def test_invalid_postcode_400(self, demo_token):
+        r = requests.get(f"{API}/trades/search", params={"postcode": "NOTAPC", "trade": "plumber"},
+                         headers=auth(demo_token), timeout=15)
+        assert r.status_code == 400
+
+    def test_unknown_postcode_404(self, demo_token):
+        r = requests.get(f"{API}/trades/search", params={"postcode": "ZZ9 9ZZ", "trade": "plumber"},
+                         headers=auth(demo_token), timeout=20)
+        assert r.status_code == 404
+
+    def test_unknown_trade_400(self, demo_token):
+        r = requests.get(f"{API}/trades/search", params={"postcode": "NG3 5AP", "trade": "wizard"},
+                         headers=auth(demo_token), timeout=15)
+        assert r.status_code == 400
+
+    def test_search_success_and_cache(self, demo_token):
+        r = requests.get(f"{API}/trades/search", params={"postcode": "NG3 5AP", "trade": "plumber"},
+                         headers=auth(demo_token), timeout=60)
+        if r.status_code == 503:
+            pytest.skip(f"Trades upstream unavailable: {r.text}")
+        assert r.status_code == 200, f"Trades search failed: {r.status_code} {r.text}"
+        body = r.json()
+        assert body["trade"] == "plumber"
+        assert body["postcode"].replace(" ", "").upper() == "NG35AP"
+        assert isinstance(body["results"], list)
+        if body["results"]:
+            item = body["results"][0]
+            for k in ("name", "distance_km"):
+                assert k in item
+            assert isinstance(item["distance_km"], (int, float))
+
+        # Second call should be served from cache quickly (<3s)
+        import time as _t
+        t0 = _t.time()
+        r2 = requests.get(f"{API}/trades/search", params={"postcode": "NG3 5AP", "trade": "plumber"},
+                          headers=auth(demo_token), timeout=15)
+        elapsed = _t.time() - t0
+        assert r2.status_code == 200
+        assert r2.json()["results"] == body["results"]
+        assert elapsed < 3.0, f"Second call not cached (took {elapsed:.2f}s)"

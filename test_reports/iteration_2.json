@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 2 end-to-end test (multi-project + trades finder + progress report). Backend: 33/33 pytest cases passed including 9 new iteration-2 tests covering GET/POST/activate/DELETE /api/projects with totals and 'active' flag, data isolation (new project has empty line-items/receipts/media/trade contacts; switching back to Nottingham restores seeded data; /api/project reflects active), delete-last-project 400 guard, activate-nonexistent 404, blank-name 400, and /api/trades/search validation + cache (NG3 5AP plumber returned 2 results via Nominatim fallback in <6s, 2nd call served from cache <0.5s). Frontend (390x844, Expo web preview): login as demo -> home shows 'Nottingham Victorian Refurb' hero -> switch-project-button -> projects-screen -> new-project-button opens project-edit (mode=new) -> created 'TEST E2E Project' with address and price -> project-save-button returns to home with the new project active -> switch back to Nottingham via project-row-* -> delete TEST project with project-delete-* then project-delete-confirm-* (row disappears). profile-link-projects navigates to /projects. Team tab trades segment shows trades-finder-banner -> /trades-finder with postcode prefilled 'NG3 5AP'; trades-filter-plumber then trades-search-button returned 2 results; trade-invite-0 added 'Plumbing, Heating and Gas Service' to team (button correctly flipped to 'On team' and Team tab trade count went 3->4). quick-action-report on Home fires expo-print without crash/error toast on web preview. Regression spot-checks (login, budget line-items CRUD, receipts CRUD) all green. Demo user left clean: Nottingham project active, plan=basic, monthly_rent=1350, 3 original trade contacts, no TEST_ projects.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "global", "issues": ["Still emits RN Web console warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' Unchanged from iteration 1 — carryover follow-up."]}
+    ],
+    "react_native_issues": [
+      {"component": "StyleSheet shadow*", "issue": "Deprecated shadow* style props still present on several Cards/Buttons; migrate to boxShadow. Non-blocking warning on web preview."}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "(Carried over from iteration 1) Replace shadowColor/shadowOffset/shadowOpacity/shadowRadius with boxShadow across styles to silence RN Web deprecation warnings.",
+    "No blocking issues introduced by iteration 2 — safe to proceed."
+  ],
+  "critical_code_review_comments": [
+    "server.py grew to ~860 lines (now includes projects multi-project, trades/search + cache); approaching recommended split threshold — consider separating routers (auth/project/contacts/media/payments/trades) into modules in a future refactor. Not blocking.",
+    "trades/search caches by key `{postcode-no-space}|{trade}` for 24h in db.trade_cache with upsert; good. Cache value size is bounded by Nominatim/Overpass response (<= ~30 items).",
+    "overpass_search gracefully falls back to Nominatim when Overpass is blocked in the container (observed in logs). Good resilience, though Nominatim is ~2-4s per call and rate-limited to 1 req/sec which is handled with time.sleep(1.1).",
+    "delete_project cascades across line_items/contacts/receipts/media by (user_id, project_id). It does NOT currently delete receipts/media objects from object storage (only DB rows). Minor — orphaned blobs will accumulate. Low priority unless storage credits become a concern.",
+    "active_pid auto-selects a project (sorted by _id) if active_project_id is missing/invalid and persists it on the user. Robust and side-effect-safe.",
+    "/api/projects list endpoint iterates projects and calls project_summary which independently queries line_items+receipts per project (N+1). Fine at current scale; could be batched later."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "100% (33/33)", "frontend": "100% of iteration-2 flows exercised"},
+  "seed_data_creation": "No persistent seeds. Backend tests create a TEST_<uuid>@example.com user to validate seeding and a 'TEST Project Iso' project that is deleted in-test. Frontend test cleanup script removed the invited 'Plumbing, Heating and Gas Service' trade contact and any lingering TEST projects; demo user ends session with Nottingham project active, plan=basic, 3 original trades.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Everything from iteration 1 context still applies. For iteration 2: /api/trades/search uses postcodes.io + Overpass with Nominatim fallback — Overpass is blocked in this container so plumber searches at NG3 5AP go through Nominatim (~2-6s). Second identical call is served from db.trade_cache (<1s). Last-project delete returns 400. profile-link-projects navigates to the projects list. On the Team trades segment the trades-finder-banner opens /trades-finder with the project's postcode prefilled from project.address regex. quick-action-report calls expo-print printAsync which opens the browser print dialog on web (no error toast). Demo user left clean at the end of this run.",
+  "rca_of_issue": "N/A — no bugs found. Iteration 2 passes backend + frontend tests."
+}

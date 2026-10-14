@@ -1,6 +1,7 @@
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,7 +12,9 @@ import { BrandLogo } from "@/src/components/brand";
 import { Button, Card, fonts, Icon, IconName, ProBadge, radius, SectionTitle, space, tap } from "@/src/components/ui";
 import { usesNativeTabs } from "@/src/navigation";
 import { invalidate, useProject, useReceipts } from "@/src/queries";
+import { shareProgressReport } from "@/src/report";
 import { makeStyles, useTheme } from "@/src/theme";
+import { useToast } from "@/src/toast";
 
 const HERO = "https://images.unsplash.com/photo-1714259830228-893a69a2d45b?crop=entropy&cs=srgb&fm=jpg&ixlib=rb-4.1.0&q=85&w=1200";
 
@@ -22,6 +25,7 @@ export default function Home() {
   const s = useStyles();
   const { colors } = useTheme();
   const { user } = useAuth();
+  const toast = useToast();
   const project = useProject();
   const receipts = useReceipts();
   const p = project.data;
@@ -38,11 +42,24 @@ export default function Home() {
       ]
     : [];
 
+  const [reporting, setReporting] = useState(false);
+  const makeReport = async () => {
+    setReporting(true);
+    try {
+      await shareProgressReport();
+    } catch (e: any) {
+      toast(e?.message ?? "Could not create report", "error");
+    } finally {
+      setReporting(false);
+    }
+  };
+
   const actions: { icon: IconName; label: string; onPress: () => void; pro?: boolean; id: string }[] = [
-    { id: "ai", icon: "sparkles", label: "AI estimate", onPress: () => router.push("/ai-estimate") },
-    { id: "brrr", icon: "calculator", label: "BRRR calc", onPress: () => router.push("/brrr"), pro: true },
-    { id: "receipt", icon: "receipt", label: "Add receipt", onPress: () => router.push("/receipt-form") },
-    { id: "edit", icon: "pencil", label: "Edit project", onPress: () => router.push("/project-edit") },
+    { id: "ai", icon: "sparkles", label: "AI cost", onPress: () => router.push("/ai-estimate") },
+    { id: "brrr", icon: "calculator", label: "BRRR", onPress: () => router.push("/brrr"), pro: true },
+    { id: "report", icon: "file-text", label: "Report", onPress: makeReport },
+    { id: "receipt", icon: "receipt", label: "Receipt", onPress: () => router.push("/receipt-form") },
+    { id: "edit", icon: "pencil", label: "Edit", onPress: () => router.push("/project-edit") },
   ];
 
   return (
@@ -72,8 +89,14 @@ export default function Home() {
           <Animated.View entering={FadeInDown.duration(400)} style={s.hero} testID="project-hero-card">
             <Image source={{ uri: HERO }} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} contentFit="cover" transition={300} />
             <LinearGradient colors={["rgba(15,23,42,0.15)", colors.scrim]} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
-            <View style={s.heroTag}>
-              <Text style={s.heroTagText}>{p.target_type.toUpperCase()}</Text>
+            <View style={s.heroTop}>
+              <View style={s.heroTag}>
+                <Text style={s.heroTagText}>{p.target_type.toUpperCase()}</Text>
+              </View>
+              <Pressable testID="switch-project-button" onPress={() => { tap(); router.push("/projects"); }} style={s.switchBtn} hitSlop={6}>
+                <Icon name="arrow-left-right" size={14} color={colors.onSurfaceInverse} />
+                <Text style={s.switchText}>Switch</Text>
+              </Pressable>
             </View>
             <View style={{ marginTop: "auto", gap: space.xs }}>
               <Text style={s.heroTitle} testID="project-name">{p.name}</Text>
@@ -113,7 +136,11 @@ export default function Home() {
               <Animated.View key={a.id} entering={FadeInDown.delay(80 + i * 60)} style={{ flex: 1 }}>
                 <Pressable testID={`quick-action-${a.id}`} onPress={() => { tap(); a.onPress(); }} style={({ pressed }) => [s.action, pressed && { transform: [{ scale: 0.96 }] }]}>
                   <View style={[s.actionIcon, a.pro && { backgroundColor: colors.orangeTint }]}>
-                    <Icon name={a.icon} size={20} color={a.pro ? colors.brandPrimary : colors.brand} />
+                    {a.id === "report" && reporting ? (
+                      <ActivityIndicator color={colors.brand} testID="report-generating" />
+                    ) : (
+                      <Icon name={a.icon} size={20} color={a.pro ? colors.brandPrimary : colors.brand} />
+                    )}
                   </View>
                   <Text style={s.actionLabel} numberOfLines={1}>{a.label}</Text>
                   {a.pro && !isPro && <View style={{ position: "absolute", top: 6, right: 6 }}><ProBadge locked /></View>}
@@ -214,6 +241,19 @@ const useStyles = makeStyles((c) => ({
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.md },
   muted: { fontFamily: fonts.regular, fontSize: 12, color: c.muted },
   hero: { height: 260, borderRadius: radius.lg, overflow: "hidden", padding: space.lg, backgroundColor: c.surfaceInverse },
+  heroTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  switchBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 36,
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(15,23,42,0.55)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
+  },
+  switchText: { fontFamily: fonts.bold, fontSize: 12, color: c.onSurfaceInverse },
   heroTag: { alignSelf: "flex-start", backgroundColor: c.brandPrimary, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill },
   heroTagText: { fontFamily: fonts.bold, fontSize: 10, color: c.onBrandPrimary, letterSpacing: 0.6 },
   heroTitle: { fontFamily: fonts.extrabold, fontSize: 22, color: c.onSurfaceInverse, letterSpacing: -0.4 },

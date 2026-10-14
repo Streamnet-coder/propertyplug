@@ -132,7 +132,20 @@ export default function Team() {
           renderItem={renderItem}
           contentContainerStyle={{ padding: space.lg, paddingBottom: bottomChrome + space.xl, gap: space.md }}
           refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => invalidate("contacts")} tintColor={colors.brand} />}
-          ListHeaderComponent={seg.pro ? <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}><ProBadge /><Text style={s.role}>Pro portal</Text></View> : null}
+          ListHeaderComponent={
+            seg.pro ? (
+              <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}><ProBadge /><Text style={s.role}>Pro portal</Text></View>
+            ) : (
+              <Pressable testID="trades-finder-banner" onPress={() => { tap(); router.push("/trades-finder"); }} style={s.finder}>
+                <View style={s.finderIcon}><Icon name="search" size={20} color={colors.onBrand} /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.finderTitle}>Find local trades</Text>
+                  <Text style={s.finderSub}>Search electricians, plumbers & builders by postcode</Text>
+                </View>
+                <Icon name="chevron-right" size={20} color={colors.onBrand} />
+              </Pressable>
+            )
+          }
           ListEmptyComponent={<EmptyState icon="hard-hat" title="No team members yet" subtitle="Add your first trade to call or WhatsApp them in one tap." testID="team-empty" />}
         />
       )}
@@ -160,4 +173,8 @@ const useStyles = makeStyles((c) => ({
   scheduleText: { fontFamily: fonts.medium, fontSize: 13, color: c.onSurfaceSecondary },
   actions: { flexDirection: "row", gap: space.sm, alignItems: "center" },
   actBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: "center", justifyContent: "center", backgroundColor: c.surface },
+  finder: { flexDirection: "row", alignItems: "center", gap: space.md, backgroundColor: c.brand, padding: space.lg, borderRadius: radius.lg },
+  finderIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },
+  finderTitle: { fontFamily: fonts.bold, fontSize: 16, color: c.onBrand },
+  finderSub: { fontFamily: fonts.regular, fontSize: 12, color: c.onBrand, opacity: 0.85, marginTop: 2 },
 }));

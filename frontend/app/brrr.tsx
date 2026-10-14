@@ -110,6 +110,8 @@ export default function Brrr() {
             <Card style={{ paddingVertical: space.xs }} testID="comparables-card">
               {comps.isLoading ? (
                 <ActivityIndicator color={colors.brand} style={{ padding: space.lg }} />
+              ) : !comps.data?.length ? (
+                <Text style={[s.hint, { padding: space.lg, textAlign: "center" }]} testID="comparables-empty">No comparables recorded for this project yet.</Text>
               ) : (
                 (comps.data ?? []).map((c, i) => (
                   <View key={c.address} style={[s.comp, i > 0 && s.divider]} testID={`comparable-${i}`}>

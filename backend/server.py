@@ -10,7 +10,7 @@ from typing import Annotated, Optional, List, Literal
 from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 from pathlib import Path
-import os, json, re, uuid, logging
+import os, json, re, uuid, logging, math, time
 import bcrypt, jwt, requests
 
 ROOT_DIR = Path(__file__).parent
@@ -69,6 +69,7 @@ class User(BaseDocument):
     plan: Literal["basic", "pro"] = "basic"
     paid_pro: bool = False
     trial_ends: str
+    active_project_id: Optional[str] = None
     created_at: str = Field(default_factory=now_iso)
 
 
@@ -101,6 +102,7 @@ class Project(BaseDocument):
 
 class LineItem(BaseDocument):
     user_id: str
+    project_id: Optional[str] = None
     category: Literal["Hard Cost", "Soft Cost", "Contingency"]
     name: str
     budgeted: float = 0
@@ -112,6 +114,7 @@ class LineItem(BaseDocument):
 
 class Contact(BaseDocument):
     user_id: str
+    project_id: Optional[str] = None
     kind: Literal["trade", "subcontractor", "stakeholder"]
     name: str
     role: str = ""
@@ -125,6 +128,7 @@ class Contact(BaseDocument):
 
 class Receipt(BaseDocument):
     user_id: str
+    project_id: Optional[str] = None
     title: str
     amount: float
     date: str
@@ -136,6 +140,7 @@ class Receipt(BaseDocument):
 
 class Media(BaseDocument):
     user_id: str
+    project_id: Optional[str] = None
     title: str
     phase: Literal["before", "progress", "after"] = "progress"
     url: Optional[str] = None
@@ -180,7 +185,8 @@ async def pro_user(user: User = Depends(current_user)) -> User:
 
 
 def user_out(u: User):
-    return {"id": u.id, "name": u.name, "email": u.email, "plan": u.plan, "paid_pro": u.paid_pro, "trial_ends": u.trial_ends}
+    return {"id": u.id, "name": u.name, "email": u.email, "plan": u.plan, "paid_pro": u.paid_pro, "trial_ends": u.trial_ends,
+            "active_project_id": u.active_project_id}
 
 
 class RegisterIn(BaseModel):
@@ -204,7 +210,8 @@ async def seed_user_data(uid: str):
             Comparable(address="45 Woodborough Road", beds=3, price=272000, distance="0.12 miles", date="Apr 2026"),
             Comparable(address="8 Sherwood Rise", beds=3, price=258000, distance="0.21 miles", date="Jun 2026"),
         ])
-    await db.projects.insert_one(p.to_mongo())
+    pid = str((await db.projects.insert_one(p.to_mongo())).inserted_id)
+    await db.users.update_one({"_id": ObjectId(uid)}, {"$set": {"active_project_id": pid}})
     items = [
         ("Hard Cost", "Kitchen Units & Worktop", 6500, 6200, "DIY Kitchens", "Purchased"),
         ("Hard Cost", "Bathroom Suite & Tiles", 3200, 3450, "B&Q", "Purchased"),
@@ -213,28 +220,28 @@ async def seed_user_data(uid: str):
         ("Soft Cost", "Architectural Drawings", 1800, 1800, "Local Surveyor", "Paid"),
         ("Contingency", "Damp proofing (unexpected)", 1500, 1200, "Wickes", "Paid"),
     ]
-    await db.line_items.insert_many([LineItem(user_id=uid, category=c, name=n, budgeted=b, actual=a, supplier=s, status=st).to_mongo() for c, n, b, a, s, st in items])
+    await db.line_items.insert_many([LineItem(user_id=uid, project_id=pid, category=c, name=n, budgeted=b, actual=a, supplier=s, status=st).to_mongo() for c, n, b, a, s, st in items])
     contacts = [
-        Contact(user_id=uid, kind="trade", name="Dave Miller", role="Master Electrician", phone="+447700900077", email="dave@millerelectrical.co.uk", status="Assigned"),
-        Contact(user_id=uid, kind="trade", name="Sajid Khan", role="Plumber & Heating Engineer", phone="+447700900123", email="sajid@nottsplumbing.co.uk", status="Assigned"),
-        Contact(user_id=uid, kind="trade", name="Apex Builders Ltd", role="General Builders & Bricklayers", phone="+447700900888", email="quotes@apexbuilders.co.uk", status="Invited"),
-        Contact(user_id=uid, kind="subcontractor", name="Dave Miller", role="Electrician", phone="+447700900077", email="dave@miller.co.uk", schedule="First fix complete, second fix starting Monday", status="Today, 10:45 AM"),
-        Contact(user_id=uid, kind="subcontractor", name="Sajid Khan", role="Plumber", phone="+447700900123", email="sajid@plumbing.co.uk", schedule="Boiler installation & bathroom piping", status="Yesterday, 4:15 PM"),
-        Contact(user_id=uid, kind="stakeholder", name="NatWest Buy-to-Let Mortgage", role="Financing", email="mortgages@natwest.co.uk", cost="£1,450 fee"),
-        Contact(user_id=uid, kind="stakeholder", name="Belvoir Estate Agents Nottingham", role="Brokerage & Valuation", email="nottingham@belvoir.co.uk", cost="1.2% commission"),
-        Contact(user_id=uid, kind="stakeholder", name="Browne Jacobson Solicitors", role="Legal & Conveyancing", email="conveyancing@brownejacobson.com", cost="£1,250 fixed"),
+        Contact(user_id=uid, project_id=pid, kind="trade", name="Dave Miller", role="Master Electrician", phone="+447700900077", email="dave@millerelectrical.co.uk", status="Assigned"),
+        Contact(user_id=uid, project_id=pid, kind="trade", name="Sajid Khan", role="Plumber & Heating Engineer", phone="+447700900123", email="sajid@nottsplumbing.co.uk", status="Assigned"),
+        Contact(user_id=uid, project_id=pid, kind="trade", name="Apex Builders Ltd", role="General Builders & Bricklayers", phone="+447700900888", email="quotes@apexbuilders.co.uk", status="Invited"),
+        Contact(user_id=uid, project_id=pid, kind="subcontractor", name="Dave Miller", role="Electrician", phone="+447700900077", email="dave@miller.co.uk", schedule="First fix complete, second fix starting Monday", status="Today, 10:45 AM"),
+        Contact(user_id=uid, project_id=pid, kind="subcontractor", name="Sajid Khan", role="Plumber", phone="+447700900123", email="sajid@plumbing.co.uk", schedule="Boiler installation & bathroom piping", status="Yesterday, 4:15 PM"),
+        Contact(user_id=uid, project_id=pid, kind="stakeholder", name="NatWest Buy-to-Let Mortgage", role="Financing", email="mortgages@natwest.co.uk", cost="£1,450 fee"),
+        Contact(user_id=uid, project_id=pid, kind="stakeholder", name="Belvoir Estate Agents Nottingham", role="Brokerage & Valuation", email="nottingham@belvoir.co.uk", cost="1.2% commission"),
+        Contact(user_id=uid, project_id=pid, kind="stakeholder", name="Browne Jacobson Solicitors", role="Legal & Conveyancing", email="conveyancing@brownejacobson.com", cost="£1,250 fixed"),
     ]
     await db.contacts.insert_many([c.to_mongo() for c in contacts])
     receipts = [
-        Receipt(user_id=uid, title="B&Q Timber & Plasterboard", amount=480.50, date="2026-06-12", supplier="B&Q"),
-        Receipt(user_id=uid, title="Toolstation Cable & Sockets", amount=215.20, date="2026-06-14", supplier="Toolstation"),
-        Receipt(user_id=uid, title="Wren Kitchen Deposit", amount=1500.00, date="2026-06-18", supplier="Wren Kitchens"),
+        Receipt(user_id=uid, project_id=pid, title="B&Q Timber & Plasterboard", amount=480.50, date="2026-06-12", supplier="B&Q"),
+        Receipt(user_id=uid, project_id=pid, title="Toolstation Cable & Sockets", amount=215.20, date="2026-06-14", supplier="Toolstation"),
+        Receipt(user_id=uid, project_id=pid, title="Wren Kitchen Deposit", amount=1500.00, date="2026-06-18", supplier="Wren Kitchens"),
     ]
     await db.receipts.insert_many([r.to_mongo() for r in receipts])
     media = [
-        Media(user_id=uid, title="Kitchen Strip-Out Before", phase="before", url="https://placehold.co/600x400/0f766e/ffffff.png?text=Kitchen+Before", date="2026-06-01"),
-        Media(user_id=uid, title="New First Fix Electrics", phase="progress", url="https://placehold.co/600x400/06b6d4/ffffff.png?text=First+Fix+Electrics", date="2026-06-15"),
-        Media(user_id=uid, title="Bathroom Plumbing Installed", phase="after", url="https://placehold.co/600x400/f97316/ffffff.png?text=Bathroom+Plumbing", date="2026-06-20"),
+        Media(user_id=uid, project_id=pid, title="Kitchen Strip-Out Before", phase="before", url="https://placehold.co/600x400/0f766e/ffffff.png?text=Kitchen+Before", date="2026-06-01"),
+        Media(user_id=uid, project_id=pid, title="New First Fix Electrics", phase="progress", url="https://placehold.co/600x400/06b6d4/ffffff.png?text=First+Fix+Electrics", date="2026-06-15"),
+        Media(user_id=uid, project_id=pid, title="Bathroom Plumbing Installed", phase="after", url="https://placehold.co/600x400/f97316/ffffff.png?text=Bathroom+Plumbing", date="2026-06-20"),
     ]
     await db.media.insert_many([m.to_mongo() for m in media])
 
@@ -280,18 +287,32 @@ async def set_plan(body: PlanIn, user: User = Depends(current_user)):
 
 
 # ---------------- Project ----------------
-async def get_project_doc(uid: str) -> Project:
-    p = Project.from_mongo(await db.projects.find_one({"user_id": uid}))
-    if not p:
+async def active_pid(user: User) -> str:
+    if user.active_project_id and ObjectId.is_valid(user.active_project_id) and await db.projects.find_one(
+            {"_id": ObjectId(user.active_project_id), "user_id": user.id}, {"_id": 1}):
+        return user.active_project_id
+    doc = await db.projects.find_one({"user_id": user.id}, sort=[("_id", 1)])
+    if not doc:
         raise HTTPException(404, "Project not found")
-    return p
+    pid = str(doc["_id"])
+    await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"active_project_id": pid}})
+    user.active_project_id = pid
+    return pid
+
+
+async def get_project_doc(user: User) -> Project:
+    pid = await active_pid(user)
+    return Project.from_mongo(await db.projects.find_one({"_id": ObjectId(pid)}))
 
 
 @api.get("/project")
 async def get_project(user: User = Depends(current_user)):
-    p = await get_project_doc(user.id)
-    items = await db.line_items.find({"user_id": user.id}).to_list(1000)
-    receipts = await db.receipts.find({"user_id": user.id}).to_list(1000)
+    return await project_summary(await get_project_doc(user))
+
+
+async def project_summary(p: Project) -> dict:
+    items = await db.line_items.find({"project_id": p.id}).to_list(1000)
+    receipts = await db.receipts.find({"project_id": p.id}).to_list(1000)
     spent = {"hard": 0.0, "soft": 0.0, "contingency": 0.0}
     key = {"Hard Cost": "hard", "Soft Cost": "soft", "Contingency": "contingency"}
     for i in items:
@@ -320,15 +341,72 @@ class ProjectUpdate(BaseModel):
 @api.put("/project")
 async def update_project(body: ProjectUpdate, user: User = Depends(current_user)):
     upd = body.model_dump(exclude_none=True)
+    pid = await active_pid(user)
     if upd:
-        await db.projects.update_one({"user_id": user.id}, {"$set": upd})
+        await db.projects.update_one({"_id": ObjectId(pid)}, {"$set": upd})
     return await get_project(user)
 
 
 @api.get("/project/comparables")
 async def comparables(user: User = Depends(pro_user)):
-    p = await get_project_doc(user.id)
+    p = await get_project_doc(user)
     return [c.model_dump() for c in p.comparables]
+
+
+class ProjectCreate(BaseModel):
+    name: str
+    address: str = ""
+    target_type: str = "BRRR Refurbishment"
+    finish_type: str = "Medium Finish"
+    purchase_price: float = 0
+    estimated_valuation: float = 0
+    monthly_rent: float = 0
+    budget: Budget = Budget()
+
+
+@api.get("/projects")
+async def list_projects(user: User = Depends(current_user)):
+    pid = await active_pid(user)
+    docs = await db.projects.find({"user_id": user.id}).sort("_id", 1).to_list(200)
+    out = []
+    for d in docs:
+        s = await project_summary(Project.from_mongo(d))
+        s["active"] = s["id"] == pid
+        out.append(s)
+    return out
+
+
+@api.post("/projects")
+async def create_project(body: ProjectCreate, user: User = Depends(current_user)):
+    if not body.name.strip():
+        raise HTTPException(400, "Project name is required")
+    p = Project(user_id=user.id, **body.model_dump())
+    p.id = str((await db.projects.insert_one(p.to_mongo())).inserted_id)
+    await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"active_project_id": p.id}})
+    return await project_summary(p)
+
+
+@api.post("/projects/{pid}/activate")
+async def activate_project(pid: str, user: User = Depends(current_user)):
+    doc = await db.projects.find_one({"_id": oid(pid), "user_id": user.id})
+    if not doc:
+        raise HTTPException(404, "Project not found")
+    await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"active_project_id": pid}})
+    return await project_summary(Project.from_mongo(doc))
+
+
+@api.delete("/projects/{pid}")
+async def delete_project(pid: str, user: User = Depends(current_user)):
+    if await db.projects.count_documents({"user_id": user.id}) <= 1:
+        raise HTTPException(400, "You need at least one project")
+    r = await db.projects.delete_one({"_id": oid(pid), "user_id": user.id})
+    if not r.deleted_count:
+        raise HTTPException(404, "Project not found")
+    for coll in (db.line_items, db.contacts, db.receipts, db.media):
+        await coll.delete_many({"user_id": user.id, "project_id": pid})
+    if user.active_project_id == pid:
+        await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"active_project_id": None}})
+    return {"ok": True}
 
 
 # ---------------- Line items ----------------
@@ -343,13 +421,13 @@ class LineItemIn(BaseModel):
 
 @api.get("/line-items")
 async def list_items(user: User = Depends(current_user)):
-    docs = await db.line_items.find({"user_id": user.id}).sort("created_at", -1).to_list(1000)
+    docs = await db.line_items.find({"user_id": user.id, "project_id": await active_pid(user)}).sort("created_at", -1).to_list(1000)
     return [LineItem.from_mongo(d).out() for d in docs]
 
 
 @api.post("/line-items")
 async def create_item(body: LineItemIn, user: User = Depends(current_user)):
-    li = LineItem(user_id=user.id, **body.model_dump())
+    li = LineItem(user_id=user.id, project_id=await active_pid(user), **body.model_dump())
     res = await db.line_items.insert_one(li.to_mongo())
     li.id = str(res.inserted_id)
     return li.out()
@@ -392,7 +470,7 @@ class ContactIn(BaseModel):
 async def list_contacts(kind: str = Query("trade"), user: User = Depends(current_user)):
     if kind != "trade" and user.plan != "pro":
         raise HTTPException(403, "Pro plan required")
-    docs = await db.contacts.find({"user_id": user.id, "kind": kind}).sort("created_at", 1).to_list(500)
+    docs = await db.contacts.find({"user_id": user.id, "project_id": await active_pid(user), "kind": kind}).sort("created_at", 1).to_list(500)
     return [Contact.from_mongo(d).out() for d in docs]
 
 
@@ -400,7 +478,7 @@ async def list_contacts(kind: str = Query("trade"), user: User = Depends(current
 async def create_contact(body: ContactIn, user: User = Depends(current_user)):
     if body.kind != "trade" and user.plan != "pro":
         raise HTTPException(403, "Pro plan required")
-    c = Contact(user_id=user.id, **body.model_dump())
+    c = Contact(user_id=user.id, project_id=await active_pid(user), **body.model_dump())
     res = await db.contacts.insert_one(c.to_mongo())
     c.id = str(res.inserted_id)
     return c.out()
@@ -488,13 +566,13 @@ class ReceiptIn(BaseModel):
 
 @api.get("/receipts")
 async def list_receipts(user: User = Depends(current_user)):
-    docs = await db.receipts.find({"user_id": user.id}).sort("date", -1).to_list(1000)
+    docs = await db.receipts.find({"user_id": user.id, "project_id": await active_pid(user)}).sort("date", -1).to_list(1000)
     return [Receipt.from_mongo(d).out() for d in docs]
 
 
 @api.post("/receipts")
 async def create_receipt(body: ReceiptIn, user: User = Depends(current_user)):
-    r = Receipt(user_id=user.id, **body.model_dump())
+    r = Receipt(user_id=user.id, project_id=await active_pid(user), **body.model_dump())
     res = await db.receipts.insert_one(r.to_mongo())
     r.id = str(res.inserted_id)
     return r.out()
@@ -517,13 +595,13 @@ class MediaIn(BaseModel):
 
 @api.get("/media")
 async def list_media(user: User = Depends(current_user)):
-    docs = await db.media.find({"user_id": user.id}).sort("created_at", -1).to_list(1000)
+    docs = await db.media.find({"user_id": user.id, "project_id": await active_pid(user)}).sort("created_at", -1).to_list(1000)
     return [Media.from_mongo(d).out() for d in docs]
 
 
 @api.post("/media")
 async def create_media(body: MediaIn, user: User = Depends(current_user)):
-    m = Media(user_id=user.id, title=body.title, phase=body.phase, storage_path=body.storage_path, url=body.url,
+    m = Media(user_id=user.id, project_id=await active_pid(user), title=body.title, phase=body.phase, storage_path=body.storage_path, url=body.url,
               date=body.date or datetime.now(timezone.utc).date().isoformat())
     res = await db.media.insert_one(m.to_mongo())
     m.id = str(res.inserted_id)
@@ -636,6 +714,118 @@ async def stripe_webhook(request: Request):
     return {"received": True}
 
 
+# ---------------- Trades finder (postcodes.io + OpenStreetMap) ----------------
+TRADE_TERMS = {
+    "electrician": ["electrician"],
+    "plumber": ["plumber", "heating"],
+    "builder": ["builders", "builder"],
+    "carpenter": ["carpenter", "joinery"],
+    "painter": ["painter", "decorator"],
+    "roofer": ["roofer", "roofing"],
+}
+OSM_UA = {"User-Agent": "my-builder-app/1.0 (support@mybuilder.app)"}
+POSTCODE_RE = re.compile(r"^[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}$")
+
+
+def haversine_km(lat1, lon1, lat2, lon2):
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = p2 - p1, math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * 6371.0088 * math.asin(math.sqrt(a))
+
+
+def geocode_postcode(pc: str):
+    r = requests.get(f"https://api.postcodes.io/postcodes/{pc.replace(' ', '%20')}", headers=OSM_UA, timeout=10)
+    if r.status_code == 404:
+        raise HTTPException(404, "Postcode not found")
+    r.raise_for_status()
+    res = r.json()["result"]
+    return float(res["latitude"]), float(res["longitude"]), res["postcode"]
+
+
+def overpass_search(lat, lon, trade):
+    q = f'[out:json][timeout:15];nwr(around:8000,{lat},{lon})[craft="{trade}"];out center tags;'
+    try:
+        r = requests.post("https://overpass-api.de/api/interpreter", data={"data": q}, headers=OSM_UA, timeout=15)
+        r.raise_for_status()
+        out = []
+        for e in r.json().get("elements", []):
+            t = e.get("tags", {})
+            pt = e.get("center", e)
+            if not t.get("name") or "lat" not in pt:
+                continue
+            addr = " ".join(x for x in [t.get("addr:housenumber"), t.get("addr:street"), t.get("addr:city"), t.get("addr:postcode")] if x)
+            out.append({"osm_id": f"{e['type']}/{e['id']}", "name": t["name"], "lat": float(pt["lat"]), "lon": float(pt["lon"]),
+                        "phone": t.get("phone") or t.get("contact:phone") or t.get("mobile"),
+                        "email": t.get("email") or t.get("contact:email"),
+                        "website": t.get("website") or t.get("contact:website"), "address": addr})
+        return out
+    except Exception as e:
+        logger.info(f"Overpass unavailable, falling back to Nominatim: {e}")
+        return None
+
+
+def nominatim_search(lat, lon, trade):
+    out = []
+    viewbox = f"{lon - 0.09},{lat + 0.055},{lon + 0.09},{lat - 0.055}"
+    for i, term in enumerate(TRADE_TERMS[trade]):
+        if i:
+            time.sleep(1.1)  # Nominatim usage policy: max 1 req/sec
+        r = requests.get("https://nominatim.openstreetmap.org/search", headers=OSM_UA, timeout=15, params={
+            "q": term, "format": "jsonv2", "limit": 25, "extratags": 1, "addressdetails": 1, "bounded": 1, "viewbox": viewbox})
+        if r.status_code != 200:
+            continue
+        for e in r.json():
+            if e.get("category") not in ("craft", "office", "building") or not e.get("name"):
+                continue
+            t = e.get("extratags") or {}
+            a = e.get("address") or {}
+            addr = " ".join(x for x in [a.get("house_number"), a.get("road"), a.get("city") or a.get("town") or a.get("suburb"), a.get("postcode")] if x)
+            out.append({"osm_id": f"{e.get('osm_type')}/{e.get('osm_id')}", "name": e["name"], "lat": float(e["lat"]), "lon": float(e["lon"]),
+                        "phone": t.get("phone") or t.get("contact:phone") or t.get("mobile"),
+                        "email": t.get("email") or t.get("contact:email"),
+                        "website": t.get("website") or t.get("contact:website"), "address": addr})
+    return out
+
+
+def find_trades(lat, lon, trade):
+    found = overpass_search(lat, lon, trade)
+    if found is None:
+        found = nominatim_search(lat, lon, trade)
+    seen, results = set(), []
+    for f in found:
+        if f["osm_id"] in seen:
+            continue
+        seen.add(f["osm_id"])
+        f["trade"] = trade
+        f["distance_km"] = round(haversine_km(lat, lon, f["lat"], f["lon"]), 2)
+        results.append(f)
+    return sorted(results, key=lambda x: x["distance_km"])[:30]
+
+
+@api.get("/trades/search")
+async def trades_search(postcode: str, trade: str = "electrician", user: User = Depends(current_user)):
+    pc = " ".join(postcode.upper().split())
+    if not POSTCODE_RE.match(pc):
+        raise HTTPException(400, "Please enter a valid UK postcode")
+    if trade not in TRADE_TERMS:
+        raise HTTPException(400, "Unknown trade")
+    key = f"{pc.replace(' ', '')}|{trade}"
+    cached = await db.trade_cache.find_one({"key": key})
+    if cached and datetime.fromisoformat(cached["fetched_at"]) > datetime.now(timezone.utc) - timedelta(hours=24):
+        return {"postcode": cached["postcode"], "trade": trade, "results": cached["results"], "attribution": "© OpenStreetMap contributors"}
+    try:
+        lat, lon, norm = await run_in_threadpool(geocode_postcode, pc)
+        results = await run_in_threadpool(find_trades, lat, lon, trade)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Trades search failed")
+        raise HTTPException(503, f"Trades search is temporarily unavailable: {e}")
+    await db.trade_cache.update_one({"key": key}, {"$set": {"key": key, "postcode": norm, "results": results, "fetched_at": now_iso()}}, upsert=True)
+    return {"postcode": norm, "trade": trade, "results": results, "attribution": "© OpenStreetMap contributors"}
+
+
 @api.get("/")
 async def root():
     return {"message": "My Builder App API"}
@@ -648,6 +838,17 @@ app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=["*"], 
 @app.on_event("startup")
 async def startup():
     await db.users.create_index("email", unique=True)
+    # Migrate single-project data to multi-project: attach orphan docs to each user's first project
+    async for u in db.users.find({}, {"_id": 1, "active_project_id": 1}):
+        uid = str(u["_id"])
+        first = await db.projects.find_one({"user_id": uid}, sort=[("_id", 1)])
+        if not first:
+            continue
+        fpid = str(first["_id"])
+        for coll in (db.line_items, db.contacts, db.receipts, db.media):
+            await coll.update_many({"user_id": uid, "$or": [{"project_id": {"$exists": False}}, {"project_id": None}]}, {"$set": {"project_id": fpid}})
+        if not u.get("active_project_id"):
+            await db.users.update_one({"_id": u["_id"]}, {"$set": {"active_project_id": fpid}})
     try:
         init_storage()
     except Exception as e:

@@ -20,7 +20,10 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "permissions": ["CAMERA", "READ_MEDIA_IMAGES"],
+      "permissions": [
+        "CAMERA",
+        "READ_MEDIA_IMAGES"
+      ],
       "package": "com.emergent.devbudgettracker.abwzec"
     },
     "web": {
@@ -51,7 +54,8 @@
           "photosPermission": "Attach site photos and receipts to projects",
           "cameraPermission": "Snap site photos and receipts"
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true
