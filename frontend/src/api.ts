@@ -141,3 +141,6 @@ export const logMessage = (b: { name: string; email?: string; phone?: string; ch
 export type EmailSettings = { company_email: string | null; verified: boolean; sender_name: string; company_name: string; account_email: string };
 export type TradeRating = { id: string; assignee: string; stars: number; tags: string[]; comment: string; project_id: string; project_name: string; contact_id?: string | null; updated_at: string };
 export type TrustedTrade = { name: string; avg: number; count: number; top_tags: string[]; last_comment: string; role: string; phone: string; email: string; contact_id?: string | null };
+export const DOC_TYPES = ["Title deeds", "Survey", "Planning", "Building control", "Gas certificate", "EICR", "EPC", "Insurance", "Mortgage & finance", "Tenancy", "Invoice", "Warranty", "Drawings", "Other"] as const;
+export type DocItem = { id: string; title: string; doc_type: string; filename: string; ext: string; size: number; content_type: string; notes: string; created_at: string; share_url: string | null };
+export const fileSize = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);

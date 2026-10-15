@@ -4,14 +4,13 @@ import { Platform } from "react-native";
 
 import { BACKEND_URL, getApiToken } from "@/src/api";
 
-/** Download all account data as a ZIP of CSV spreadsheets. */
-export async function downloadDataExport() {
-  const url = `${BACKEND_URL}/api/export`;
+/** Download an authenticated backend file; on web save it, on native open the share/save sheet. */
+export async function downloadFile(apiPath: string, name: string, mimeType: string, dialogTitle: string) {
+  const url = `${BACKEND_URL}/api${apiPath}`;
   const headers = { Authorization: `Bearer ${getApiToken() ?? ""}` };
-  const name = `builder-assist-export-${new Date().toISOString().slice(0, 10)}.zip`;
   if (Platform.OS === "web") {
     const res = await fetch(url, { headers });
-    if (!res.ok) throw new Error("Export failed. Please try again");
+    if (!res.ok) throw new Error("Download failed. Please try again");
     const href = URL.createObjectURL(await res.blob());
     const a = document.createElement("a");
     a.href = href;
@@ -20,8 +19,11 @@ export async function downloadDataExport() {
     URL.revokeObjectURL(href);
     return;
   }
-  const file = await File.downloadFileAsync(url, new File(new Directory(Paths.cache), name), { headers, idempotent: true });
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(file.uri, { mimeType: "application/zip", dialogTitle: "Save your Builder Assist data" });
-  }
+  const safe = name.replace(/[^\w.\- ]+/g, "_");
+  const file = await File.downloadFileAsync(url, new File(new Directory(Paths.cache), safe), { headers, idempotent: true });
+  if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(file.uri, { mimeType, dialogTitle });
 }
+
+/** Download all account data as a ZIP of CSV spreadsheets. */
+export const downloadDataExport = () =>
+  downloadFile("/export", `builder-assist-export-${new Date().toISOString().slice(0, 10)}.zip`, "application/zip", "Save your Builder Assist data");

@@ -172,6 +172,17 @@ export default function Home() {
             </Pressable>
           )}
 
+          <Pressable testID="documents-card" onPress={() => { tap(); router.push("/documents"); }} style={({ pressed }) => [s.timeline, pressed && { opacity: 0.9 }]}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+              <View style={s.tlIcon}><Icon name="folder-open" size={20} color={colors.brand} /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.rowLabel}>Documents</Text>
+                <Text style={s.muted}>Deeds, surveys, certificates & invoices · share with stakeholders</Text>
+              </View>
+              <Icon name="chevron-right" size={18} color={colors.muted} />
+            </View>
+          </Pressable>
+
           <Pressable testID="digest-card" onPress={() => { tap(); router.push("/digest"); }} style={({ pressed }) => [s.timeline, pressed && { opacity: 0.9 }]}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
               <View style={s.tlIcon}><Icon name="calendar-days" size={20} color={colors.brand} /></View>

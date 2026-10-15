@@ -24,6 +24,7 @@ EXPORTS = {
     "shopping_items": ["_id", "project_id", "name", "supplier", "qty", "est_cost", "actual_cost", "checked", "checked_at", "created_at"],
     "stage_payments": ["_id", "project_id", "quote_id", "label", "amount", "due_date", "status", "paid_at", "created_at"],
     "quote_requests": ["_id", "project_id", "title", "trade", "description", "created_at"],
+    "documents": ["_id", "project_id", "title", "doc_type", "filename", "size", "notes", "storage_path", "created_at"],
     "media": ["_id", "project_id", "title", "phase", "date", "milestone_id", "storage_path", "url", "created_at"],
 }
 
