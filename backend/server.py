@@ -6,14 +6,14 @@ from seed import seed_milestones
 from storage import init_storage
 import asyncio
 
-from routes import (ai, auth, branding, budget, contacts, digest, export, media, milestones, payments, projects, quotes,
+from routes import (ai, auth, branding, budget, contacts, digest, export, media, messages, milestones, payments, projects, quotes,
                     referrals, share, shopping, snags, stage_payments, trades)
 
 app = FastAPI()
 api = APIRouter(prefix="/api")
 
 for m in (auth, projects, budget, contacts, media, ai, payments, trades, milestones, branding, referrals, share, quotes,
-          stage_payments, snags, shopping, digest, export):
+          stage_payments, snags, shopping, digest, export, messages):
     api.include_router(m.router)
 
 
@@ -53,6 +53,7 @@ async def startup():
     for coll in (db.line_items, db.receipts, db.milestones, db.snags, db.stage_payments, db.shopping_items, db.media):
         await coll.create_index("project_id")
     await db.projects.create_index("user_id")
+    await db.messages.create_index([("user_id", 1), ("project_id", 1), ("created_at", -1)])
     await db.projects.create_index("digest_token", sparse=True)
     asyncio.create_task(digest.digest_scheduler())
     try:

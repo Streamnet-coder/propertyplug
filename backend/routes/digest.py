@@ -12,6 +12,7 @@ from pydantic import BaseModel, EmailStr, Field
 from core import E, db, logger, money
 from deps import active_pid, current_user, get_project_doc
 from email_service import EMAIL_FROM_NAME, EmailError, send_email
+from routes.messages import log_message
 from html_utils import brand_block, owner_branding, page, serve_logo
 from models import Project, User
 
@@ -204,8 +205,12 @@ async def send_digest_emails(p: Project, week: int = 1) -> dict:
         try:
             await send_email(to=r["email"], subject=subject, html=html, reply_to=owner.get("email"))
             sent += 1
+            status = "sent"
         except EmailError:
             failed += 1
+            status = "failed"
+        await log_message(p.user_id, p.id, name=r.get("name") or r["email"], email=r["email"], channel="email", kind="weekly_update",
+                          summary=subject, url=link, status=status)
     now = datetime.now(timezone.utc)
     await db.projects.update_one({"_id": ObjectId(p.id)}, {"$set": {"digest_last_sent_at": now.isoformat(), "digest_last_sent_week": now.strftime("%G-W%V")}})
     return {"sent": sent, "failed": failed}

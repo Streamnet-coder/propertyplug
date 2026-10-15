@@ -7,6 +7,7 @@ from core import db, now_iso, oid, money, E
 from models import User, LineItem, QuoteEntry, QuoteRequest
 from deps import current_user, active_pid
 from html_utils import page, owner_branding, brand_block, serve_logo
+from routes.messages import log_message
 
 router = APIRouter()
 
@@ -164,4 +165,6 @@ async def public_quote_submit(token: str, amount: float = Form(...), days: Optio
     e.amount, e.notes, e.status, e.responded_at = float(amount), notes.strip()[:2000], "received", now_iso()
     e.days = int(days) if days and days.strip().isdigit() else None
     await db.quote_requests.update_one({"_id": ObjectId(q.id)}, {"$set": {"quotes": [x.model_dump() for x in q.quotes]}})
+    await log_message(q.user_id, q.project_id, name=e.name, email=e.email, phone=e.phone, channel="web", kind="quote", direction="in",
+                      summary=f"Submitted a quote of {money(e.amount, 2)} for “{q.title}”" + (f" · {e.days} days" if e.days else ""))
     return page("Quote sent", f"<div class='card'><h2>Thanks {E(e.name)} — your quote of {money(e.amount, 2)} was sent</h2><p>The project owner will be in touch. You can reopen this link to update your quote.</p></div>", ref="quote", by=q.user_id)

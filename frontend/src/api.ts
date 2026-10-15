@@ -130,3 +130,11 @@ export type Digest = {
   next_milestone: { name: string; target_date?: string | null; status: string } | null;
 };
 export type DigestSettings = { recipients: { name: string; email: string }[]; auto: boolean; last_sent_at: string | null; url: string | null };
+export type Signature = { name: string; path: string; width: number; height: number; signed_at: string };
+export type SnagSignoff = { assignee: string; snag_count: number; owner: Signature | null; trade: Signature | null; complete: boolean };
+export type Message = { id: string; name: string; email: string; channel: string; kind: string; direction: "in" | "out"; status: string; summary: string; url?: string | null; created_at: string };
+export type Stakeholder = { key: string; name: string; email: string; phone: string; role: string; source: string; contact_id?: string | null; count?: number; last_at?: string; last_summary?: string; last_direction?: "in" | "out" };
+
+/** Record an outbound message in the stakeholder log (fire-and-forget). */
+export const logMessage = (b: { name: string; email?: string; phone?: string; channel: "email" | "whatsapp" | "call" | "link" | "share"; kind: string; summary: string; url?: string }) =>
+  api("/messages", { body: b }).catch(() => undefined);

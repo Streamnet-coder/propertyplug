@@ -48,7 +48,7 @@ class DeleteAccountIn(BaseModel):
 
 _failed: dict = {}  # uid -> [timestamps of failed confirmations]
 USER_COLLECTIONS = ("line_items", "contacts", "receipts", "media", "milestones", "quote_requests", "stage_payments",
-                    "snags", "snag_links", "shopping_items", "estimates", "payment_transactions", "projects")
+                    "snags", "snag_links", "snag_signoffs", "messages", "shopping_items", "estimates", "payment_transactions", "projects")
 
 
 @router.delete("/auth/account")

@@ -2,7 +2,7 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
 
-import { api, Branding, Comparable, fileUrl, gbp, LineItem, MediaItem, Milestone, Project, Receipt, Snag } from "@/src/api";
+import { api, Branding, Comparable, fileUrl, gbp, LineItem, MediaItem, Milestone, Project, Receipt, Signature, Snag, SnagSignoff } from "@/src/api";
 import { colors } from "@/src/theme";
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
@@ -196,7 +196,7 @@ ${alerts}${sections}`;
 }
 
 export async function shareSnagPdf() {
-  const [p, snags] = await Promise.all([api<Project>("/project"), api<Snag[]>("/snags")]);
+  const [p, snags, signoffs] = await Promise.all([api<Project>("/project"), api<Snag[]>("/snags"), api<SnagSignoff[]>("/snag-signoffs")]);
   const photos = await Promise.all(snags.map(async (x) => {
     const path = x.fix_photo_path || x.storage_path;
     return path ? await toDataUri(fileUrl(path)) : null;
@@ -210,9 +210,18 @@ export async function shareSnagPdf() {
       .map(([x, i]) => `<tr><td>${esc(x.description)}${x.fix_note ? `<div class="bd">${esc(x.fix_note)}</div>` : ""}</td><td>${x.priority}</td><td>${esc(x.assignee || "-")}</td><td class="${x.status === "fixed" ? "under" : "over"}">${x.status === "fixed" ? `Fixed${x.fixed_by ? ` by ${esc(x.fixed_by)}` : ""}` : "Open"}</td><td>${photos[i] ? `<img src="${photos[i]}" style="width:70px;height:52px;object-fit:cover;border-radius:6px"/>` : ""}</td></tr>`)
       .join("")}</table>`)
     .join("");
-  const html = doc(`${await brandHeader("SNAGGING REPORT", p)}
-${kpis([["Total snags", String(snags.length)], ["Open", String(open)], ["Fixed", String(snags.length - open)], ["Rooms", String(rooms.length)]])}
-${rows || "<p>No snags logged.</p>"}`);
+  const trades = Array.from(new Set(snags.map((x) => x.assignee.trim()).filter(Boolean)));
+  const soFor = (n: string) => signoffs.find((x) => x.assignee.toLowerCase() === n.toLowerCase());
+  const allSigned = !open && trades.length > 0 && trades.every((n) => soFor(n)?.complete);
+  const svg = (g: Signature) => `<svg viewBox="0 0 ${g.width} ${g.height}" style="height:54px;max-width:100%" xmlns="http://www.w3.org/2000/svg"><path d="${esc(g.path)}" fill="none" stroke="#0f172a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const cell = (g: Signature | null | undefined, label: string) =>
+    g ? `<td style="width:50%">${svg(g)}<div><b>${esc(g.name)}</b> · ${label}</div><div class="bd">Signed ${new Date(g.signed_at).toLocaleString("en-GB")}</div></td>` : `<td style="width:50%" class="bd">${label}: not signed</td>`;
+  const signSection = trades.length
+    ? `<h2>Sign-off</h2><table>${trades.map((n) => { const so = soFor(n); return `<tr><td colspan="2"><b>${esc(n)}</b> · ${so?.complete ? `<span class="under">Signed off · ${so.snag_count} snags</span>` : "<span class=\"warn\">Awaiting sign-off</span>"}</td></tr><tr>${cell(so?.trade, `Trade (${esc(n)})`)}${cell(so?.owner, "Project owner")}</tr>`; }).join("")}</table>`
+    : "";
+  const html = doc(`${await brandHeader(allSigned ? "SIGNED-OFF SNAGGING REPORT" : "SNAGGING REPORT", p)}
+${kpis([["Total snags", String(snags.length)], ["Open", String(open)], ["Fixed", String(snags.length - open)], [allSigned ? "Status" : "Rooms", allSigned ? "Signed off" : String(rooms.length)]])}
+${rows || "<p>No snags logged.</p>"}${signSection}`);
   await printPdf(html, `${p.name} snagging report`);
 }
 

@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, fileUrl, Snag } from "@/src/api";
 import { Button, Chip, EmptyState, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { PdfButton } from "@/src/components/pdf-button";
+import { SignoffPanel } from "@/src/components/signoff-panel";
 import { SnagShareSheet } from "@/src/components/snag-share-sheet";
 import { shareSnagPdf } from "@/src/report";
 import { invalidate, useSnags } from "@/src/queries";
@@ -34,7 +35,7 @@ export default function Snags() {
   const toggle = useMutation({
     mutationFn: (x: Snag) => api(`/snags/${x.id}`, { method: "PUT", body: { status: x.status === "open" ? "fixed" : "open" } }),
     onSuccess: (_d, x) => {
-      invalidate("snags");
+      invalidate("snags", "snag-signoffs");
       if (x.status === "open") toast("Snag ticked off");
     },
   });
@@ -80,6 +81,7 @@ export default function Snags() {
           keyExtractor={(x) => x.id}
           contentContainerStyle={{ padding: space.lg, gap: space.sm, paddingBottom: insets.bottom + 100 }}
           refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => q.refetch()} tintColor={colors.brand} />}
+          ListHeaderComponent={room === "All" ? <SignoffPanel snags={all} /> : null}
           ListEmptyComponent={<EmptyState icon="list-checks" title="No snags logged" subtitle="Walk each room before sign-off and log defects with a photo." testID="snags-empty" />}
           renderItem={({ item, index }) => (
             <Animated.View entering={FadeInDown.delay(Math.min(index, 8) * 30)}>

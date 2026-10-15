@@ -5,7 +5,7 @@ import { ActivityIndicator, FlatList, Linking, Pressable, RefreshControl, Scroll
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { api, Contact, ContactKind } from "@/src/api";
+import { api, Contact, ContactKind, logMessage } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Button, Chip, EmptyState, fonts, Icon, IconName, LockedPro, ProBadge, radius, space, tap } from "@/src/components/ui";
 import { usesNativeTabs } from "@/src/navigation";
@@ -47,6 +47,7 @@ export default function Team() {
     onSuccess: () => { invalidate("contacts"); toast("Contact removed"); },
   });
 
+  const who = (c: Contact) => ({ name: c.name, email: c.email, phone: c.phone });
   const open = (url: string) => Linking.openURL(url).catch(() => toast("Can't open this on your device", "error"));
 
   const renderItem = ({ item, index }: { item: Contact; index: number }) => {
@@ -79,10 +80,11 @@ export default function Team() {
           </View>
         )}
         <View style={s.actions}>
-          {item.phone ? <ActionBtn icon="phone" color={colors.brand} onPress={() => open(`tel:${item.phone}`)} testID={`contact-call-${item.id}`} /> : null}
-          {item.phone ? <ActionBtn icon="message-circle" color={colors.success} onPress={() => open(`https://wa.me/${wa}`)} testID={`contact-whatsapp-${item.id}`} /> : null}
-          {item.email ? <ActionBtn icon="mail" color={colors.accent} onPress={() => open(`mailto:${item.email}`)} testID={`contact-email-${item.id}`} /> : null}
+          {item.phone ? <ActionBtn icon="phone" color={colors.brand} onPress={() => { logMessage({ ...who(item), channel: "call", kind: "message", summary: "Phoned" }); open(`tel:${item.phone}`); }} testID={`contact-call-${item.id}`} /> : null}
+          {item.phone ? <ActionBtn icon="message-circle" color={colors.success} onPress={() => { logMessage({ ...who(item), channel: "whatsapp", kind: "message", summary: "Opened WhatsApp chat" }); open(`https://wa.me/${wa}`); }} testID={`contact-whatsapp-${item.id}`} /> : null}
+          {item.email ? <ActionBtn icon="mail" color={colors.accent} onPress={() => { logMessage({ ...who(item), channel: "email", kind: "message", summary: "Emailed from the app" }); open(`mailto:${item.email}`); }} testID={`contact-email-${item.id}`} /> : null}
           <View style={{ flex: 1 }} />
+          <ActionBtn icon="messages-square" color={colors.onSurfaceSecondary} onPress={() => router.push({ pathname: "/stakeholder", params: { ...who(item), role: item.role } })} testID={`contact-log-${item.id}`} />
           <ActionBtn icon="trash-2" color={colors.muted} onPress={() => del.mutate(item.id)} testID={`contact-delete-${item.id}`} />
         </View>
       </Animated.View>
@@ -96,6 +98,9 @@ export default function Team() {
           <Text style={s.title}>Team</Text>
           <Text style={s.role}>Trades, subcontractors & stakeholders</Text>
         </View>
+        <Pressable testID="message-log-button" onPress={() => { tap(); router.push("/stakeholders"); }} style={[s.addBtn, { backgroundColor: colors.brandTertiary, marginRight: space.sm }]} accessibilityLabel="Message log">
+          <Icon name="messages-square" size={20} color={colors.brand} />
+        </Pressable>
         {!locked && (
           <Pressable testID="add-contact-button" onPress={() => { tap(); router.push({ pathname: "/contact-form", params: { kind } }); }} style={s.addBtn}>
             <Icon name="plus" size={22} color={colors.onBrandPrimary} />

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Linking, Modal, Platform, Pressable, Share, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { api, BACKEND_URL, Snag } from "@/src/api";
+import { api, BACKEND_URL, logMessage, Snag } from "@/src/api";
 import { Button, EmptyState, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { useContacts, useProject } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -35,7 +35,9 @@ export function SnagShareSheet({ visible, onClose, snags }: { visible: boolean; 
     try {
       const { url } = await api<{ url: string }>("/snag-links", { body: { assignee: name, origin_url: BACKEND_URL } });
       const msg = `Hi ${name}, here are the ${open} snag${open === 1 ? "" : "s"} for ${project?.name ?? "the project"}. Please mark each one fixed with a photo: ${url}`;
-      const phone = team.data?.find((c) => c.name.toLowerCase() === name.toLowerCase())?.phone.replace(/[^\d]/g, "").replace(/^0/, "44");
+      const contact = team.data?.find((c) => c.name.toLowerCase() === name.toLowerCase());
+      const phone = contact?.phone.replace(/[^\d]/g, "").replace(/^0/, "44");
+      logMessage({ name, email: contact?.email, phone: contact?.phone, channel: phone ? "whatsapp" : "share", kind: "snag_link", summary: `Sent snag list link (${open} open)`, url });
       if (phone) await Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`);
       else if (Platform.OS === "web") {
         await Clipboard.setStringAsync(url);

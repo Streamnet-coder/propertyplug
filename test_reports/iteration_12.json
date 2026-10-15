@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 12 (sign-off + stakeholder message log) fully verified. Backend: 10/10 pytest cases pass in tests/test_iteration12.py covering POST/GET/DELETE /api/snag-signoffs (owner validation, open-snag/no-snag/invalid-path 400s, success with snag_count/owner/trade/complete fields), public /api/s/{token}/sign (303 redirect, blocked when snags still open, complete=true when both owner & trade signed), sign-off invalidation on new snag OR reopen (PUT status=open), POST/GET /api/messages newest-first with id field, auto-logging of snag link page views (once per day via last_viewed), quote submission via POST /api/q/{token}, GET /api/stakeholders returning team contacts + digest_recipients with count/last_at/last_summary/last_direction, and DELETE /api/auth/account also deleting messages + snag_signoffs. Frontend: /team shows message-log-button and contact-log-{id}/contact-email-{id} on each row; message-log-button → /stakeholders list (stakeholder-row-{key}) → /stakeholder log screen with message-{id} items and stakeholder-call/whatsapp/email actions; contact-log-{id} opens the same timeline. /snags signoff-panel renders signoff-{slug} card with signoff-status-{slug}; after fixing all snags the Sign button appears, signoff-sheet opens with signoff-name-input + signoff-pad + signoff-confirm (confirm correctly disabled until a signature is drawn), after submit the card updates to 'All 1 fixed · waiting for trade to sign' with owner signature SVG and 'Send TEST_Dave their snag link' hint; snags-pdf-button still renders. Cleanup: demo plan reset to basic, TEST_ snags/snag_links/snag_signoffs/messages removed, digest recipients=[]/auto=false, digest share revoked.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration12.py",
+    "/app/test_reports/pytest/pytest_iteration12.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/messages.py list_messages: when name='' and email='' both are provided (or omitted), the $in filter becomes empty and returns nothing. This is fine for the current UI (always queries by name/email), but documenting it: callers must pass at least one of name/email to see messages. Consider returning all stakeholder messages if both are empty, or short-circuiting the query. Non-blocking.",
+    "routes/snags.py SIG_PATH regex `^[MLml0-9 .,-]{4,30000}$` accepts any sequence of M/L/digits/space/dot/comma/dash — a trivial 'MMMM' string will pass validation even though it is not a drawn signature. The frontend's SignaturePad guarantees a real path but a public POST /api/s/{token}/sign could still accept 'MMMM'. Consider requiring at least one 'L' command (continuous stroke) or minimum coordinate count. Non-blocking.",
+    "routes/auth.py DELETE /api/auth/account deletes 15 collections in sequence; a partial failure between collections could leave orphan files. Current ordering (user doc last) is OK but consider wrapping in a transaction or background cleanup job as data grows."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration12.py (new)",
+    "/app/test_reports/pytest/pytest_iteration12.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100%"},
+  "seed_data_creation": "Each backend test registers a disposable TEST_ user via /api/auth/register and deletes it via DELETE /api/auth/account. Frontend sign-off test added one TEST_Dave snag on demo and cleaned it + its snag_signoff afterwards.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend URL env key is EXPO_PUBLIC_BACKEND_URL (not EXPO_BACKEND_URL) — see /app/frontend/.env. Direct curl/requests to the preview host from inside the container is blocked by a 403 UA filter unless a browser-like User-Agent header is sent (python-requests default UA is allowed by pytest here, but urllib's default UA is blocked). For Playwright, run API calls via page.evaluate(fetch(...)) which proxies through the browser session. Signature-pad on web uses PanResponder + mouse drag; a programmatic mouse.down → multiple mouse.move → mouse.up over the signoff-pad bounding box produces a valid SVG path that enables signoff-confirm. Reserved email TLDs like .local/.test are rejected by Pydantic EmailStr; use @example.com for digest recipient tests.",
+  "rca_of_issue": "N/A — no bugs found."
+}

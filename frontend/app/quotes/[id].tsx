@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { api, gbp, QuoteEntry, QuoteRequest } from "@/src/api";
+import { api, logMessage, gbp, QuoteEntry, QuoteRequest } from "@/src/api";
 import { Button, Field, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { queryClient } from "@/src/query-client";
 import { invalidate, useProject, useQuote } from "@/src/queries";
@@ -95,6 +95,7 @@ export default function QuoteDetail() {
       if (wa) await Linking.openURL(`https://wa.me/${wa}?text=${encodeURIComponent(message(e))}`);
       else if (e.email) await Linking.openURL(`mailto:${e.email}?subject=${encodeURIComponent(`Quote request: ${r.title}`)}&body=${encodeURIComponent(message(e))}`);
       else await Share.share({ message: message(e) });
+      logMessage({ name: e.name, email: e.email, phone: e.phone, channel: wa ? "whatsapp" : e.email ? "email" : "share", kind: "quote_request", summary: `Sent quote request: “${r.title}”`, url: e.link });
       if (!e.sent) update.mutate({ eid: e.id, body: { sent: true } });
     } catch {
       toast("Couldn't open messaging on this device", "error");
