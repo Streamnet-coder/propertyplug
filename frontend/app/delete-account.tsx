@@ -7,7 +7,7 @@ import { useAuth } from "@/src/auth";
 import { Button, Field, fonts, FormScreen, Icon, radius, space } from "@/src/components/ui";
 import { makeStyles, useTheme } from "@/src/theme";
 import { downloadDataExport } from "@/src/export";
-import { shareBudgetPdf, shareProgressReport, shareSnagPdf } from "@/src/report";
+import { shareBudgetPdf, shareLenderPack, shareProgressReport, shareSnagPdf } from "@/src/report";
 import { useToast } from "@/src/toast";
 
 const WHAT = ["All projects, budgets, line items and receipts", "Photos, milestones, snags and shopping lists", "Quotes, payment schedules and share links", "Your profile, branding and referral history"];
@@ -88,6 +88,7 @@ export default function DeleteAccount() {
           <Button small variant="outline" icon="file-down" title="Progress" loading={exporting === "progress"} onPress={() => run("progress", shareProgressReport)} testID="export-progress-pdf" />
           <Button small variant="outline" icon="file-down" title="Budget" loading={exporting === "budget"} onPress={() => run("budget", shareBudgetPdf)} testID="export-budget-pdf" />
           <Button small variant="outline" icon="file-down" title="Snags" loading={exporting === "snags"} onPress={() => run("snags", shareSnagPdf)} testID="export-snags-pdf" />
+          <Button small variant="outline" icon="file-down" title="Lender pack" loading={exporting === "pack"} onPress={() => run("pack", () => shareLenderPack(false))} testID="export-pack-pdf" />
         </View>
       </View>
       <Field label="Enter your password to confirm" value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" autoComplete="password" testID="delete-account-password" />

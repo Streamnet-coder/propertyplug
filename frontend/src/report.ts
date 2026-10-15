@@ -85,11 +85,7 @@ function buildHtml(
     })
     .join("");
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
-<style>
-${CSS}
-</style></head><body>
-${brandHtml}
+  return `${brandHtml}
 <div class="hdr"><div class="brand">BUILDER <b>ASSIST</b> · PROGRESS REPORT</div><h1>${esc(p.name)}</h1><p>${esc(p.address)}</p>
 <p style="margin-top:6px;font-size:11px">${esc(p.target_type)} · ${esc(p.finish_type)} · ${new Date().toLocaleDateString("en-GB")}</p></div>
 <div class="kpis">
@@ -113,11 +109,15 @@ ${items.map((i) => `<tr><td>${esc(i.name)}</td><td>${i.category}</td><td>${esc(i
 ${receipts.map((r) => `<tr><td>${r.date}</td><td>${esc(r.title)}</td><td>${esc(r.supplier)}</td><td class="n">${gbp(r.amount, 2)}</td></tr>`).join("")}
 </table>
 ${photoSection ? `<h2>Before &amp; after photos</h2>${photoSection}` : ""}
-<div class="foot">Generated with Builder Assist · ${new Date().toLocaleString("en-GB")} · Figures are owner-reported</div>
-</body></html>`;
+`;
 }
 
 export async function shareProgressReport() {
+  const p = await api<Project>("/project");
+  await printPdf(doc(await progressBody()), `${p.name} progress report`);
+}
+
+async function progressBody() {
   const [p, items, receipts, media, milestones] = await Promise.all([
     api<Project>("/project"),
     api<LineItem[]>("/line-items"),
@@ -133,7 +133,7 @@ export async function shareProgressReport() {
       return { m, src: url ? await toDataUri(url) : null };
     }),
   );
-  await printPdf(buildHtml(p, items, receipts, photos, milestones, { b, logo }), `${p.name} progress report`);
+  return buildHtml(p, items, receipts, photos, milestones, { b, logo });
 }
 
 export async function printPdf(html: string, title: string) {
@@ -167,6 +167,11 @@ const doc = (body: string) =>
 const kpis = (rows: [string, string][]) => `<div class="kpis">${rows.map(([l, v]) => `<div class="kpi"><span>${l}</span><div>${v}</div></div>`).join("")}</div>`;
 
 export async function shareBudgetPdf() {
+  const p = await api<Project>("/project");
+  await printPdf(doc(await budgetBody()), `${p.name} budget estimate`);
+}
+
+async function budgetBody() {
   const [p, items] = await Promise.all([api<Project>("/project"), api<LineItem[]>("/line-items")]);
   const cats = ["Hard Cost", "Soft Cost", "Contingency"] as const;
   const key = { "Hard Cost": "hard", "Soft Cost": "soft", Contingency: "contingency" } as const;
@@ -185,10 +190,9 @@ ${list.map((i) => `<tr><td>${esc(i.name)}</td><td>${esc(i.supplier)}</td><td>${e
     })
     .join("");
   const est = items.reduce((a, i) => a + i.budgeted, 0);
-  const html = doc(`${await brandHeader("BUDGET ESTIMATE", p)}
+  return `${await brandHeader("BUDGET ESTIMATE", p)}
 ${kpis([["Total budget", gbp(p.total_budget)], ["Itemised estimate", gbp(est)], ["Spent to date", gbp(p.total_spent)], ["Remaining", gbp(p.total_budget - p.total_spent)]])}
-${alerts}${sections}`);
-  await printPdf(html, `${p.name} budget estimate`);
+${alerts}${sections}`;
 }
 
 export async function shareSnagPdf() {
@@ -217,13 +221,51 @@ export type BrrrFigures = { purchase: number; fees: number; refurb: number; valu
 
 export async function shareBrrrPdf(f: BrrrFigures, comps: Comparable[]) {
   const p = await api<Project>("/project");
+  await printPdf(doc(await brrrBody(p, f, comps)), `${p.name} BRRR analysis`);
+}
+
+async function brrrBody(p: Project, f: BrrrFigures, comps: Comparable[]) {
   const row = (l: string, v: string) => `<tr><td>${l}</td><td class="n">${v}</td></tr>`;
   const avg = comps.length ? comps.reduce((a, c) => a + c.price, 0) / comps.length : 0;
-  const html = doc(`${await brandHeader("BRRR ANALYSIS", p)}
+  return `${await brandHeader("BRRR ANALYSIS", p)}
 ${kpis([["Money left in", f.leftIn <= 0 ? `${gbp(-f.leftIn)} out` : gbp(f.leftIn)], ["Cash-on-cash ROI", Number.isFinite(f.roi) ? `${f.roi.toFixed(1)}%` : "Infinite"], ["Cashflow / mo", gbp(f.cashflow)], ["Gross yield", `${f.yieldPct.toFixed(1)}%`]])}
 <h2>Buy &amp; refurbish</h2><table>${row("Purchase price", gbp(f.purchase))}${row("Fees &amp; SDLT", gbp(f.fees))}${row("Refurb budget", gbp(f.refurb))}${row("<b>Total invested</b>", `<b>${gbp(f.invested)}</b>`)}</table>
 <h2>Refinance</h2><table>${row("End valuation (GDV)", gbp(f.valuation))}${row(`Refinance at ${f.ltv}% LTV`, gbp(f.refi))}${row("Equity retained", gbp(f.equity))}${row(`Mortgage (${f.rate}% interest-only)`, `${gbp(f.mortgage)}/mo`)}</table>
 <h2>Rent</h2><table>${row("Monthly rent", gbp(f.rent))}${row("Monthly costs", gbp(f.costs))}${row("<b>Monthly cashflow</b>", `<b class="${f.cashflow < 0 ? "over" : "under"}">${gbp(f.cashflow)}</b>`)}${row("Annual cashflow", gbp(f.cashflow * 12))}</table>
-${comps.length ? `<h2>1/4 mile comparables · average ${gbp(avg)}</h2><table><tr><th>Address</th><th>Beds</th><th>Date</th><th class="n">Sold</th></tr>${comps.map((c) => `<tr><td>${esc(c.address)}</td><td>${c.beds}</td><td>${esc(c.date)}</td><td class="n">${gbp(c.price)}</td></tr>`).join("")}</table>` : ""}`);
-  await printPdf(html, `${p.name} BRRR analysis`);
+${comps.length ? `<h2>1/4 mile comparables · average ${gbp(avg)}</h2><table><tr><th>Address</th><th>Beds</th><th>Date</th><th class="n">Sold</th></tr>${comps.map((c) => `<tr><td>${esc(c.address)}</td><td>${c.beds}</td><td>${esc(c.date)}</td><td class="n">${gbp(c.price)}</td></tr>`).join("")}</table>` : ""}`;
+}
+
+export type BrrrInputs = Pick<BrrrFigures, "purchase" | "fees" | "refurb" | "valuation" | "ltv" | "rate" | "rent" | "costs">;
+export const BRRR_DEFAULT_FEES = 6000;
+export const BRRR_DEFAULT_COSTS = 200;
+
+export function calcBrrr(i: BrrrInputs): BrrrFigures {
+  const invested = i.purchase + i.fees + i.refurb;
+  const refi = i.valuation * (i.ltv / 100);
+  const leftIn = invested - refi;
+  const mortgage = (refi * (i.rate / 100)) / 12;
+  const cashflow = i.rent - mortgage - i.costs;
+  const roi = leftIn <= 0 ? Infinity : ((cashflow * 12) / leftIn) * 100;
+  const yieldPct = i.valuation > 0 ? ((i.rent * 12) / i.valuation) * 100 : 0;
+  return { ...i, invested, refi, leftIn, mortgage, cashflow, roi, yieldPct, equity: i.valuation - refi };
+}
+
+/** One combined PDF for refinance applications: cover + progress + budget estimate (+ BRRR analysis for Pro). */
+export async function shareLenderPack(includeBrrr: boolean) {
+  const p = await api<Project>("/project");
+  const f = calcBrrr({ purchase: p.purchase_price, fees: BRRR_DEFAULT_FEES, refurb: p.total_budget, valuation: p.estimated_valuation,
+    ltv: p.refinance_ltv, rate: p.refinance_rate, rent: p.monthly_rent, costs: BRRR_DEFAULT_COSTS });
+  const comps = includeBrrr ? await api<Comparable[]>("/project/comparables").catch(() => [] as Comparable[]) : [];
+  const [progress, budget, brrr] = await Promise.all([progressBody(), budgetBody(), includeBrrr ? brrrBody(p, f, comps) : Promise.resolve("")]);
+  const sections = [["1", "Progress report", "Milestones, budget usage, receipts and before & after photos"], ["2", "Budget estimate", "Itemised costs by category with variance"],
+    ...(includeBrrr ? [["3", "BRRR analysis", "Refinance, money left in, cashflow and local comparables"]] : [])];
+  const cover = `${await brandHeader("LENDER REPORT PACK", p)}
+<p style="margin:18px 0 6px;font-size:13px">Prepared for refinance application · ${esc(p.target_type)} · ${esc(p.finish_type)}</p>
+${kpis([["Purchase price", gbp(p.purchase_price)], ["End valuation (GDV)", gbp(p.estimated_valuation)], [`Refinance at ${p.refinance_ltv}% LTV`, gbp(f.refi)], [f.leftIn > 0 ? "Money left in" : "Cash pulled out", gbp(Math.abs(f.leftIn))]])}
+${kpis([["Refurb budget", gbp(p.total_budget)], ["Spent to date", gbp(p.total_spent)], ["Monthly rent", gbp(p.monthly_rent)], ["Gross yield", `${f.yieldPct.toFixed(1)}%`]])}
+<p style="font-size:11px">Stage: <b>${esc(p.current_stage ?? "Not started")}</b> · ${p.milestones_done}/${p.milestones_total} milestones complete</p>
+<h2>Contents</h2><table>${sections.map(([n, t, d]) => `<tr><td style="width:24px"><b>${n}</b></td><td><b>${t}</b><div class="bd">${d}</div></td></tr>`).join("")}</table>
+<p class="bd" style="margin-top:14px">Money left in assumes ${gbp(BRRR_DEFAULT_FEES)} purchase fees and the full refurb budget. Mortgage is interest-only at ${p.refinance_rate}%.</p>`;
+  const brk = (h: string) => `<div style="page-break-before:always"></div>${h}`;
+  await printPdf(doc(cover + brk(progress) + brk(budget) + (brrr ? brk(brrr) : "")), `${p.name} lender report pack`);
 }

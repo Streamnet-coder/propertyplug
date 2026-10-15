@@ -1,0 +1,23 @@
+{
+  "summary": "Frontend-only regression test for Lender Report Pack feature plus report.ts refactor and BRRR calculator. All targeted flows pass: /share-report shows lender-pack-card with correct checklist for Basic (3 bullets + lender-pack-pro-note) and Pro (4 bullets incl BRRR, no note); lender-pack-button triggers PDF print without error toast on both plans; share-pdf-button, dashboard-pdf-button, budget-pdf-button, snags-pdf-button, brrr-pdf-button (Pro) all generate PDFs with no error toasts and 0 page JS errors; /brrr calculator with demo inputs (purchase 185000, fees 6000, refurb 48500, GDV 255000, LTV 75, rate 5.5, rent 1350, costs 200) yields money-left-in £48,250, ROI 6.8%, cashflow £273 as expected (gbp() rounds £273.44 to £273); /delete-account export-pack-pdf button present and generates PDF without error. Plan reset to basic at end as requested.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/frontend/tests/lender_pack_test.py (placeholder — Playwright executed via mcp_browser_automation)"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "report.ts (272 lines) is approaching the recommended split threshold and now hosts progress/budget/snag/BRRR/lender-pack HTML builders plus shared helpers; consider splitting into report/{progress,budget,snag,brrr,pack}.ts + report/html.ts as it grows further.",
+    "shareLenderPack hardcodes BRRR_DEFAULT_FEES and BRRR_DEFAULT_COSTS for the cover KPIs (money-left-in). The visible delta vs a user's custom BRRR inputs may surprise users since /share-report cannot override these. Non-blocking."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "100%"},
+  "seed_data_creation": "None. Reused seeded demo project under demo@mybuilder.app.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Testing is frontend-only via mcp_browser_automation. Sign-in testIDs are 'sign-in-button' (on /welcome) then 'auth-email-input' / 'auth-password-input' / 'auth-submit-button'. Auth token is stored in localStorage under 'mba_auth_token' (JSON-encoded string). To toggle plan from scripts use POST /api/auth/plan with Bearer header (reload page afterwards so useAuth picks up the new user object). On web, expo-print calls iframe.contentWindow.print(); stub window.print via page.add_init_script and a MutationObserver that overrides iframe print to avoid blocking the headless browser and to count PDF generation events. Demo plan was reset to 'basic' at the end of this run.",
+  "rca_of_issue": "N/A — no bugs found."
+}

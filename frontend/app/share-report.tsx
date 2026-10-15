@@ -9,7 +9,8 @@ import { api, BACKEND_URL } from "@/src/api";
 import { Button, Card, fonts, FormScreen, Icon, radius, space } from "@/src/components/ui";
 import { queryClient } from "@/src/query-client";
 import { useBranding, useProject, useReferrals } from "@/src/queries";
-import { shareProgressReport } from "@/src/report";
+import { useAuth } from "@/src/auth";
+import { shareLenderPack, shareProgressReport } from "@/src/report";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
@@ -22,6 +23,9 @@ export default function ShareReport() {
   const referrals = useReferrals();
   const router = useRouter();
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [packBusy, setPackBusy] = useState(false);
+  const { user } = useAuth();
+  const isPro = user?.plan === "pro";
   const link = useQuery({ queryKey: ["share-link"], queryFn: () => api<{ url: string | null }>("/project/share") });
   const url = link.data?.url ?? null;
 
@@ -58,6 +62,17 @@ export default function ShareReport() {
       toast(e?.message ?? "Could not create PDF", "error");
     } finally {
       setPdfBusy(false);
+    }
+  };
+
+  const pack = async () => {
+    setPackBusy(true);
+    try {
+      await shareLenderPack(isPro);
+    } catch (e: any) {
+      toast(e?.message ?? "Could not create the report pack", "error");
+    } finally {
+      setPackBusy(false);
     }
   };
 
@@ -110,6 +125,23 @@ export default function ShareReport() {
         ) : (
           <Button icon="link" title="Create live link" loading={create.isPending} onPress={() => create.mutate()} testID="share-link-create-button" />
         )}
+      </Card>
+      <Card style={{ gap: space.md, borderColor: colors.brand, borderWidth: 1.5 }} testID="lender-pack-card">
+        <View style={s.row}>
+          <View style={s.icon}><Icon name="landmark" size={20} color={colors.brand} /></View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.title}>Lender report pack</Text>
+            <Text style={s.muted}>One PDF for your refinance application: a cover summary, the progress report, the budget estimate{isPro ? " and the BRRR analysis" : ""}.</Text>
+          </View>
+        </View>
+        {["Cover with valuation, refinance & money left in", "Progress report with milestones & photos", "Itemised budget estimate with variance", ...(isPro ? ["BRRR analysis with local comparables"] : [])].map((x) => (
+          <View key={x} style={{ flexDirection: "row", gap: space.sm, alignItems: "center" }}>
+            <Icon name="check" size={14} color={colors.success} />
+            <Text style={s.muted}>{x}</Text>
+          </View>
+        ))}
+        {!isPro && <Text style={[s.muted, { color: colors.brandPrimary }]} testID="lender-pack-pro-note">Upgrade to Pro to add the BRRR analysis section.</Text>}
+        <Button icon="file-stack" title="Create lender pack" loading={packBusy} onPress={pack} testID="lender-pack-button" />
       </Card>
       <Card style={{ gap: space.md }}>
         <View style={s.row}>

@@ -8,7 +8,7 @@ import { gbp } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { PdfButton } from "@/src/components/pdf-button";
 import { Card, fonts, Icon, LockedPro, radius, SectionTitle, space } from "@/src/components/ui";
-import { shareBrrrPdf } from "@/src/report";
+import { BRRR_DEFAULT_COSTS, BRRR_DEFAULT_FEES, calcBrrr, shareBrrrPdf } from "@/src/report";
 import { useComparables, useProject } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
 
@@ -23,24 +23,19 @@ export default function Brrr() {
   const isPro = user?.plan === "pro";
   const { data: p } = useProject();
   const comps = useComparables(isPro);
-  const [v, setV] = useState<Inputs>({ purchase: "", fees: "6000", refurb: "", valuation: "", ltv: "75", rate: "5.5", rent: "", costs: "200" });
+  const [v, setV] = useState<Inputs>({ purchase: "", fees: String(BRRR_DEFAULT_FEES), refurb: "", valuation: "", ltv: "75", rate: "5.5", rent: "", costs: String(BRRR_DEFAULT_COSTS) });
   const set = (k: keyof Inputs) => (t: string) => setV((x) => ({ ...x, [k]: t }));
 
   useEffect(() => {
-    if (p) setV((x) => ({ ...x, purchase: String(p.purchase_price), refurb: String(p.total_budget), valuation: String(p.estimated_valuation), rent: String(p.monthly_rent) }));
+    if (p) setV((x) => ({ ...x, purchase: String(p.purchase_price), refurb: String(p.total_budget), valuation: String(p.estimated_valuation), rent: String(p.monthly_rent), ltv: String(p.refinance_ltv), rate: String(p.refinance_rate) }));
   }, [p]);
 
-  const r = useMemo(() => {
-    const n = (k: keyof Inputs) => Number(v[k]) || 0;
-    const invested = n("purchase") + n("fees") + n("refurb");
-    const refi = n("valuation") * (n("ltv") / 100);
-    const leftIn = invested - refi;
-    const mortgage = (refi * (n("rate") / 100)) / 12;
-    const cashflow = n("rent") - mortgage - n("costs");
-    const roi = leftIn <= 0 ? Infinity : ((cashflow * 12) / leftIn) * 100;
-    const yieldPct = n("valuation") > 0 ? ((n("rent") * 12) / n("valuation")) * 100 : 0;
-    return { invested, refi, leftIn, mortgage, cashflow, roi, yieldPct, equity: n("valuation") - refi };
-  }, [v]);
+  const n = (k: keyof Inputs) => Number(v[k]) || 0;
+  const r = useMemo(
+    () => calcBrrr({ purchase: n("purchase"), fees: n("fees"), refurb: n("refurb"), valuation: n("valuation"), ltv: n("ltv"), rate: n("rate"), rent: n("rent"), costs: n("costs") }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [v],
+  );
 
   const avgComp = comps.data?.length ? comps.data.reduce((a, c) => a + c.price, 0) / comps.data.length : 0;
 
@@ -65,10 +60,7 @@ export default function Brrr() {
         {isPro ? (
           <PdfButton
             testID="brrr-pdf-button"
-            onGenerate={() => {
-              const n = (k: keyof Inputs) => Number(v[k]) || 0;
-              return shareBrrrPdf({ purchase: n("purchase"), fees: n("fees"), refurb: n("refurb"), valuation: n("valuation"), ltv: n("ltv"), rate: n("rate"), rent: n("rent"), costs: n("costs"), ...r }, comps.data ?? []);
-            }}
+            onGenerate={() => shareBrrrPdf(r, comps.data ?? [])}
           />
         ) : (
           <View style={{ width: 44 }} />
