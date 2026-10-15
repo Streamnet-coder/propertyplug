@@ -3,6 +3,9 @@ import { useState } from "react";
 import { ActivityIndicator, Pressable, Switch, Text, View } from "react-native";
 
 import { api, DigestSettings } from "@/src/api";
+import { useRouter } from "expo-router";
+
+import { useEmailSettings } from "@/src/components/company-email-card";
 import { Button, Card, Field, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { queryClient } from "@/src/query-client";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -18,6 +21,8 @@ export function DigestEmailCard({ hasLink }: { hasLink: boolean }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const d = q.data;
+  const es = useEmailSettings();
+  const router = useRouter();
 
   const save = useMutation({
     mutationFn: (body: Pick<DigestSettings, "recipients" | "auto">) => api<DigestSettings>("/digest/settings", { method: "PUT", body }),
@@ -87,6 +92,12 @@ export function DigestEmailCard({ hasLink }: { hasLink: boolean }) {
         </View>
       )}
       <Button small icon="send" title="Email this week's update now" disabled={!hasLink || !d.recipients.length} loading={send.isPending} onPress={() => send.mutate()} testID="digest-send-now" />
+      <Pressable onPress={() => router.push("/branding")} hitSlop={6} testID="digest-reply-to-link">
+        <Text style={s.hint}>
+          Replies go to {es.data?.verified ? es.data.company_email : es.data?.account_email ?? "your email"} ·{" "}
+          <Text style={{ color: colors.brand, fontFamily: fonts.semibold }}>{es.data?.verified ? "Change" : "Use your company email"}</Text>
+        </Text>
+      </Pressable>
       {d.last_sent_at ? <Text style={s.hint} testID="digest-last-sent">Last sent {new Date(d.last_sent_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</Text> : null}
     </Card>
   );

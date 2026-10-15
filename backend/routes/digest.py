@@ -12,6 +12,7 @@ from pydantic import BaseModel, EmailStr, Field
 from core import E, db, logger, money
 from deps import active_pid, current_user, get_project_doc
 from email_service import EMAIL_FROM_NAME, EmailError, send_email
+from routes.email_settings import owner_reply_to
 from routes.messages import log_message
 from html_utils import brand_block, owner_branding, page, serve_logo
 from models import Project, User
@@ -173,7 +174,7 @@ async def put_digest_settings(body: DigestSettingsIn, user: User = Depends(curre
     return _settings(p)
 
 
-def digest_email_html(p: Project, owner: str, d: dict, url: str) -> str:
+def digest_email_html(p: Project, owner: str, d: dict, url: str, company: str = "") -> str:
     sp = d["spend"]
     cell = "padding:12px;border:1px solid #e2e8f0;border-radius:8px;font-family:Arial,sans-serif"
     ms = "".join(f"<li>{E(m['name'])}</li>" for m in d["milestones_done"]) or "<li>No stages completed</li>"
@@ -181,7 +182,7 @@ def digest_email_html(p: Project, owner: str, d: dict, url: str) -> str:
             f'<p style="font-size:12px;letter-spacing:1px;color:#0f766e;font-weight:bold;margin:0">{E(EMAIL_FROM_NAME.upper())} · WEEKLY UPDATE</p>'
             f'<h1 style="font-size:22px;margin:8px 0 4px">{E(p.name)}</h1>'
             f'<p style="margin:0 0 16px;color:#64748b">{E(p.address)} · {_d(d["week_start"])} – {_d(d["week_end"])}</p>'
-            f'<p>Hi, here is {E(owner)}\'s progress update for last week.</p>'
+            f'<p>Hi, here is {E(company or owner)}\'s progress update for last week.</p>'
             f'<table role="presentation" width="100%" cellspacing="8"><tr>'
             f'<td style="{cell}"><div style="font-size:11px;color:#64748b">SPENT</div><div style="font-size:18px;font-weight:bold">{money(sp["total"], 2)}</div></td>'
             f'<td style="{cell}"><div style="font-size:11px;color:#64748b">SNAGS FIXED</div><div style="font-size:18px;font-weight:bold">{len(d["snags_fixed"])}</div></td>'
@@ -199,11 +200,12 @@ async def send_digest_emails(p: Project, week: int = 1) -> dict:
     d = await build_digest(p.id, week)
     link = f"{url}?week={week}" if week else url
     subject = f"{p.name}: weekly update {_d(d['week_start'])} – {_d(d['week_end'])}"
-    html = digest_email_html(p, owner["name"], d, link)
+    html = digest_email_html(p, owner["name"], d, link, ((await db.users.find_one({"_id": ObjectId(p.user_id)}, {"branding": 1}) or {}).get("branding") or {}).get("company_name", ""))
+    reply_to = await owner_reply_to(p.user_id)
     sent = failed = 0
     for r in p.digest_recipients:
         try:
-            await send_email(to=r["email"], subject=subject, html=html, reply_to=owner.get("email"))
+            await send_email(to=r["email"], subject=subject, html=html, reply_to=reply_to)
             sent += 1
             status = "sent"
         except EmailError:

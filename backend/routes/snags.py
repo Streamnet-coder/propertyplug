@@ -10,6 +10,7 @@ from models import User, Snag
 from deps import current_user, active_pid
 from storage import put_object, get_object
 from html_utils import page, owner_branding, brand_block, serve_logo
+from routes.email_settings import notify_owner_signoff
 from routes.messages import log_message
 
 router = APIRouter()
@@ -262,6 +263,10 @@ async def public_sign(token: str, name: str = Form(...), path: str = Form(...), 
     await _upsert_signoff(link["user_id"], link["project_id"], link["assignee"], "trade", _sig(name, path, min(max(width, 1), 4000), min(max(height, 1), 4000)), count)
     await log_message(link["user_id"], link["project_id"], name=link["assignee"], channel="web", kind="snag_signoff", direction="in",
                       summary=f"Signed off {count} fixed snag{'s' if count != 1 else ''} as {name.strip()[:80]}")
+    so = await db.snag_signoffs.find_one({"project_id": link["project_id"], "assignee_lc": link["assignee"].lower()})
+    proj = await db.projects.find_one({"_id": ObjectId(link["project_id"])}, {"name": 1}) or {}
+    await notify_owner_signoff(link["user_id"], proj.get("name", "your project"), link["assignee"], name.strip()[:80], count,
+                               bool(so and so.get("owner")), snag_link_url(link))
     return RedirectResponse(f"/api/s/{token}?signed=1", status_code=303)
 
 

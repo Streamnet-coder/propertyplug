@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api, Snag, SnagSignoff } from "@/src/api";
 import { useAuth } from "@/src/auth";
+import { RatingSheet, Stars, useProjectRatings } from "@/src/components/rating";
 import { SignaturePad, SignatureValue, SignatureView } from "@/src/components/signature-pad";
 import { Button, Field, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { queryClient } from "@/src/query-client";
@@ -21,6 +22,9 @@ export function SignoffPanel({ snags }: { snags: Snag[] }) {
   const { colors } = useTheme();
   const q = useSignoffs();
   const [signing, setSigning] = useState<string | null>(null);
+  const [rating, setRating] = useState<string | null>(null);
+  const ratings = useProjectRatings();
+  const ratingFor = (n: string) => ratings.data?.find((x) => x.assignee.toLowerCase() === n.toLowerCase());
   const groups = Object.values(
     snags.filter((x) => x.assignee.trim()).reduce<Record<string, { name: string; open: number; total: number }>>((a, x) => {
       const k = x.assignee.trim().toLowerCase();
@@ -74,10 +78,22 @@ export function SignoffPanel({ snags }: { snags: Snag[] }) {
               </View>
             )}
             {state === "ready" && so?.owner && !so.trade && <Text style={s.muted}>Send {g.name} their snag link: they can sign at the bottom of the page.</Text>}
+            {!g.open && so?.owner && (
+              ratingFor(g.name) ? (
+                <Pressable onPress={() => { tap(); setRating(g.name); }} style={s.rated} testID={`rating-show-${slug}`}>
+                  <Stars value={ratingFor(g.name)!.stars} />
+                  <Text style={[s.muted, { flex: 1 }]} numberOfLines={1}>{ratingFor(g.name)!.comment || ratingFor(g.name)!.tags.join(" · ") || "Your rating"}</Text>
+                  <Text style={[s.muted, { color: colors.brand }]}>Edit</Text>
+                </Pressable>
+              ) : (
+                <Button small variant="secondary" icon="star" title={`Rate ${g.name}`} onPress={() => { tap(); setRating(g.name); }} testID={`rating-open-${slug}`} />
+              )
+            )}
           </View>
         );
       })}
       <SignSheet assignee={signing} onClose={() => setSigning(null)} />
+      <RatingSheet assignee={rating} existing={rating ? ratingFor(rating) : undefined} onClose={() => setRating(null)} />
     </View>
   );
 }
@@ -126,6 +142,7 @@ const useStyles = makeStyles((c) => ({
   icon: { width: 36, height: 36, borderRadius: 18, backgroundColor: c.brandTertiary, alignItems: "center", justifyContent: "center" },
   name: { fontFamily: fonts.semibold, fontSize: 14, color: c.onSurface },
   muted: { fontFamily: fonts.regular, fontSize: 12, color: c.muted, lineHeight: 17 },
+  rated: { flexDirection: "row", alignItems: "center", gap: space.sm, padding: space.sm, borderRadius: radius.sm, backgroundColor: c.surfaceSecondary, minHeight: 44 },
   sigRow: { flexDirection: "row", gap: space.sm },
   sigBox: { flex: 1, padding: space.sm, borderRadius: radius.sm, backgroundColor: c.surfaceSecondary, minHeight: 80, gap: 2 },
   overlay: { flex: 1, backgroundColor: c.overlay, justifyContent: "flex-end" },

@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, Contact, ContactKind, logMessage } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Button, Chip, EmptyState, fonts, Icon, IconName, LockedPro, ProBadge, radius, space, tap } from "@/src/components/ui";
+import { Stars, useTrustedTrades } from "@/src/components/rating";
 import { usesNativeTabs } from "@/src/navigation";
 import { invalidate, useContacts } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -41,6 +42,9 @@ export default function Team() {
   const seg = SEGMENTS.find((x) => x.kind === kind)!;
   const locked = seg.pro && !isPro;
   const q = useContacts(kind, !locked);
+  const trusted = useTrustedTrades();
+  const ratingOf = (c: Contact) => trusted.data?.find((t) => t.contact_id === c.id || t.name.toLowerCase() === c.name.toLowerCase());
+  const rows = kind === "trade" ? [...(q.data ?? [])].sort((a, b) => (ratingOf(b)?.avg ?? 0) - (ratingOf(a)?.avg ?? 0)) : q.data;
 
   const del = useMutation({
     mutationFn: (id: string) => api(`/contacts/${id}`, { method: "DELETE" }),
@@ -62,6 +66,12 @@ export default function Team() {
           <View style={{ flex: 1 }}>
             <Text style={s.name} numberOfLines={1}>{item.name}</Text>
             <Text style={s.role} numberOfLines={1}>{item.role}</Text>
+            {ratingOf(item) ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }} testID={`contact-rating-${item.id}`}>
+                <Stars value={ratingOf(item)!.avg} size={12} />
+                <Text style={s.role}>{ratingOf(item)!.avg.toFixed(1)} · {ratingOf(item)!.count} job{ratingOf(item)!.count === 1 ? "" : "s"}</Text>
+              </View>
+            ) : null}
           </View>
           {item.status && kind === "trade" ? (
             <View style={[s.status, item.status === "Assigned" && { backgroundColor: colors.brandTertiary }]}>
@@ -132,11 +142,11 @@ export default function Team() {
         </View>
       ) : (
         <FlatList
-          data={q.data}
+          data={rows}
           keyExtractor={(i) => i.id}
           renderItem={renderItem}
           contentContainerStyle={{ padding: space.lg, paddingBottom: bottomChrome + space.xl, gap: space.md }}
-          refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => invalidate("contacts")} tintColor={colors.brand} />}
+          refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => invalidate("contacts", "trusted-trades")} tintColor={colors.brand} />}
           ListHeaderComponent={
             seg.pro ? (
               <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}><ProBadge /><Text style={s.role}>Pro portal</Text></View>

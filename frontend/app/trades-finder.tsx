@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "@/src/api";
 import { Button, Chip, EmptyState, fonts, Icon, IconName, radius, space, tap } from "@/src/components/ui";
+import { Stars, useTrustedTrades } from "@/src/components/rating";
 import { invalidate, useContacts, useProject } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
@@ -28,6 +29,7 @@ export default function TradesFinder() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const s = useStyles();
+  const trusted = useTrustedTrades();
   const { colors } = useTheme();
   const toast = useToast();
   const { data: project } = useProject();
@@ -112,6 +114,28 @@ export default function TradesFinder() {
         </ScrollView>
       </View>
 
+      {!search.data && !search.isPending && (trusted.data ?? []).filter((x) => x.avg >= 4).length > 0 && (
+        <View style={s.trusted} testID="trusted-trades-section">
+          <Text style={s.trustedTitle}>Your trusted trades</Text>
+          {(trusted.data ?? []).filter((x) => x.avg >= 4).slice(0, 5).map((x) => (
+            <View key={x.name} style={s.trustedRow} testID={`trusted-${x.name.replace(/\s+/g, "-").toLowerCase()}`}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={s.trustedName}>{x.name}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Stars value={x.avg} size={12} />
+                  <Text style={s.muted}>{x.avg.toFixed(1)} · {x.count} job{x.count === 1 ? "" : "s"}{x.top_tags.length ? ` · ${x.top_tags.join(", ")}` : ""}</Text>
+                </View>
+              </View>
+              {x.phone ? (
+                <Pressable onPress={() => open(`tel:${x.phone}`)} style={s.trustedCall} hitSlop={6} testID={`trusted-call-${x.name.replace(/\s+/g, "-").toLowerCase()}`}>
+                  <Icon name="phone" size={16} color={colors.brand} />
+                </Pressable>
+              ) : null}
+            </View>
+          ))}
+        </View>
+      )}
+
       {search.isPending ? (
         <View style={s.center}>
           <ActivityIndicator color={colors.brand} />
@@ -177,6 +201,11 @@ export default function TradesFinder() {
 }
 
 const useStyles = makeStyles((c) => ({
+  trusted: { margin: space.lg, marginBottom: 0, padding: space.md, borderRadius: radius.md, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, gap: space.sm },
+  trustedTitle: { fontFamily: fonts.bold, fontSize: 15, color: c.onSurface },
+  trustedRow: { flexDirection: "row", alignItems: "center", gap: space.md, paddingTop: space.sm, borderTopWidth: 1, borderTopColor: c.divider },
+  trustedName: { fontFamily: fonts.semibold, fontSize: 14, color: c.onSurface },
+  trustedCall: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.brandTertiary, alignItems: "center", justifyContent: "center" },
   root: { flex: 1, backgroundColor: c.surfaceSecondary },
   header: { paddingHorizontal: space.lg, paddingBottom: space.md, backgroundColor: c.surface, gap: space.md },
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },

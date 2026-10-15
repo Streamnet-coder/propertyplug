@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 13 fully verified. Backend: 14/14 pytest cases pass in tests/test_iteration13.py covering (1) /api/email-settings GET/POST/DELETE with correct fields (company_email, verified, sender_name='Builder Assist', company_name, account_email), http origin → 400, 3 POSTs/hour then 4th → 429, verification email sent to delivered@resend.dev, GET /api/verify-email/{token} returns HTML #email-verified + flips verified true, invalid token → 'expired' page, DELETE clears; (2) /api/digest/send-now returns sent:1 to delivered@resend.dev (uses owner_reply_to in routes/digest.py send_digest_emails); (3) /api/s/{token}/sign still returns 303 even when notify_owner_signoff cannot deliver (undeliverable account email just logs warning), plus a second case using a verified delivered+signoff@resend.dev user to confirm the notification send also succeeds; (4) trade-ratings: 400 before owner signoff, 200 after fix+signoff, stars 0/6 → 422, unknown tags filtered to TAGS allowlist, re-POST upserts (same id, updated stars/tags/comment), GET /api/trade-ratings and ?project=active both work, GET /api/trusted-trades returns {name, avg, count, top_tags, contact_id, role, phone, email, last_comment} sorted best-first, contact_id populated when a contact name matches, DELETE /api/auth/account removes trade_ratings. Frontend: /branding shows company-email-card with company-email-input/verify/status/resend/remove; verify button disabled while email invalid, enabled with valid email; after POST status pill reads 'delivered@resend.dev · Check your inbox to confirm' and resend+remove buttons appear; remove clears state. /digest shows digest-reply-to-link ('Replies go to demo@mybuilder.app · Use your company email'). /snags signoff-panel: after owner signs, rating-open-apex-builders-ltd appears → rating-sheet with 5 stars + chips (rating-tag-quality-work) + rating-comment-input + rating-save → card updates to rating-show-apex-builders-ltd with 5★ and the comment. /team Trades tab: contact-rating-{id} is rendered on the Apex Builders Ltd row after rating. /trades-finder intro renders trusted-trades-section listing 'Apex Builders Ltd · 5.0 · 1 job · Quality work'. Cleanup: demo plan reset to basic, TEST_ snags/snag_signoffs/trade_ratings removed, demo company_email cleared, digest recipients=[]/auto=false, digest share revoked.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration13.py",
+    "/app/test_reports/pytest/pytest_iteration13.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/email_settings.py _sends dict is module-level in-memory → rate-limit resets on backend restart and is per-process. Fine for current single-worker deploy; if scaled, move to Mongo/Redis so attackers can't bypass by hitting a different pod.",
+    "routes/ratings.py has no DELETE endpoint; a rating lives until the account is deleted. If an owner mis-rates a trade (wrong assignee typo) they can only upsert over the same (project_id, assignee_lc) key — they can't reset for a different name. Non-blocking.",
+    "routes/digest.py send_digest_emails resolves owner_reply_to once per project and reuses it for every recipient — correct and efficient. Logging also records 'sent'/'failed' per recipient via log_message. Looks good.",
+    "routes/email_settings.py verify link uses body.origin_url without canonicalising scheme/host (e.g. accepts 'https://evil.example'). Backend already enforces https; an attacker who tricks a user into pasting a malicious origin_url could get a plausible-looking link but the server redirects to its own /api/verify-email/{token} anyway, so impact is only cosmetic. Non-blocking.",
+    "routes/ratings.py trusted_trades aggregation reads contacts.find_one per group with ObjectId(contact_id) — if a stored contact_id is not a valid ObjectId (e.g. legacy data) this raises bson.errors.InvalidId and 500s. Guard with ObjectId.is_valid() first."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration13.py (new)",
+    "/app/test_reports/pytest/pytest_iteration13.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100%"},
+  "seed_data_creation": "Each backend test registers a disposable TEST_ user via /api/auth/register and deletes it via DELETE /api/auth/account. One test uses delivered+signoff@resend.dev (reused across runs). Frontend test added one TEST_ snag assigned to the existing 'Apex Builders Ltd' contact on demo, signed off + rated it to prove /team + /trades-finder render; cleanup script then removed the TEST_ snag, its sign-off, the trade rating, cleared demo company_email, and reset plan to basic.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend URL env key is EXPO_PUBLIC_BACKEND_URL (see frontend/.env). Auth token on the web client is stored in localStorage key 'mba_auth_token' as a JSON-stringified string (so JSON.parse before using as Bearer). For UI tests of the rating/sign-off flow, use JS fetch via page.evaluate to pre-seed a TEST_ snag + fix + owner-signoff on the Apex Builders Ltd contact; then click rating-open-apex-builders-ltd → rating-sheet (stars/tags/comment/save) → rating-show-apex-builders-ltd. Trade ratings have no DELETE endpoint, so cleanup requires DB access (db.trade_ratings.delete_many on demo user_id).",
+  "rca_of_issue": "N/A — all iteration-13 features (company email verification, verified reply_to on digest, sign-off notification, trade ratings + trusted trades list) verified working end-to-end on backend and frontend."
+}

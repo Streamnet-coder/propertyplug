@@ -6,6 +6,7 @@ import { Pressable, Text, View } from "react-native";
 
 import { api, Branding, fileUrl } from "@/src/api";
 import { PhotoPicker, PickedAsset } from "@/src/components/photo-picker";
+import { CompanyEmailCard } from "@/src/components/company-email-card";
 import { Button, Field, fonts, FormScreen, Icon, radius, space } from "@/src/components/ui";
 import { queryClient } from "@/src/query-client";
 import { useBranding } from "@/src/queries";
@@ -74,6 +75,7 @@ export default function BrandingScreen() {
       </View>
       <Field label="Email" value={b.email} onChangeText={set("email")} keyboardType="email-address" autoCapitalize="none" placeholder="hello@yourco.co.uk" testID="branding-email-input" />
 
+      <CompanyEmailCard />
       <Text style={s.label}>Preview</Text>
       <View style={s.preview} testID="branding-preview">
         {logo || b.logo_path ? (

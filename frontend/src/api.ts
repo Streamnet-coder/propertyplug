@@ -138,3 +138,6 @@ export type Stakeholder = { key: string; name: string; email: string; phone: str
 /** Record an outbound message in the stakeholder log (fire-and-forget). */
 export const logMessage = (b: { name: string; email?: string; phone?: string; channel: "email" | "whatsapp" | "call" | "link" | "share"; kind: string; summary: string; url?: string }) =>
   api("/messages", { body: b }).catch(() => undefined);
+export type EmailSettings = { company_email: string | null; verified: boolean; sender_name: string; company_name: string; account_email: string };
+export type TradeRating = { id: string; assignee: string; stars: number; tags: string[]; comment: string; project_id: string; project_name: string; contact_id?: string | null; updated_at: string };
+export type TrustedTrade = { name: string; avg: number; count: number; top_tags: string[]; last_comment: string; role: string; phone: string; email: string; contact_id?: string | null };
