@@ -132,3 +132,6 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 ## Map filter totals + Team leads (Jun 2026)
 - Map: FilterTotals bar (purchase/value/budget/spent for filtered pins; native currency if single else home currency via portfolio rates).
 - Portal: member.is_lead (requires company), invited_by. Lead endpoints /portal/projects/{pid}/team GET/POST/DELETE (same owner+project+company; can't remove leads/self). Activity kinds team_invite/team_remove.
+
+## Portal access end dates (Jun 2026)
+- portal_members.expires_on (YYYY-MM-DD, access through that day). active_q() filters login/_resolve/_account_by_code/portal_me; _membership 403 when expired. Teammates inherit lead's end date. Owner UI AccessEndPicker (presets/date/no end).

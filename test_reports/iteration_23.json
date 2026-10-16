@@ -1,0 +1,46 @@
+{
+  "summary": "Iteration 23 — Portal access expiry dates (owner-settable end date after which stakeholder access stops). Backend: 17/17 pytest tests in /app/backend/tests/test_iteration23.py pass (2 workers, 8.7s). Covered: (a) POST /api/portal-members accepts expires_on (YYYY-MM-DD); response/GET expose expires_on + expired flag; past date -> 400 'End date can't be in the past'; bad format '12/31/2026' -> 422 (pydantic validator); null/absent -> expired=false. (b) PUT /api/portal-members/{id} {expires_on:'YYYY-MM-DD'} sets, {expires_on:null} clears, past date -> 400. (c) Resend for an expired member -> 400 'Their access has ended. Extend the end date first' (invited_at reset in db to bypass the 120s throttle). (d) Enforcement (end date is inclusive): simulated expiry by direct db update to today-30. GET /api/portal/projects/{pid} -> 403 and detail includes PAST_FAR date; GET /api/portal/me returns projects:[]; POST /api/portal/request-code 200s but writes NO portal_codes row (silent); POST /api/portal/login-password with a planted code+password -> 401 (active_q() filters out expired member); POST /api/portal/activate with a planted code -> 400 'That access code isn't valid'. Extending expires_on back to today+30 immediately restores the 200 on /api/portal/projects/{pid} using the same JWT. (e) Inclusive end date: expires_on=today still allows GET /api/portal/projects/{pid}. (f) Team-lead inheritance: POST /api/portal/projects/{pid}/team by a lead whose expires_on=today+90 creates teammate with expires_on=today+90; lead with no expiry -> teammate expires_on=null. Mobile UI (390x844, demo@mybuilder.app -> /portal-access): AccessEndPicker present on invite form with all required testIDs (portal-invite-ends, -none/-30/-90/-182/-365, -input). Typing '2020-01-01' into portal-invite-ends-input shows portal-invite-ends-error 'Enter a date from today onwards as YYYY-MM-DD'; typing bad format '12/31/2026' also shows the same error. Invited test_ui_exp_<rand>@example.com with 90-day chip -> card auto-expanded, portal-member-expiry-{id} badge displays 'Access until 14 Jan 2027'. Expanded card shows portal-ends-{id} picker; save button (portal-ends-{id}-save) is absent before change; appears when 'No end date' chip clicked; clicking it cleared expiry and badge disappeared and toast 'End date removed' shown implicitly; selecting 30-day chip reveals save, saving updates badge to 'Access until 15 Nov 2026' with toast 'Access now ends 15 Nov 2026' visible; typing past date into picker-input shows portal-ends-{id}-error. Web portal (/api/portal with lead token injected into sessionStorage.pt): #portal-project header shows '#access-ends' span with text 'access until 2026-11-15' when expires_on is set.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/portal/activate (expired-only member)", "issue": "Returns 400 'That access code isn't valid. Check your invite email' which is correct per the spec (silent/non-enumerating), but a user whose access just ended will see the same error as a wrong code. Consider wording like 'Your access has ended. Ask the owner to extend it.' when the account exists but all memberships are expired, if non-enumeration is already covered by request-code. Reference: /app/backend/routes/portal.py:388-391."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration23.py",
+    "/app/test_reports/pytest/pytest_iteration23.xml"
+  ],
+  "action_items": [
+    "(Nit) Resend-invite 400 message mentions 'extend the end date' but the API error does not include the past date; could be 'Their access ended on YYYY-MM-DD. Extend the end date first' for consistency with GET /api/portal/projects/{pid}'s 403 message.",
+    "(Nit) activate() currently returns a generic 400 for expired-only members (via _account_by_code -> None). Consider returning a more actionable message when the raw access code is correct but the member has no active memberships (e.g. 'Your access has ended'). Must weigh against account-enumeration risk.",
+    "(Pre-existing from iter 22) EMERGENT_LLM_KEY lacks objstore scope so POST /api/documents 500s — unrelated to this iteration."
+  ],
+  "critical_code_review_comments": [
+    "routes/portal.py:_valid_end + MemberIn/MemberUpdate field_validator together ensure format errors become 422 (pydantic ValueError in validator) and past-date errors become 400 (explicit HTTPException in handler). The division is correct per spec.",
+    "routes/portal.py:active_q() uses $or with 'expires_on exists/missing/None/>=today' — stringified ISO comparison works because YYYY-MM-DD sorts lexicographically. Good.",
+    "routes/portal.py:is_expired() uses today's ISO; access remains valid on the end date (inclusive) because 'equal' is not 'less than'. Matches 'access lasts through the end date'.",
+    "routes/portal.py:_membership raises 403 with the exact stored expires_on in the message — matches spec exactly.",
+    "routes/portal.py:_resolve filters membership by active_q() → request-code is silent for expired-only stakeholders (verified: no portal_codes row written). Non-enumeration preserved.",
+    "routes/portal.py:_account_by_code also filters by active_q() → login-password/activate fail for expired-only stakeholders. Good.",
+    "routes/portal.py:team_invite copies lead.get('expires_on') into the new teammate record; nothing adjusts if a teammate's end date is set directly later — correct per spec (inherit at creation).",
+    "routes/portal.py:resend_invite blocks on is_expired(m) BEFORE the 120s throttle check — ordering is correct so the UX hint 'Extend the end date first' always wins over the throttle message.",
+    "components/access-end-picker.tsx:bad = text!=='' && (bad format OR < today ISO) — exclusive-of-today compare is strict less-than, so today is valid (matches backend inclusive end date). Save button only renders when onSave is passed AND dirty flag is true AND !bad — correct per spec.",
+    "app/portal-access.tsx: AccessEndPicker on invite form uses onChange (controlled state) with no onSave (sent only when 'Send invite' pressed); on member card uses onSave (explicit save button). Different patterns — intentional and correctly keyed via key={ends ?? 'none'}/{m.expires_on ?? 'none'} to reset local text state after submit."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration23.py (new)",
+    "/app/test_reports/pytest/pytest_iteration23.xml (new)",
+    "/app/test_reports/iteration_23.json (new)"
+  ],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "100% (mobile portal-access AccessEndPicker + error states + inline card save flow + toast; web portal #access-ends header)"},
+  "seed_data_creation": "Backend: each test uses test_<slug>_<uuid>@example.com; fixture teardown clears portal_accounts/handles/members/codes/activity/questions per email. UI: registered no new accounts (used demo@mybuilder.app) and invited one portal member test_ui_exp_<rand>@example.com against the Nottingham demo project. Final cleanup script deleted 1 portal_member, 1 portal_account, 1 portal_handle, 1 portal_activity entry for the test_* email pattern.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Access-expiry feature is fully verified end-to-end. Key invariant: everything that gates portal access (login-password, activate, request-code, me, projects) runs through active_q() or is_expired(); any new portal endpoint should reuse these helpers so the end-date-inclusive rule holds. Note that the Resend 400 message does NOT include the end date — if a future ticket surfaces this in the UI, use the member's expires_on from the GET /api/portal-members payload. For UI, picker 'save' button is intentionally hidden until the user changes the chip/input; test by comparing portal-ends-{id}-save presence before and after a chip click. Web portal #access-ends only renders when expires_on is set; absent for None (correct). AccessEndPicker is remounted via key={value} after each save to resync local state — tests should also wait for the toast or badge to update before poking the picker again."
+}

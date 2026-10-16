@@ -6,6 +6,7 @@ import { ActivityIndicator, Pressable, Switch, Text, View } from "react-native";
 import { api, BACKEND_URL, DocItem, PortalMember } from "@/src/api";
 import { Button, Card, Chip, Field, fonts, FormScreen, Icon, radius, space, tap } from "@/src/components/ui";
 import { ActivityPanel, QuestionsPanel, usePortalQuestions } from "@/src/components/portal-panels";
+import { AccessEndPicker, fmtEnd } from "@/src/components/access-end-picker";
 import { queryClient } from "@/src/query-client";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
@@ -21,6 +22,7 @@ export default function PortalAccess() {
   const docs = useQuery({ queryKey: ["documents"], queryFn: () => api<DocItem[]>("/documents") });
   const [f, setF] = useState({ name: "", email: "", role: "Investor", handle: "", company: "" });
   const [team, setTeam] = useState<PortalMember | null>(null);
+  const [ends, setEnds] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [tab, setTab] = useState<"people" | "activity" | "questions">("people");
   const questions = usePortalQuestions();
@@ -28,11 +30,12 @@ export default function PortalAccess() {
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["portal-members"] });
 
   const add = useMutation({
-    mutationFn: () => api<PortalMember & { email_sent: boolean }>("/portal-members", { body: { ...f, handle: f.handle.trim() || undefined, doc_ids: team?.doc_ids ?? [], digest: team?.digest ?? true, origin_url: BACKEND_URL } }),
+    mutationFn: () => api<PortalMember & { email_sent: boolean }>("/portal-members", { body: { ...f, handle: f.handle.trim() || undefined, doc_ids: team?.doc_ids ?? [], digest: team?.digest ?? true, expires_on: ends, origin_url: BACKEND_URL } }),
     onSuccess: (m) => {
       refresh();
       setF({ name: "", email: "", role: "Investor", handle: "", company: "" });
       setTeam(null);
+      setEnds(null);
       setOpen(m.id);
       if (m.email_sent) toast(`Invite sent · ID ${m.handle}`);
       else toast(`Access added (ID ${m.handle}) but the invite email failed. Tap Resend invite`, "error");
@@ -86,6 +89,7 @@ export default function PortalAccess() {
       <View style={s.chips}>
         {ROLES.map((r) => <Chip key={r} label={r} selected={f.role === r} onPress={() => setF({ ...f, role: r })} testID={`portal-role-${r.replace(/\s+/g, "-").toLowerCase()}`} />)}
       </View>
+      <AccessEndPicker key={ends ?? "none"} value={ends} onChange={setEnds} testID="portal-invite-ends" />
       <Button icon="user-plus" title="Send invite" disabled={!f.name.trim() || !EMAIL_RE.test(f.email.trim())} loading={add.isPending} onPress={() => add.mutate()} testID="portal-invite-button" />
 
       <Text style={s.section}>People with access ({members.data?.length ?? 0})</Text>
@@ -102,6 +106,12 @@ export default function PortalAccess() {
                 <Icon name={m.password_set ? "lock" : "key-round"} size={12} color={m.password_set ? colors.brand : colors.muted} />
                 <Text style={[s.statusText, { color: m.password_set ? colors.brand : colors.muted }]}>{m.password_set ? "Password set" : "Access code sent · password not set yet"}</Text>
               </View>
+              {(m.expires_on || m.expired) && (
+                <View style={[s.status, { backgroundColor: m.expired ? colors.errorTint : colors.surfaceSecondary }]} testID={`portal-member-expiry-${m.id}`}>
+                  <Icon name={m.expired ? "lock" : "calendar-clock"} size={12} color={m.expired ? colors.error : colors.muted} />
+                  <Text style={[s.statusText, { color: m.expired ? colors.error : colors.muted }]}>{m.expired ? `Access ended ${fmtEnd(m.expires_on!)}` : `Access until ${fmtEnd(m.expires_on!)}`}</Text>
+                </View>
+              )}
             </View>
             <Icon name={open === m.id ? "chevron-up" : "chevron-down"} size={18} color={colors.muted} />
           </Pressable>
@@ -118,6 +128,7 @@ export default function PortalAccess() {
                 </View>
                 <Switch value={m.is_lead} disabled={!m.company} onValueChange={(v) => update.mutate({ id: m.id, body: { is_lead: v } })} trackColor={{ true: colors.brand, false: colors.borderStrong }} thumbColor={colors.surface} testID={`portal-lead-switch-${m.id}`} />
               </View>
+              <AccessEndPicker key={m.expires_on ?? "none"} value={m.expires_on} onSave={(v) => update.mutate({ id: m.id, body: { expires_on: v } }, { onSuccess: () => toast(v ? `Access now ends ${fmtEnd(v)}` : "End date removed") })} saving={update.isPending} testID={`portal-ends-${m.id}`} />
               {m.invited_by && <Text style={s.muted} testID={`portal-member-invited-by-${m.id}`}>Added by their team lead ({m.invited_by})</Text>}
               <Text style={s.label}>Documents they can see</Text>
               {(docs.data ?? []).length === 0 && <Text style={s.muted}>Upload documents first.</Text>}

@@ -7,7 +7,7 @@ import hmac
 import re
 import secrets
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
 import bcrypt
@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPAuthorizationCredentials
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from core import E, JWT_SECRET, bearer, db, logger, now_iso, oid, sym
 from deps import active_pid, current_user, get_project_doc
@@ -37,6 +37,25 @@ PORTAL_SECRET = JWT_SECRET + "|portal"  # different key: portal tokens can never
 CODE_TTL = 600
 MAX_FAILS = 5
 LOCK_SECONDS = 900
+
+
+def active_q() -> dict:
+    """Memberships still in date (no end date, or end date today or later: access lasts through the end date)."""
+    return {"$or": [{"expires_on": None}, {"expires_on": {"$exists": False}}, {"expires_on": {"$gte": date.today().isoformat()}}]}
+
+
+def is_expired(m: dict) -> bool:
+    return bool(m.get("expires_on")) and m["expires_on"] < date.today().isoformat()
+
+
+def _valid_end(v):
+    if not v:
+        return None
+    try:
+        d = date.fromisoformat(v)
+    except ValueError:
+        raise ValueError("Use date format YYYY-MM-DD")
+    return d.isoformat()
 
 
 def handle_addr(h: str) -> str:
@@ -65,7 +84,13 @@ class MemberIn(BaseModel):
     handle: Optional[str] = Field(None, max_length=24)
     doc_ids: List[str] = Field(default_factory=list, max_length=200)
     digest: bool = True
+    expires_on: Optional[str] = None
     origin_url: str
+
+    @field_validator("expires_on")
+    @classmethod
+    def _end(cls, v):
+        return _valid_end(v)
 
 
 class MemberUpdate(BaseModel):
@@ -74,6 +99,12 @@ class MemberUpdate(BaseModel):
     doc_ids: Optional[List[str]] = Field(None, max_length=200)
     digest: Optional[bool] = None
     is_lead: Optional[bool] = None
+    expires_on: Optional[str] = None  # send null to remove the end date
+
+    @field_validator("expires_on")
+    @classmethod
+    def _end(cls, v):
+        return _valid_end(v)
 
 
 class TeammateIn(BaseModel):
@@ -86,6 +117,7 @@ async def member_out(m: dict) -> dict:
     acc = await db.portal_accounts.find_one({"email": m["email"]}, {"password_hash": 1})
     return {"id": str(m["_id"]), "name": m["name"], "email": m["email"], "role": m["role"], "company": m.get("company", ""), "doc_ids": m["doc_ids"], "digest": m["digest"],
             "password_set": bool(acc and acc.get("password_hash")), "is_lead": m.get("is_lead", False), "invited_by": m.get("invited_by"),
+            "expires_on": m.get("expires_on"), "expired": is_expired(m),
             "handle": handle_addr(h["handle"]) if h else None, "last_login": m.get("last_login"), "invited_at": m.get("invited_at"),
             "portal_url": f"{m['origin'].rstrip('/')}/api/portal" if m.get("origin") else None}
 
@@ -119,6 +151,7 @@ async def _invite_email(m: dict, owner: User, project_name: str, access_code: Op
             f'<p style="font-size:12px;letter-spacing:1px;color:#0f766e;font-weight:bold;margin:0">{E(EMAIL_FROM_NAME.upper())} · STAKEHOLDER PORTAL</p>'
             f'<h1 style="font-size:20px;margin:8px 0">You have access to {E(project_name)}</h1>'
             f'<p>Hi {E(m["name"])}, {E(owner.name)} has shared project updates and documents with you.</p>'
+            + (f'<p>Your access runs until <b>{E(m["expires_on"])}</b>.</p>' if m.get("expires_on") else '')
             + (f'<div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:14px;margin:12px 0"><p style="margin:0 0 4px">Your personal access code:</p>'
                f'<p style="font-size:20px;font-weight:bold;letter-spacing:2px;margin:0;font-family:monospace">{E(access_code)}</p>'
                f'<p style="margin:8px 0 0;font-size:13px">First time? Open the portal, choose <b>Set up password</b>, enter this code and create your password. After that, sign in with the code + your password.</p></div>'
@@ -145,10 +178,12 @@ async def add_member(body: MemberIn, user: User = Depends(current_user)):
         raise HTTPException(400, "This person already has access to this project")
     if await db.portal_members.count_documents({"owner_id": user.id, "project_id": p.id}) >= 25:
         raise HTTPException(400, "Up to 25 stakeholders per project")
+    if body.expires_on and body.expires_on < date.today().isoformat():
+        raise HTTPException(400, "End date can't be in the past")
     own = {str(d["_id"]) for d in await db.documents.find({"_id": {"$in": [oid(i) for i in body.doc_ids]}, "user_id": user.id, "project_id": p.id}, {"_id": 1}).to_list(200)}
     await ensure_handle(email, body.name, body.handle)
     code = await issue_access_code(email)
-    m = {"owner_id": user.id, "project_id": p.id, "name": body.name.strip(), "email": email, "role": body.role.strip() or "Investor", "company": body.company.strip(),
+    m = {"owner_id": user.id, "project_id": p.id, "name": body.name.strip(), "email": email, "role": body.role.strip() or "Investor", "company": body.company.strip(), "expires_on": body.expires_on,
          "doc_ids": [i for i in body.doc_ids if i in own], "digest": body.digest, "origin": body.origin_url, "created_at": now_iso(), "invited_at": now_iso()}
     m["_id"] = (await db.portal_members.insert_one(m)).inserted_id
     try:
@@ -167,6 +202,8 @@ async def update_member(mid: str, body: MemberUpdate, user: User = Depends(curre
     if not m:
         raise HTTPException(404, "Not found")
     upd = body.model_dump(exclude_unset=True)
+    if upd.get("expires_on") and upd["expires_on"] < date.today().isoformat():
+        raise HTTPException(400, "End date can't be in the past")
     if upd.get("is_lead") and not (upd.get("company", m.get("company")) or "").strip():
         raise HTTPException(400, "Add their company first so we know which team they lead")
     if "doc_ids" in upd:
@@ -181,6 +218,8 @@ async def resend_invite(mid: str, user: User = Depends(current_user)):
     m = await db.portal_members.find_one({"_id": oid(mid), "owner_id": user.id})
     if not m:
         raise HTTPException(404, "Not found")
+    if is_expired(m):
+        raise HTTPException(400, "Their access has ended. Extend the end date first")
     if m.get("invited_at") and (datetime.now(timezone.utc) - datetime.fromisoformat(m["invited_at"])).total_seconds() < 120:
         raise HTTPException(429, "Invite just sent. Try again in a couple of minutes")
     p = await db.projects.find_one({"_id": ObjectId(m["project_id"])}, {"name": 1}) or {}
@@ -270,7 +309,7 @@ async def _resolve(identifier: str) -> Optional[str]:
     if ident.endswith(f"@{HANDLE_DOMAIN}") or "@" not in ident:
         h = await db.portal_handles.find_one({"handle": ident.split("@")[0]})
         ident = h["email"] if h else ""
-    return ident if ident and await db.portal_members.find_one({"email": ident}, {"_id": 1}) else None
+    return ident if ident and await db.portal_members.find_one({"email": ident, **active_q()}, {"_id": 1}) else None
 
 
 @router.post("/portal/request-code")
@@ -308,8 +347,8 @@ async def verify_code(body: CodeVerify):
 
 
 async def _session(email: str) -> dict:
-    await db.portal_members.update_many({"email": email}, {"$set": {"last_login": now_iso()}})
-    async for m in db.portal_members.find({"email": email}):
+    await db.portal_members.update_many({"email": email, **active_q()}, {"$set": {"last_login": now_iso()}})
+    async for m in db.portal_members.find({"email": email, **active_q()}):
         await log_activity(m, "login")
     n = datetime.now(timezone.utc)
     return {"token": jwt.encode({"sub": email, "typ": "portal", "iat": n, "exp": n + timedelta(days=7)}, PORTAL_SECRET, algorithm="HS256")}
@@ -340,7 +379,7 @@ def _check_password_rules(pw: str):
 async def _account_by_code(code: str) -> Optional[dict]:
     acc = await db.portal_accounts.find_one({"code_lookup": _code_lookup(code)})
     # Access only while they are still a member of at least one project.
-    return acc if acc and await db.portal_members.find_one({"email": acc["email"]}, {"_id": 1}) else None
+    return acc if acc and await db.portal_members.find_one({"email": acc["email"], **active_q()}, {"_id": 1}) else None
 
 
 @router.post("/portal/activate")
@@ -437,6 +476,8 @@ async def _membership(email: str, pid: str) -> dict:
     m = await db.portal_members.find_one({"email": email, "project_id": pid})
     if not m:
         raise HTTPException(404, "Project not shared with you")
+    if is_expired(m):
+        raise HTTPException(403, f"Your access to this project ended on {m['expires_on']}. Ask the owner to extend it")
     return m
 
 
@@ -444,11 +485,11 @@ async def _membership(email: str, pid: str) -> dict:
 async def portal_me(email: str = Depends(portal_email)):
     h = await db.portal_handles.find_one({"email": email}, {"handle": 1})
     out = []
-    async for m in db.portal_members.find({"email": email}):
+    async for m in db.portal_members.find({"email": email, **active_q()}):
         p = await db.projects.find_one({"_id": ObjectId(m["project_id"])}, {"name": 1, "address": 1})
         o = await db.users.find_one({"_id": ObjectId(m["owner_id"])}, {"name": 1, "branding": 1})
         if p and o:
-            out.append({"project_id": m["project_id"], "name": p["name"], "address": p.get("address", ""), "role": m["role"],
+            out.append({"project_id": m["project_id"], "name": p["name"], "address": p.get("address", ""), "role": m["role"], "expires_on": m.get("expires_on"),
                         "owner": ((o.get("branding") or {}).get("company_name") or o["name"])})
     return {"email": email, "handle": handle_addr(h["handle"]) if h else None, "projects": out}
 
@@ -464,7 +505,7 @@ async def portal_project(pid: str, week: int = Query(0, ge=0, le=52), email: str
     return {"name": s["name"], "address": s["address"], "stage": s["current_stage"], "milestones_done": s["milestones_done"],
             "milestones_total": s["milestones_total"], "total_budget": s["total_budget"], "total_spent": s["total_spent"],
             "purchase_price": s["purchase_price"], "estimated_valuation": s["estimated_valuation"], "role": m["role"], "symbol": sym(s["currency"]),
-            "company": m.get("company", ""), "is_lead": bool(m.get("is_lead") and m.get("company")),
+            "company": m.get("company", ""), "is_lead": bool(m.get("is_lead") and m.get("company")), "expires_on": m.get("expires_on"),
             "documents": [{k: v for k, v in doc_out(d).items() if k != "share_url"} for d in docs],
             "digest": await build_digest(pid, week) if m["digest"] else None}
 
@@ -530,7 +571,7 @@ async def team_list(pid: str, email: str = Depends(portal_email)):
     out = []
     for m in await db.portal_members.find(_team_q(lead)).sort("created_at", 1).to_list(100):
         o = await member_out(m)
-        out.append({k: o[k] for k in ("id", "name", "email", "role", "is_lead", "password_set", "last_login", "invited_by")} | {"is_you": m["email"] == email})
+        out.append({k: o[k] for k in ("id", "name", "email", "role", "is_lead", "password_set", "last_login", "invited_by", "expires_on", "expired")} | {"is_you": m["email"] == email})
     return out
 
 
@@ -545,7 +586,7 @@ async def team_invite(pid: str, body: TeammateIn, email: str = Depends(portal_em
     await ensure_handle(new, body.name)
     code = await issue_access_code(new)
     m = {"owner_id": lead["owner_id"], "project_id": pid, "name": body.name.strip(), "email": new, "role": lead["role"], "company": lead["company"],
-         "doc_ids": list(lead["doc_ids"]), "digest": lead["digest"], "origin": lead["origin"], "invited_by": email, "created_at": now_iso(), "invited_at": now_iso()}
+         "doc_ids": list(lead["doc_ids"]), "digest": lead["digest"], "origin": lead["origin"], "invited_by": email, "expires_on": lead.get("expires_on"), "created_at": now_iso(), "invited_at": now_iso()}
     m["_id"] = (await db.portal_members.insert_one(m)).inserted_id
     owner = User.from_mongo(await db.users.find_one({"_id": ObjectId(lead["owner_id"])}))
     p = await db.projects.find_one({"_id": ObjectId(pid)}, {"name": 1}) or {}
@@ -614,7 +655,7 @@ document.querySelectorAll('.proj').forEach(a=>a.onclick=e=>{e.preventDefault();p
 function logout(e){e&&e.preventDefault();sessionStorage.removeItem('pt');login()}
 async function dl(pid,d){const r=await api(`/portal/projects/${pid}/documents/${d.id}`);const u=URL.createObjectURL(await r.blob());const a=document.createElement('a');a.href=u;a.download=d.filename;a.click();URL.revokeObjectURL(u)}
 async function project(pid,me){cur=pid;const p=await(await api(`/portal/projects/${pid}?week=${week}`)).json();sy=p.symbol||'£';const g=p.digest;
-$('#app').innerHTML=`<div class='hdr' id='portal-project'><div class='brand'>BUILDER <b>ASSIST</b> · STAKEHOLDER PORTAL</div><h1>${esc(p.name)}</h1><div>${esc(p.address)}</div><div style='font-size:12px;margin-top:6px'>${esc(me.handle||me.email)} · ${esc(p.role)} · ${me.projects.length>1?"<a href='#' id='all' style='color:#fff'>All projects</a> · ":""}<a href='#' id='logout' style='color:#fff'>Sign out</a></div></div>
+$('#app').innerHTML=`<div class='hdr' id='portal-project'><div class='brand'>BUILDER <b>ASSIST</b> · STAKEHOLDER PORTAL</div><h1>${esc(p.name)}</h1><div>${esc(p.address)}</div><div style='font-size:12px;margin-top:6px'>${esc(me.handle||me.email)} · ${esc(p.role)} · ${p.expires_on?`<span id='access-ends'>access until ${esc(p.expires_on)}</span> · `:''}${me.projects.length>1?"<a href='#' id='all' style='color:#fff'>All projects</a> · ":""}<a href='#' id='logout' style='color:#fff'>Sign out</a></div></div>
 <div class='kpis' style='margin-top:14px'><div class='kpi'><span>Stage</span><div>${esc(p.stage||'-')}</div></div><div class='kpi'><span>Milestones</span><div>${p.milestones_done}/${p.milestones_total}</div></div><div class='kpi'><span>Budget</span><div>${gbp(p.total_budget)}</div></div><div class='kpi'><span>Spent</span><div>${gbp(p.total_spent)}</div></div></div>
 ${g?`<div class='card' id='portal-digest'><h2>Weekly update · ${week===0?'This week':week===1?'Last week':week+' weeks ago'}</h2><div class='kpis'><div class='kpi'><span>Spent</span><div>${gbp(g.spend.total)}</div></div><div class='kpi'><span>Snags fixed</span><div>${g.snags_fixed.length}</div></div><div class='kpi'><span>Stages done</span><div>${g.milestones_done.length}</div></div><div class='kpi'><span>Open snags</span><div>${g.snags_open_now}</div></div></div>
 ${g.milestones_done.map(m=>`<div class='cap'>✓ ${esc(m.name)}</div>`).join('')}<div style='display:flex;justify-content:space-between;margin-top:10px'><a href='#' id='prev'>← Previous week</a>${week>0?"<a href='#' id='next'>Next week →</a>":"<span></span>"}</div></div>`:''}
