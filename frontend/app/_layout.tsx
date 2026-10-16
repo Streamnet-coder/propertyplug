@@ -67,6 +67,7 @@ export default function RootLayout() {
                 <Stack.Screen name="digest" />
                 <Stack.Screen name="stakeholders" />
                 <Stack.Screen name="documents" />
+                <Stack.Screen name="portal-access" options={{ presentation: "modal" }} />
                 <Stack.Screen name="document-form" options={{ presentation: "modal" }} />
                 <Stack.Screen name="stakeholder" />
                 <Stack.Screen name="delete-account" options={{ presentation: "modal" }} />

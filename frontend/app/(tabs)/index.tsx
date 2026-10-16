@@ -6,7 +6,9 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } 
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { gbp } from "@/src/api";
+import { useQuery } from "@tanstack/react-query";
+
+import { api, DocItem, expiryLabel, gbp } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { BrandLogo } from "@/src/components/brand";
 import { Button, Card, fonts, Icon, IconName, ProBadge, radius, SectionTitle, space, tap } from "@/src/components/ui";
@@ -29,6 +31,7 @@ export default function Home() {
   const receipts = useReceipts();
   const digest = useDigest(0);
   const lineItems = useLineItems();
+  const expiring = useQuery({ queryKey: ["documents", "expiring"], queryFn: () => api<DocItem[]>("/documents/expiring") });
   const over = (lineItems.data ?? []).filter((i) => i.alert === "over").length;
   const near = (lineItems.data ?? []).filter((i) => i.alert === "near").length;
   useEffect(() => { prefetchProjects(); }, []);
@@ -167,6 +170,22 @@ export default function Home() {
               <View style={{ flex: 1 }}>
                 <Text style={s.rowLabel}>Budget variance alert</Text>
                 <Text style={s.muted}>{[over && `${over} item${over === 1 ? "" : "s"} over budget`, near && `${near} at 90%+`].filter(Boolean).join(" · ")}</Text>
+              </View>
+              <Icon name="chevron-right" size={18} color={colors.muted} />
+            </Pressable>
+          )}
+
+          {(expiring.data ?? []).length > 0 && (
+            <Pressable testID="expiry-alert-card" onPress={() => { tap(); router.push("/documents"); }} style={[s.alertCard, { borderColor: expiring.data!.some((d) => d.expiry_status === "expired") ? colors.error : colors.brandPrimary }]}>
+              <Icon name="calendar-clock" size={20} color={expiring.data!.some((d) => d.expiry_status === "expired") ? colors.error : colors.brandPrimary} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={s.rowLabel}>Certificates & insurance</Text>
+                {expiring.data!.slice(0, 3).map((d) => (
+                  <Text key={d.id} style={[s.muted, d.expiry_status === "expired" && { color: colors.error, fontFamily: fonts.semibold }]} numberOfLines={1} testID={`expiry-item-${d.id}`}>
+                    {d.doc_type}: {expiryLabel(d)}
+                  </Text>
+                ))}
+                {expiring.data!.length > 3 && <Text style={s.muted}>+{expiring.data!.length - 3} more</Text>}
               </View>
               <Icon name="chevron-right" size={18} color={colors.muted} />
             </Pressable>

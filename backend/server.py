@@ -6,14 +6,14 @@ from seed import seed_milestones
 from storage import init_storage
 import asyncio
 
-from routes import (ai, auth, branding, budget, contacts, digest, documents, email_settings, export, media, messages, ratings, milestones, payments, projects, quotes,
+from routes import (ai, auth, branding, budget, contacts, digest, documents, portal, email_settings, export, media, messages, ratings, milestones, payments, projects, quotes,
                     referrals, share, shopping, snags, stage_payments, trades)
 
 app = FastAPI()
 api = APIRouter(prefix="/api")
 
 for m in (auth, projects, budget, contacts, media, ai, payments, trades, milestones, branding, referrals, share, quotes,
-          stage_payments, snags, shopping, digest, export, messages, email_settings, ratings, documents):
+          stage_payments, snags, shopping, digest, export, messages, email_settings, ratings, documents, portal):
     api.include_router(m.router)
 
 
@@ -56,6 +56,11 @@ async def startup():
     await db.users.create_index("company_email_token", sparse=True)
     await db.documents.create_index([("user_id", 1), ("project_id", 1), ("created_at", -1)])
     await db.documents.create_index("share_token", sparse=True)
+    await db.doc_folders.create_index("token", unique=True)
+    await db.portal_handles.create_index("handle", unique=True)
+    await db.portal_handles.create_index("email", unique=True)
+    await db.portal_members.create_index([("email", 1), ("project_id", 1)])
+    await db.portal_codes.create_index("email", unique=True)
     await db.trade_ratings.create_index([("user_id", 1), ("assignee_lc", 1)])
     await db.messages.create_index([("user_id", 1), ("project_id", 1), ("created_at", -1)])
     await db.projects.create_index("digest_token", sparse=True)

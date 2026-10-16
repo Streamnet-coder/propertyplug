@@ -12,6 +12,7 @@ import { useToast } from "@/src/toast";
 import { uploadForm } from "@/src/utils/upload";
 
 const MAX = 20 * 1024 * 1024;
+const EXPIRING = ["Gas certificate", "EICR", "EPC", "Insurance", "Warranty", "Tenancy", "Mortgage & finance"];
 const MIME = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "text/csv", "text/plain", "image/*"];
 
@@ -24,6 +25,8 @@ export default function DocumentForm() {
   const [title, setTitle] = useState("");
   const [type, setType] = useState<string>("");
   const [notes, setNotes] = useState("");
+  const [expires, setExpires] = useState("");
+  const expiresOk = !expires || /^\d{4}-\d{2}-\d{2}$/.test(expires.trim());
 
   const pick = async () => {
     tap();
@@ -36,7 +39,7 @@ export default function DocumentForm() {
   };
 
   const save = useMutation({
-    mutationFn: () => uploadForm<DocItem>("/documents", { uri: file!.uri, name: file!.name, type: file!.mimeType ?? "application/octet-stream" }, { title, doc_type: type, notes }),
+    mutationFn: () => uploadForm<DocItem>("/documents", { uri: file!.uri, name: file!.name, type: file!.mimeType ?? "application/octet-stream" }, { title, doc_type: type, notes, expires_on: expires.trim() }),
     onSuccess: () => { invalidate("documents"); toast("Document uploaded"); router.back(); },
     onError: (e: Error) => toast(e.message, "error"),
   });
@@ -45,7 +48,7 @@ export default function DocumentForm() {
     <FormScreen
       title="Upload document"
       testID="document-form-screen"
-      footer={<Button title="Upload" icon="upload" disabled={!file || !type || !title.trim()} loading={save.isPending} onPress={() => save.mutate()} testID="document-save-button" />}
+      footer={<Button title="Upload" icon="upload" disabled={!file || !type || !title.trim() || !expiresOk} loading={save.isPending} onPress={() => save.mutate()} testID="document-save-button" />}
     >
       <Pressable onPress={pick} style={[s.drop, file && { borderStyle: "solid", borderColor: colors.brand }]} testID="document-pick-button">
         <Icon name={file ? "file-check" : "file-up"} size={28} color={colors.brand} />
@@ -61,6 +64,16 @@ export default function DocumentForm() {
         ))}
       </View>
       <Field label="Title" value={title} onChangeText={setTitle} placeholder="e.g. Level 2 HomeBuyer survey" testID="document-title-input" />
+      <Field
+        label={EXPIRING.includes(type) ? "Expiry date (recommended)" : "Expiry date (optional)"}
+        value={expires}
+        onChangeText={setExpires}
+        placeholder="YYYY-MM-DD"
+        keyboardType="numbers-and-punctuation"
+        testID="document-expiry-input"
+      />
+      {!expiresOk && <Text style={[s.muted, { color: colors.error }]}>Use the format YYYY-MM-DD, e.g. 2027-03-31</Text>}
+      {EXPIRING.includes(type) && expiresOk && <Text style={s.muted}>We&apos;ll warn you on the dashboard 30 days before it expires.</Text>}
       <Field label="Notes (optional)" value={notes} onChangeText={setNotes} placeholder="e.g. Valid until March 2027" multiline testID="document-notes-input" />
     </FormScreen>
   );

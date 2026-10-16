@@ -48,7 +48,7 @@ class DeleteAccountIn(BaseModel):
 
 _failed: dict = {}  # uid -> [timestamps of failed confirmations]
 USER_COLLECTIONS = ("line_items", "contacts", "receipts", "media", "milestones", "quote_requests", "stage_payments",
-                    "snags", "snag_links", "snag_signoffs", "messages", "trade_ratings", "documents", "shopping_items", "estimates", "payment_transactions", "projects")
+                    "snags", "snag_links", "snag_signoffs", "messages", "trade_ratings", "documents", "doc_folders", "shopping_items", "estimates", "payment_transactions", "projects")
 
 
 @router.delete("/auth/account")
@@ -65,6 +65,7 @@ async def delete_account(body: DeleteAccountIn, user: User = Depends(current_use
         await db[name].delete_many({"user_id": user.id})
     await db.files.delete_many({"owner_id": user.id})
     await db.referrals.delete_many({"$or": [{"referrer_id": user.id}, {"new_user_id": user.id}]})
+    await db.portal_members.delete_many({"owner_id": user.id})
     # User doc last so a failed run can be retried with the same token
     await db.users.delete_one({"_id": ObjectId(user.id)})
     return {"ok": True}

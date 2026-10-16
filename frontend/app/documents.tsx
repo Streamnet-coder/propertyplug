@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { api, DocItem, DOC_TYPES, fileSize } from "@/src/api";
+import { api, DocItem, DOC_TYPES, expiryLabel, fileSize } from "@/src/api";
 import { DocumentShareSheet } from "@/src/components/document-share-sheet";
+import { FolderSheet } from "@/src/components/folder-sheet";
 import { Button, Chip, EmptyState, fonts, Icon, IconName, radius, space, tap } from "@/src/components/ui";
 import { downloadFile } from "@/src/export";
 import { invalidate, useProject } from "@/src/queries";
@@ -28,6 +29,10 @@ export default function Documents() {
   const [query, setQuery] = useState("");
   const [sharing, setSharing] = useState<DocItem | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [folderOpen, setFolderOpen] = useState(false);
+  const togglePick = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const q = useQuery({ queryKey: ["documents"], queryFn: () => api<DocItem[]>("/documents") });
   const all = useMemo(() => q.data ?? [], [q.data]);
   const counts = useMemo(() => all.reduce<Record<string, number>>((a, d) => ({ ...a, [d.doc_type]: (a[d.doc_type] ?? 0) + 1 }), {}), [all]);
@@ -55,6 +60,12 @@ export default function Documents() {
             <Text style={s.headerTitle}>Documents</Text>
             <Text style={s.muted} numberOfLines={1}>{project.data?.name} · {all.length} file{all.length === 1 ? "" : "s"}</Text>
           </View>
+          <Pressable testID="documents-portal-button" onPress={() => { tap(); router.push("/portal-access"); }} style={[s.iconBtn, { backgroundColor: colors.brandTertiary }]} hitSlop={6} accessibilityLabel="Stakeholder portal">
+            <Icon name="users" size={20} color={colors.brand} />
+          </Pressable>
+          <Pressable testID="documents-folders-button" onPress={() => { tap(); setPicked([]); setFolderOpen(true); }} style={[s.iconBtn, { backgroundColor: colors.brandTertiary }]} hitSlop={6} accessibilityLabel="Folder links">
+            <Icon name="folder-symlink" size={20} color={colors.brand} />
+          </Pressable>
           {all.length > 0 && (
             <Pressable
               testID="documents-download-all"
@@ -70,6 +81,11 @@ export default function Documents() {
         <View style={s.search}>
           <Icon name="search" size={16} color={colors.muted} />
           <TextInput value={query} onChangeText={setQuery} placeholder="Search documents" placeholderTextColor={colors.muted} style={s.input} testID="documents-search-input" />
+          {all.length > 0 && (
+            <Pressable onPress={() => { tap(); setSelecting(!selecting); setPicked([]); }} hitSlop={8} style={{ minHeight: 44, justifyContent: "center" }} testID="documents-select-toggle">
+              <Text style={s.selectText}>{selecting ? "Cancel" : "Select"}</Text>
+            </Pressable>
+          )}
         </View>
       </View>
       <View>
@@ -89,7 +105,12 @@ export default function Documents() {
           refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => q.refetch()} tintColor={colors.brand} />}
           ListEmptyComponent={<EmptyState icon="folder-open" title={all.length ? "No matching documents" : "No documents yet"} subtitle="Upload deeds, surveys, certificates, invoices and more, then share them with your team, lender or partners." testID="documents-empty" />}
           renderItem={({ item }) => (
-            <View style={s.card} testID={`document-row-${item.id}`}>
+            <Pressable disabled={!selecting} onPress={() => togglePick(item.id)} style={[s.card, picked.includes(item.id) && { borderColor: colors.brand, backgroundColor: colors.brandTertiary }]} testID={`document-row-${item.id}`}>
+              {selecting && (
+                <View style={[s.box, picked.includes(item.id) && { backgroundColor: colors.brand, borderColor: colors.brand }]} testID={`document-pick-${item.id}`}>
+                  {picked.includes(item.id) && <Icon name="check" size={14} color={colors.onBrand} />}
+                </View>
+              )}
               <View style={s.fileIcon}><Icon name={EXT_ICON[item.ext] ?? "file"} size={22} color={colors.brand} /></View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={s.name} numberOfLines={2}>{item.title}</Text>
@@ -99,8 +120,14 @@ export default function Documents() {
                   {item.share_url ? <Icon name="link" size={12} color={colors.success} /> : null}
                 </View>
                 {item.notes ? <Text style={s.muted} numberOfLines={2}>{item.notes}</Text> : null}
+                {expiryLabel(item) ? (
+                  <View style={[s.expiry, { backgroundColor: item.expiry_status === "expired" ? colors.errorTint : colors.orangeTint }]} testID={`document-expiry-${item.id}`}>
+                    <Icon name="calendar-clock" size={12} color={item.expiry_status === "expired" ? colors.error : colors.brandPrimary} />
+                    <Text style={[s.expiryText, { color: item.expiry_status === "expired" ? colors.error : colors.brandPrimary }]}>{expiryLabel(item)}</Text>
+                  </View>
+                ) : item.expires_on ? <Text style={s.muted}>Valid until {new Date(item.expires_on).toLocaleDateString("en-GB")}</Text> : null}
               </View>
-              <View style={{ gap: space.xs }}>
+              {!selecting && <View style={{ gap: space.xs }}>
                 <Pressable onPress={() => run(item.id, () => downloadFile(`/documents/${item.id}/download`, item.filename, item.content_type, item.title))} style={s.act} hitSlop={4} testID={`document-download-${item.id}`} accessibilityLabel="Download">
                   {busy === item.id ? <ActivityIndicator size="small" color={colors.brand} /> : <Icon name="download" size={18} color={colors.brand} />}
                 </Pressable>
@@ -110,15 +137,20 @@ export default function Documents() {
                 <Pressable onPress={async () => { if (await confirm(`Delete “${item.title}”?`)) remove.mutate(item.id); }} style={s.act} hitSlop={4} testID={`document-delete-${item.id}`} accessibilityLabel="Delete">
                   <Icon name="trash-2" size={16} color={colors.error} />
                 </Pressable>
-              </View>
-            </View>
+              </View>}
+            </Pressable>
           )}
         />
       )}
       <View style={[s.cta, { bottom: insets.bottom + space.lg }]}>
-        <Button title="Upload document" icon="upload" onPress={() => router.push("/document-form")} testID="documents-upload-button" />
+        {selecting ? (
+          <Button title={picked.length ? `Share ${picked.length} as a folder link` : "Tap documents to select"} icon="folder-symlink" disabled={!picked.length} onPress={() => setFolderOpen(true)} testID="documents-share-folder-button" />
+        ) : (
+          <Button title="Upload document" icon="upload" onPress={() => router.push("/document-form")} testID="documents-upload-button" />
+        )}
       </View>
       <DocumentShareSheet doc={sharing} onClose={() => setSharing(null)} />
+      <FolderSheet docIds={picked} visible={folderOpen} projectName={project.data?.name} onClose={() => setFolderOpen(false)} onCreated={() => { setSelecting(false); setPicked([]); }} />
     </View>
   );
 }
@@ -139,6 +171,10 @@ const useStyles = makeStyles((c) => ({
   name: { fontFamily: fonts.semibold, fontSize: 15, color: c.onSurface },
   typePill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.pill, backgroundColor: c.orangeTint },
   typeText: { fontFamily: fonts.semibold, fontSize: 11, color: c.brandPrimary },
+  box: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: c.borderStrong, alignItems: "center", justifyContent: "center", alignSelf: "center" },
+  selectText: { fontFamily: fonts.semibold, fontSize: 14, color: c.brand },
+  expiry: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, marginTop: 2 },
+  expiryText: { fontFamily: fonts.semibold, fontSize: 11 },
   act: { width: 40, height: 40, borderRadius: 20, backgroundColor: c.surfaceSecondary, alignItems: "center", justifyContent: "center" },
   cta: { position: "absolute", left: space.lg, right: space.lg },
 }));
