@@ -56,6 +56,7 @@ export default function RootLayout() {
                 <Stack.Screen name="projects" />
                 <Stack.Screen name="co-owners" />
                 <Stack.Screen name="project-activity" />
+                <Stack.Screen name="billing" />
                 <Stack.Screen name="portfolio-map" />
                 <Stack.Screen name="planning" />
                 <Stack.Screen name="planning-form" options={{ presentation: "modal" }} />

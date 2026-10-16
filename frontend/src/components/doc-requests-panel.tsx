@@ -8,7 +8,7 @@ import { queryClient } from "@/src/query-client";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
-type DocRequest = { id: string; title: string; note: string; status: "open" | "fulfilled" | "declined"; reply: string; name: string; company: string; created_at: string; doc_titles: string[] | null };
+type DocRequest = { id: string; title: string; note: string; status: "open" | "fulfilled" | "declined"; reply: string; name: string; company: string; created_at: string; doc_titles: string[] | null; days_waiting: number; overdue: boolean; reminders: number };
 
 /** Owner side of team-lead document requests: share documents with the requester's team, or decline. */
 export function DocRequestsPanel({ docs }: { docs: DocItem[] }) {
@@ -41,6 +41,11 @@ export function DocRequestsPanel({ docs }: { docs: DocItem[] }) {
             <Icon name={r.status === "open" ? "file-question" : r.status === "fulfilled" ? "file-check" : "file-x"} size={18} color={r.status === "open" ? colors.brandPrimary : r.status === "fulfilled" ? colors.success : colors.muted} />
             <View style={{ flex: 1 }}>
               <Text style={s.name}>{r.title}</Text>
+              {r.overdue && (
+                <Text style={[s.muted, { color: colors.brandPrimary, fontFamily: fonts.semibold }]} testID={`doc-request-overdue-${r.id}`}>
+                  Waiting {r.days_waiting} days{r.reminders ? ` · reminded ${r.reminders}×` : ""}
+                </Text>
+              )}
               <Text style={s.muted}>{r.name}{r.company ? ` · ${r.company}` : ""} · {new Date(r.created_at).toLocaleDateString("en-GB")}{r.note ? ` · "${r.note}"` : ""}</Text>
               {r.status !== "open" && <Text style={s.muted} testID={`doc-request-status-${r.id}`}>{r.status === "fulfilled" ? `Shared${r.doc_titles?.length ? `: ${r.doc_titles.join(", ")}` : ""}` : "Declined"}{r.reply ? ` · "${r.reply}"` : ""}</Text>}
             </View>

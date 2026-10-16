@@ -150,3 +150,52 @@ async def subscription_webhook(request: Request):
             raise HTTPException(500, "Retry later")
     await db.stripe_events.insert_one({"_id": event["id"], "type": event["type"], "at": now_iso()})
     return {"received": True}
+
+
+# ---------------- Billing history ----------------
+from fastapi import Query  # noqa: E402
+from fastapi.responses import HTMLResponse  # noqa: E402
+from core import E  # noqa: E402
+from deps import load_user, decode_uid  # noqa: E402
+
+
+@router.get("/payments/history")
+async def billing_history(user: User = Depends(real_user)):
+    """One-off Pro payments recorded here + Stripe invoices for auto-renewing plans (with Stripe's own receipt links)."""
+    out = []
+    async for t in db.payment_transactions.find({"user_id": user.id, "payment_status": "paid", "kind": {"$ne": "subscription"}}).sort("created_at", -1):
+        tier = (t.get("metadata") or {}).get("tier", "lifetime")
+        out.append({"id": t["session_id"], "date": t.get("paid_at") or t["created_at"], "description": f"Builder Assist Pro ({PRO_TIERS.get(tier, PRO_TIERS['lifetime'])['label']})",
+                    "amount": float(t["amount"]), "currency": t.get("currency", "gbp").upper(), "status": "paid", "receipt": "local", "url": None})
+    if user.stripe_customer_id and stripe.api_key:
+        try:
+            inv = await run_in_threadpool(lambda: stripe.Invoice.list(customer=user.stripe_customer_id, limit=50))
+            for i in inv.auto_paging_iter():
+                if i.status in ("paid", "open", "uncollectible"):
+                    line = (i.lines.data[0].description if i.lines and i.lines.data else None) or "Builder Assist Pro"
+                    out.append({"id": i.id, "date": datetime.fromtimestamp(i.created, timezone.utc).isoformat(), "description": line,
+                                "amount": i.amount_paid / 100 if i.status == "paid" else i.amount_due / 100, "currency": i.currency.upper(),
+                                "status": "paid" if i.status == "paid" else "failed" if i.status == "uncollectible" else "due",
+                                "receipt": "stripe", "url": i.hosted_invoice_url or i.invoice_pdf})
+        except Exception as e:
+            logger.warning(f"Invoice list failed: {e}")
+    return sorted(out, key=lambda x: x["date"], reverse=True)
+
+
+@router.get("/payments/receipt/{session_id}", response_class=HTMLResponse)
+async def receipt_page(session_id: str, t: str = Query(...)):
+    """Printable receipt for one-off payments (Stripe invoices use Stripe's hosted receipt instead)."""
+    user = await load_user(decode_uid(t))
+    tx = await db.payment_transactions.find_one({"session_id": session_id, "user_id": user.id, "payment_status": "paid"})
+    if not tx:
+        raise HTTPException(404, "Receipt not found")
+    tier = (tx.get("metadata") or {}).get("tier", "lifetime")
+    d = datetime.fromisoformat(tx.get("paid_at") or tx["created_at"]).strftime("%d %B %Y")
+    return HTMLResponse(f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Receipt</title>
+<style>body{{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a;max-width:560px;margin:24px auto;padding:0 16px}}h1{{color:#0f766e}}
+table{{width:100%;border-collapse:collapse;margin:16px 0}}td{{padding:10px 0;border-bottom:1px solid #e2e8f0}}.r{{text-align:right}}.cap{{color:#64748b;font-size:13px}}button{{padding:10px 16px;border-radius:8px;border:0;background:#0f766e;color:#fff;font-weight:600}}@media print{{button{{display:none}}}}</style></head>
+<body><h1>Builder Assist</h1><h2>Receipt</h2><p class="cap">Receipt no. {E(session_id[-12:].upper())} · {d}</p>
+<p><b>Billed to</b><br>{E(user.name)}<br>{E(user.email)}</p>
+<table><tr><td>Builder Assist Pro ({E(PRO_TIERS.get(tier, PRO_TIERS['lifetime'])['label'])})</td><td class="r">£{float(tx['amount']):,.2f}</td></tr>
+<tr><td><b>Total paid</b></td><td class="r"><b>£{float(tx['amount']):,.2f}</b></td></tr></table>
+<p class="cap">Paid by card via Stripe. Status: paid.</p><button onclick="window.print()">Print / save as PDF</button></body></html>""")

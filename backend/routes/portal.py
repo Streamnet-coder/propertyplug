@@ -654,8 +654,15 @@ class DocRequestAnswer(BaseModel):
     doc_ids: List[str] = Field(default_factory=list, max_length=50)
 
 
+NUDGE_DAYS = 3
+
+
 def _req_out(r: dict) -> dict:
-    return {k: r.get(k) for k in ("title", "note", "status", "reply", "name", "email", "company", "created_at", "answered_at", "doc_titles")} | {"id": str(r["_id"])}
+    days = (datetime.now(timezone.utc) - datetime.fromisoformat(r["created_at"])).days
+    last = r.get("reminded_at")
+    can = r["status"] == "open" and days >= NUDGE_DAYS and (not last or datetime.fromisoformat(last) < datetime.now(timezone.utc) - timedelta(hours=24))
+    return {k: r.get(k) for k in ("title", "note", "status", "reply", "name", "email", "company", "created_at", "answered_at", "doc_titles", "reminded_at")} | {
+        "id": str(r["_id"]), "days_waiting": days, "overdue": r["status"] == "open" and days >= NUDGE_DAYS, "can_remind": can, "reminders": r.get("reminders", 0)}
 
 
 @router.get("/portal/projects/{pid}/doc-requests")
@@ -686,6 +693,38 @@ async def create_doc_request(pid: str, body: DocRequestIn, email: str = Depends(
         except EmailError as e:
             logger.warning(f"Doc request email failed: {e}")
     return _req_out(r)
+
+
+@router.post("/portal/projects/{pid}/doc-requests/{rid}/remind")
+async def remind_doc_request(pid: str, rid: str, email: str = Depends(portal_email)):
+    """Lead nudges the owner about a request that has waited 3+ days (at most once a day)."""
+    lead = await _lead(email, pid)
+    r = await db.portal_doc_requests.find_one({"_id": oid(rid), **_team_q(lead)})
+    if not r:
+        raise HTTPException(404, "Request not found")
+    if not _req_out(r)["can_remind"]:
+        raise HTTPException(400, f"You can send a reminder once a request has waited {NUDGE_DAYS} days, and once a day after that")
+    owner = await db.users.find_one({"_id": ObjectId(lead["owner_id"])}, {"email": 1})
+    p = await db.projects.find_one({"_id": ObjectId(pid)}, {"name": 1}) or {}
+    days = _req_out(r)["days_waiting"]
+    html = (f'<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0f172a">'
+            f'<p>Reminder: {E(lead["name"])} ({E(lead["company"])}) is still waiting for <b>{E(r["title"])}</b> on {E(p.get("name", "your project"))}.</p>'
+            f'<p>They asked {days} days ago. Open Builder Assist → Documents → Stakeholder portal to share it or reply.</p></td></tr></table>')
+    try:
+        await send_email(to=owner["email"], subject=f"Reminder: {lead['name']} is waiting for {r['title']}", html=html, reply_to=email)
+    except EmailError as e:
+        raise HTTPException(503, f"Couldn't send the reminder right now: {e}")
+    await db.portal_doc_requests.update_one({"_id": r["_id"]}, {"$set": {"reminded_at": now_iso()}, "$inc": {"reminders": 1}})
+    await log_activity(lead, "doc_reminder", detail=r["title"])
+    return _req_out(await db.portal_doc_requests.find_one({"_id": r["_id"]}))
+
+
+@router.get("/portal-doc-requests/overdue")
+async def overdue_doc_requests(user: User = Depends(current_user)):
+    """Dashboard nudge: open requests waiting 3+ days on the active project."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=NUDGE_DAYS)).isoformat()
+    docs = await db.portal_doc_requests.find({"owner_id": user.id, "project_id": await active_pid(user), "status": "open", "created_at": {"$lte": cutoff}}).sort("created_at", 1).to_list(50)
+    return [_req_out(r) for r in docs]
 
 
 @router.get("/portal-doc-requests")
@@ -766,8 +805,9 @@ $('#app').insertAdjacentHTML('beforeend',`<div class='card' id='portal-team'><h2
 $('#t-add').onclick=async()=>{const n=$('#t-name').value.trim(),em=$('#t-email').value.trim();if(!n||!em){$('#t-err').textContent='Enter a name and email';return}$('#t-add').disabled=true;try{const r=await(await api(`/portal/projects/${pid}/team`,{method:'POST',body:JSON.stringify({name:n,email:em})})).json();if(!r.email_sent)alert('Added, but the invite email could not be sent. Ask the owner to resend it.');project(pid,me)}catch(e){$('#t-err').textContent=e.message;$('#t-add').disabled=false}};
 const rq=await(await api(`/portal/projects/${pid}/doc-requests`)).json();
 $('#app').insertAdjacentHTML('beforeend',`<div class='card' id='portal-doc-requests'><h2>Request a document</h2><p class='cap'>Ask the owner for anything you need, e.g. a building control certificate or an updated valuation.</p>
-<table>${rq.map(r=>`<tr><td><b>${esc(r.title)}</b><div class='cap'>${esc(r.name)} · ${esc(r.created_at.slice(0,10))}${r.reply?' · Owner: '+esc(r.reply):''}${r.doc_titles&&r.doc_titles.length?' · Shared: '+r.doc_titles.map(esc).join(', '):''}</div></td><td class='n' data-st='${r.status}'>${r.status==='open'?'Waiting':r.status==='fulfilled'?'Done':'Declined'}</td></tr>`).join('')}</table>
+<table>${rq.map(r=>`<tr><td><b>${esc(r.title)}</b><div class='cap'>${esc(r.name)} · ${esc(r.created_at.slice(0,10))}${r.reply?' · Owner: '+esc(r.reply):''}${r.doc_titles&&r.doc_titles.length?' · Shared: '+r.doc_titles.map(esc).join(', '):''}</div></td><td class='n' data-st='${r.status}'>${r.status==='open'?(r.overdue?`<span class='over'>Waiting ${r.days_waiting} days</span>`:'Waiting'):r.status==='fulfilled'?'Done':'Declined'}${r.can_remind?`<div><a href='#' class='rq-remind' data-id='${r.id}'>Send reminder</a></div>`:r.overdue&&r.reminded_at?`<div class='cap'>Reminded</div>`:''}</td></tr>`).join('')}</table>
 <label>Document needed</label><input id='rq-title' placeholder='e.g. Electrical certificate'/><label>Note (optional)</label><textarea id='rq-note' rows='2'></textarea><button id='rq-send'>Send request</button><p id='rq-err' class='over'></p></div>`);
+document.querySelectorAll('.rq-remind').forEach(a=>a.onclick=async e=>{e.preventDefault();try{await api(`/portal/projects/${pid}/doc-requests/${a.dataset.id}/remind`,{method:'POST'});alert('Reminder sent to the owner');project(pid,me)}catch(err){alert(err.message)}});
 $('#rq-send').onclick=async()=>{const t=$('#rq-title').value.trim();if(t.length<2){$('#rq-err').textContent='Say which document you need';return}$('#rq-send').disabled=true;try{await api(`/portal/projects/${pid}/doc-requests`,{method:'POST',body:JSON.stringify({title:t,note:$('#rq-note').value.trim()})});project(pid,me)}catch(e){$('#rq-err').textContent=e.message;$('#rq-send').disabled=false}};
 document.querySelectorAll('.t-rm').forEach(a=>a.onclick=async e=>{e.preventDefault();if(!confirm('Remove '+a.dataset.n+' from this project?'))return;try{await api(`/portal/projects/${pid}/team/${a.dataset.id}`,{method:'DELETE'});project(pid,me)}catch(err){alert(err.message)}})}
 $('#q-send').onclick=async()=>{const v=$('#q-text').value.trim();if(v.length<2)return;$('#q-send').disabled=true;try{await api(`/portal/projects/${pid}/questions`,{method:'POST',body:JSON.stringify({text:v})});project(pid,me)}catch(e){$('#q-err').textContent=e.message;$('#q-send').disabled=false}};

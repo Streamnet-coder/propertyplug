@@ -40,6 +40,8 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
 }
 
 export const fileUrl = (path: string) => `${BACKEND_URL}/api/files/${path}?token=${encodeURIComponent(token ?? "")}`;
+export const receiptUrl = (sessionId: string) => `${BACKEND_URL}/api/payments/receipt/${sessionId}?t=${encodeURIComponent(token ?? "")}`;
+export type BillingItem = { id: string; date: string; description: string; amount: number; currency: string; status: "paid" | "due" | "failed"; receipt: "local" | "stripe"; url: string | null };
 
 export const CURRENCIES = { GBP: "£", EUR: "€", USD: "$", CAD: "C$", AUD: "A$", NZD: "NZ$", ZAR: "R", AED: "AED ", NGN: "₦", INR: "₹" } as const;
 export type CurrencyCode = keyof typeof CURRENCIES;
@@ -194,5 +196,5 @@ export type DocFolder = { id: string; title: string; doc_count: number; created_
 export type PortalMember = { id: string; name: string; email: string; role: string; company: string; password_set: boolean; is_lead: boolean; invited_by: string | null; expires_on: string | null; expired: boolean; doc_ids: string[]; digest: boolean; handle: string | null; last_login: string | null; invited_at: string | null; portal_url: string | null };
 export const expiryLabel = (d: { expiry_status: string | null; days_left: number | null }) =>
   d.expiry_status === "expired" ? `Expired ${Math.abs(d.days_left ?? 0)} day${Math.abs(d.days_left ?? 0) === 1 ? "" : "s"} ago` : d.expiry_status === "soon" ? (d.days_left === 0 ? "Expires today" : `Expires in ${d.days_left} day${d.days_left === 1 ? "" : "s"}`) : null;
-export type PortalActivity = { id: string; email: string; name: string; kind: "login" | "view" | "download" | "team_invite" | "team_remove" | "doc_request"; doc_id: string | null; doc_title: string | null; doc_type: string | null; detail?: string | null; at: string };
+export type PortalActivity = { id: string; email: string; name: string; kind: "login" | "view" | "download" | "team_invite" | "team_remove" | "doc_request" | "doc_reminder"; doc_id: string | null; doc_title: string | null; doc_type: string | null; detail?: string | null; at: string };
 export type PortalQuestion = { id: string; name: string; email: string; text: string; created_at: string; reply: string | null; replied_at: string | null };
