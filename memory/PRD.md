@@ -114,3 +114,9 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Per-project currency (GBP, EUR, USD, CAD, AUD, NZD, ZAR, AED, NGN, INR); frontend gbp()/sym() follow active project; backend money() uses CURRENCY contextvar.
 - Land property type: plot_size/unit, planning_status, intended_use; hides rent/BRRR.
 - /api/portfolio converts totals to user home_currency via Frankfurter live rates (cached 6h in db.fx_rates). Portfolio card on My projects. Tested iteration 18.
+
+## Land Uplift, Portfolio Map, Planning Tracker (Jun 2026)
+- Project: value_without_planning/value_with_planning, lat/lon/pin_manual (manual pin) + auto Nominatim geocode cached (geocoded_for).
+- /api/planning CRUD (planning_apps), days_to_decision; dashboard PlanningCard reminder (no email). LandUplift card.
+- /api/portfolio/map + portfolio-map screen (Leaflet/OSM; WebView native, iframe web).
+- Fixed: backend EMERGENT_LLM_KEY was stale after fork -> object storage 401; updated. Tested iteration 19.

@@ -49,7 +49,9 @@ export default function Projects() {
           <Icon name="arrow-left" size={22} />
         </Pressable>
         <Text style={s.headerTitle}>My projects</Text>
-        <View style={{ width: 44 }} />
+        <Pressable testID="portfolio-map-button" onPress={() => { tap(); router.push("/portfolio-map"); }} style={s.back} hitSlop={10}>
+          <Icon name="map" size={20} />
+        </Pressable>
       </View>
       {q.isLoading ? (
         <View style={s.center}><ActivityIndicator color={colors.brand} /></View>

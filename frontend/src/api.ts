@@ -85,7 +85,27 @@ export type Project = {
   plot_unit: "acres" | "hectares";
   planning_status: "none" | "applied" | "granted";
   intended_use: string;
+  value_without_planning: number;
+  value_with_planning: number;
+  lat: number | null;
+  lon: number | null;
+  pin_manual: boolean;
 };
+export type PlanningApp = {
+  id: string;
+  authority: string;
+  reference: string;
+  description: string;
+  submitted_date: string | null;
+  validated_date: string | null;
+  consultation_end: string | null;
+  target_decision_date: string | null;
+  decision: "pending" | "approved" | "refused" | "withdrawn";
+  decision_date: string | null;
+  notes: string;
+  days_to_decision: number | null;
+};
+export type MapPin = Pick<Project, "id" | "name" | "address" | "lat" | "lon" | "pin_manual" | "property_type" | "currency" | "total_spent" | "total_budget" | "estimated_valuation"> & { active: boolean };
 type PortfolioSums = { purchase_price: number; estimated_valuation: number; total_budget: number; total_spent: number };
 export type Portfolio = {
   home_currency: CurrencyCode;

@@ -24,7 +24,7 @@ export default function ProjectEdit() {
   const { data: p } = useProject();
   const [f, setF] = useState({
     name: "", address: "", purchase_price: "", estimated_valuation: "", monthly_rent: "", refinance_ltv: "75", refinance_rate: "5.5", hard: "", soft: "", contingency: "", finish_type: "Medium Finish",
-    currency: "GBP" as CurrencyCode, property_type: "residential" as Project["property_type"], plot_size: "", plot_unit: "acres" as Project["plot_unit"], planning_status: "none" as Project["planning_status"], intended_use: "",
+    currency: "GBP" as CurrencyCode, property_type: "residential" as Project["property_type"], plot_size: "", plot_unit: "acres" as Project["plot_unit"], planning_status: "none" as Project["planning_status"], intended_use: "", value_without_planning: "", value_with_planning: "", lat: "", lon: "",
   });
   const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }));
   const isLand = f.property_type === "land";
@@ -50,6 +50,10 @@ export default function ProjectEdit() {
         plot_unit: p.plot_unit,
         planning_status: p.planning_status,
         intended_use: p.intended_use,
+        value_without_planning: p.value_without_planning ? String(p.value_without_planning) : "",
+        value_with_planning: p.value_with_planning ? String(p.value_with_planning) : "",
+        lat: p.pin_manual && p.lat != null ? String(p.lat) : "",
+        lon: p.pin_manual && p.lon != null ? String(p.lon) : "",
       });
   }, [p, isNew]);
 
@@ -73,6 +77,9 @@ export default function ProjectEdit() {
           plot_unit: f.plot_unit,
           planning_status: f.planning_status,
           intended_use: f.intended_use,
+          value_without_planning: Number(f.value_without_planning) || 0,
+          value_with_planning: Number(f.value_with_planning) || 0,
+          ...pin,
         },
       }),
     onSuccess: async (res) => {
@@ -91,12 +98,17 @@ export default function ProjectEdit() {
   });
 
   const num = { keyboardType: "decimal-pad" as const };
+  const hasPin = f.lat.trim() !== "" && f.lon.trim() !== "";
+  // Manual pin -> send coords; cleared manual pin -> revert to address geocoding (create endpoint ignores these).
+  const pin = hasPin ? { lat: Number(f.lat), lon: Number(f.lon) } : p?.pin_manual && !isNew ? { clear_pin: true } : {};
+  const pinError = (f.lat.trim() || f.lon.trim()) && (!hasPin || isNaN(Number(f.lat)) || isNaN(Number(f.lon)) || Math.abs(Number(f.lat)) > 90 || Math.abs(Number(f.lon)) > 180)
+    ? "Enter a valid latitude (-90 to 90) and longitude (-180 to 180)" : "";
   const label = { fontFamily: fonts.bold, fontSize: 16, color: colors.onSurface, marginTop: space.sm };
   return (
     <FormScreen
       title={isNew ? "New project" : "Edit project"}
       testID="project-edit-screen"
-      footer={<Button title={isNew ? "Create project" : "Save project"} loading={save.isPending} onPress={() => (f.name.trim() ? save.mutate() : toast("Please enter a project name", "error"))} testID="project-save-button" />}
+      footer={<Button title={isNew ? "Create project" : "Save project"} loading={save.isPending} onPress={() => (!f.name.trim() ? toast("Please enter a project name", "error") : pinError ? toast(pinError, "error") : save.mutate())} testID="project-save-button" />}
     >
       <Field label="Project name" value={f.name} onChangeText={set("name")} placeholder={isLand ? "e.g. Ashby paddock plot" : "e.g. Derby terrace flip"} testID="project-name-input" />
       <Field label="Address" value={f.address} onChangeText={set("address")} placeholder="Street, town, postcode" testID="project-address-input" />
@@ -134,6 +146,10 @@ export default function ProjectEdit() {
             ))}
           </View>
           <Field label="Intended use" value={f.intended_use} onChangeText={set("intended_use")} placeholder="e.g. 4 self-build plots, grazing, hold for uplift" testID="project-intended-use-input" />
+          <View style={{ flexDirection: "row", gap: space.md }}>
+            <View style={{ flex: 1 }}><Field label={`Value without planning (${c})`} value={f.value_without_planning} onChangeText={set("value_without_planning")} {...num} testID="project-value-without-input" /></View>
+            <View style={{ flex: 1 }}><Field label={`Value with planning (${c})`} value={f.value_with_planning} onChangeText={set("value_with_planning")} {...num} testID="project-value-with-input" /></View>
+          </View>
         </>
       ) : (
         <>
@@ -156,6 +172,17 @@ export default function ProjectEdit() {
             <Chip key={x} label={x} selected={f.finish_type === x} onPress={() => set("finish_type")(x)} testID={`project-finish-${x.split(" ")[0].toLowerCase()}`} />
           ))}
         </ScrollView>
+      )}
+      <Text style={label}>Map pin</Text>
+      <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: -space.sm }}>
+        {p?.pin_manual && !isNew ? "Using your coordinates." : "Found automatically from the address. Enter coordinates to place it exactly."}
+      </Text>
+      <View style={{ flexDirection: "row", gap: space.md }}>
+        <View style={{ flex: 1 }}><Field label="Latitude" value={f.lat} onChangeText={set("lat")} keyboardType="numbers-and-punctuation" placeholder="e.g. 52.9548" testID="project-lat-input" /></View>
+        <View style={{ flex: 1 }}><Field label="Longitude" value={f.lon} onChangeText={set("lon")} keyboardType="numbers-and-punctuation" placeholder="e.g. -1.1581" testID="project-lon-input" /></View>
+      </View>
+      {p?.pin_manual && !isNew && (
+        <Button small variant="outline" title="Use address location instead" onPress={() => setF((x) => ({ ...x, lat: "", lon: "" }))} testID="project-clear-pin-button" />
       )}
     </FormScreen>
   );

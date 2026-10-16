@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Literal, Optional
 from bson import ObjectId
 from core import db, oid
@@ -39,6 +39,7 @@ async def project_summaries(projects: list) -> list:
         ms = ms_by[p.id]
         o = p.out()
         o.pop("comparables", None)
+        o.pop("geocoded_for", None)
         total_budget = p.budget.hard + p.budget.soft + p.budget.contingency
         current = next((m for m in ms if m["status"] == "in_progress"), None) or next((m for m in ms if m["status"] == "todo"), None)
         o.update({"spent": spent[p.id], "total_budget": total_budget, "total_spent": round(sum(spent[p.id].values()), 2),
@@ -78,11 +79,23 @@ class ProjectUpdate(BaseModel):
     plot_unit: Optional[Literal["acres", "hectares"]] = None
     planning_status: Optional[Literal["none", "applied", "granted"]] = None
     intended_use: Optional[str] = None
+    value_without_planning: Optional[float] = None
+    value_with_planning: Optional[float] = None
+    lat: Optional[float] = Field(None, ge=-90, le=90)
+    lon: Optional[float] = Field(None, ge=-180, le=180)
+    clear_pin: bool = False
 
 
 @router.put("/project")
 async def update_project(body: ProjectUpdate, user: User = Depends(current_user)):
     upd = body.model_dump(exclude_none=True)
+    clear = upd.pop("clear_pin", False)
+    if "lat" in upd or "lon" in upd:
+        if "lat" not in upd or "lon" not in upd:
+            raise HTTPException(400, "Enter both latitude and longitude")
+        upd["pin_manual"] = True
+    elif clear:
+        upd.update({"lat": None, "lon": None, "pin_manual": False, "geocoded_for": None})
     if "property_type" in upd:
         upd["target_type"] = "Land Investment" if upd["property_type"] == "land" else "BRRR Refurbishment"
     pid = await active_pid(user)
@@ -114,6 +127,10 @@ class ProjectCreate(BaseModel):
     plot_unit: Literal["acres", "hectares"] = "acres"
     planning_status: Literal["none", "applied", "granted"] = "none"
     intended_use: str = ""
+    value_without_planning: float = 0
+    value_with_planning: float = 0
+    lat: Optional[float] = Field(None, ge=-90, le=90)
+    lon: Optional[float] = Field(None, ge=-180, le=180)
 
 
 @router.get("/projects")
@@ -132,7 +149,7 @@ async def create_project(body: ProjectCreate, user: User = Depends(current_user)
         raise HTTPException(400, "Project name is required")
     if body.property_type == "land":
         body.target_type = "Land Investment"
-    p = Project(user_id=user.id, **body.model_dump())
+    p = Project(user_id=user.id, pin_manual=body.lat is not None and body.lon is not None, **body.model_dump())
     p.id = str((await db.projects.insert_one(p.to_mongo())).inserted_id)
     await seed_milestones(user.id, p.id)
     await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"active_project_id": p.id}})
@@ -155,7 +172,7 @@ async def delete_project(pid: str, user: User = Depends(current_user)):
     r = await db.projects.delete_one({"_id": oid(pid), "user_id": user.id})
     if not r.deleted_count:
         raise HTTPException(404, "Project not found")
-    for coll in (db.line_items, db.contacts, db.receipts, db.media, db.milestones, db.quote_requests, db.stage_payments, db.snags, db.snag_links, db.shopping_items, db.documents, db.doc_folders):
+    for coll in (db.line_items, db.contacts, db.receipts, db.media, db.milestones, db.quote_requests, db.stage_payments, db.snags, db.snag_links, db.shopping_items, db.documents, db.doc_folders, db.planning_apps):
         await coll.delete_many({"user_id": user.id, "project_id": pid})
     for coll in (db.portal_members, db.portal_activity, db.portal_questions):
         await coll.delete_many({"owner_id": user.id, "project_id": pid})

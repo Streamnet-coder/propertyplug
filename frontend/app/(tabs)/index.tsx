@@ -16,6 +16,7 @@ import { usesNativeTabs } from "@/src/navigation";
 import { PdfButton } from "@/src/components/pdf-button";
 import { invalidate, prefetchProjects, useDigest, useLineItems, useProject, useReceipts } from "@/src/queries";
 import { shareProgressReport } from "@/src/report";
+import { LandUplift, PlanningCard } from "@/src/components/land-cards";
 import { makeStyles, useTheme } from "@/src/theme";
 
 const HERO = "https://images.unsplash.com/photo-1714259830228-893a69a2d45b?crop=entropy&cs=srgb&fm=jpg&ixlib=rb-4.1.0&q=85&w=1200";
@@ -284,6 +285,8 @@ export default function Home() {
               <Text style={s.muted} testID="land-intended-use">Intended use: {p.intended_use || "Not set"}</Text>
               {p.plot_size > 0 && p.purchase_price > 0 && <Text style={s.muted}>{gbp(p.purchase_price / p.plot_size)} per {p.plot_unit === "acres" ? "acre" : "hectare"} paid</Text>}
             </Card>
+            <LandUplift p={p} />
+            <PlanningCard />
           </View>
           ) : (
           <View>

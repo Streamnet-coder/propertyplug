@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 19 — Land uplift + Portfolio map + Planning tracker. Backend: 12/12 pytest tests pass covering (a) /api/planning full CRUD (list scoped to active project+user, POST 400 when neither reference nor description, 422 on bad YYYY-MM-DD dates, days_to_decision computed only while pending, update→approved clears days_to_decision, DELETE 200, planning docs removed on project delete, cross-project isolation); (b) PUT /api/project accepts value_without_planning/value_with_planning round-trip, lat alone → 400, lat=100 → 422, lat+lon → pin_manual=true, clear_pin=true resets lat/lon/pin_manual; (c) POST /api/projects accepts lat/lon on create (pin_manual=true); (d) GET /api/portfolio/map returns required shape {id,name,address,lat,lon,pin_manual,property_type,currency,active}, manual pin preserved, requires auth. Frontend: full mobile viewport (390x844) UI flow verified end-to-end — Sign in with demo, Projects header shows portfolio-map-button → opens portfolio-map-screen with Leaflet iframe (portfolio-map-view) + 1/1 map-pin-count + map-row for Nottingham. Residential (Nottingham) dashboard has NO planning-card or land-uplift-card (no regression). Created TEST land project; land dashboard shows land-uplift-card with correct math on £150k→£500k values and £100k purchase: gain +£350,000, uplift +233%, profit_with +£400,000, profit_without +£50,000. Opened planning-card → planning-screen → add-planning-button → planning-form-screen → saved 24/0999/FUL with target_decision_date=+7d; row renders with Pending pill + 'Decision due in 7 days'; back on home planning-reminder shows '24/0999/FUL: Decision due in 7 days'. project-edit Map pin fields (project-lat-input/project-lon-input) and Land Value fields (project-value-without-input/project-value-with-input) all present and submit cleanly. Cleanup: deleted TEST land project, Nottingham re-activated.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/documents", "issue": "500 Internal Server Error — upstream object storage returns 401 Unauthorized to https://integrations.emergentagent.com/objstore/api/v1/storage/init at startup and on every upload attempt. Document/photo upload is completely broken in this forked preview env. Likely stale EMERGENT_LLM_KEY after fork or missing INTEGRATION_PROXY_URL. Reference: /app/backend/storage.py:16, /app/backend/server.py:71.", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration19.py",
+    "/app/test_reports/pytest/pytest_iteration19.xml"
+  ],
+  "action_items": [
+    "Document/photo upload (POST /api/documents) is DOWN in this preview env due to 401 at objstore/storage/init — rotate EMERGENT_LLM_KEY or re-provision storage credentials. Not caused by this iteration's changes, but blocks the documents feature end-to-end."
+  ],
+  "critical_code_review_comments": [
+    "routes/planning.py: PlanningIn always sends decision='pending' by default; PUT replaces full document via body.model_dump(), so clients must pass all fields — the form already does this. OK.",
+    "routes/projects.py update_project: when lat/lon are None but the client sends them (would need exclude_none path), they'd be stripped — fine. The 400 'Enter both latitude and longitude' only triggers when exactly one is present after exclude_none; correct.",
+    "routes/fx.py portfolio_map: caps geocoding at 10 per call and respects Nominatim 1 req/s. For users with >10 un-geocoded addresses, remaining pins stay null until next call. Consider logging or returning a 'pending' flag so UI can hint.",
+    "land-cards.tsx uses gbp() for all monetary labels — currency label is correct for GBP projects but should accept per-project currency symbol (consistent with iter 18 refactor). Minor — on a EUR land project the uplift card will still show £. Suggest passing p.currency.",
+    "planning-form.tsx: body() converts empty strings to null for *_date fields but keeps non-date empty strings as ''; backend validator skips empty via `if not v: return None` — fine.",
+    "portfolio-map.tsx: shows missing count via (pins.length - missing.length)/pins.length — correctly surfaces un-geocoded pins; good."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration19.py (new)"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% (all critical flows verified)"},
+  "seed_data_creation": "Backend tests use a fresh registered TEST_iter19_<uuid>@mybuilder.app user, deleted via DELETE /api/auth/account at teardown. UI test created TEST_iter19_Land under demo@mybuilder.app and deleted it; Nottingham Victorian Refurb re-activated as demo's active project.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Demo account restored to active=Nottingham Victorian Refurb (GBP residential, address 14 Mapperley Road Nottingham NG3 5AP, auto-geocoded by Nominatim). New endpoints: GET/POST/PUT/DELETE /api/planning, GET /api/portfolio/map. Project model gained value_without_planning, value_with_planning, lat, lon, pin_manual, geocoded_for. land-cards.tsx (uplift + planning summary) renders only when p.property_type=='land'. KNOWN BROKEN (environment-side, unrelated to this iter): POST /api/documents returns 500 because EMERGENT_LLM_KEY→objstore/storage/init responds 401; backend log line 'Storage init failed: 401' at every startup confirms it.",
+  "rca_of_issue": "Document upload RCA: /app/backend/storage.py:init_storage() POSTs {emergent_key: EMERGENT_LLM_KEY} to https://integrations.emergentagent.com/objstore/api/v1/storage/init; after the fork the key no longer has objstore permissions, returning 401 Unauthorized. Every subsequent put_object() fails → /api/documents 500. Reproduction: curl -X POST $BACKEND/api/documents -H 'Authorization: Bearer <token>' -F 'file=@any.txt' -F 'name=X' → HTTP 500 with backend traceback 'requests.exceptions.HTTPError: 401 Client Error: Unauthorized for url: .../objstore/api/v1/storage/init'. Mitigation: re-issue EMERGENT_LLM_KEY with storage scope or set INTEGRATION_PROXY_URL to a working endpoint; no code change required."
+}

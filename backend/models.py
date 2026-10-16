@@ -64,6 +64,12 @@ class Project(BaseDocument):
     plot_unit: Literal["acres", "hectares"] = "acres"
     planning_status: Literal["none", "applied", "granted"] = "none"
     intended_use: str = ""
+    value_without_planning: float = 0
+    value_with_planning: float = 0
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    pin_manual: bool = False
+    geocoded_for: Optional[str] = None
     comparables: List[Comparable] = []
     share_token: Optional[str] = None
     share_origin: Optional[str] = None

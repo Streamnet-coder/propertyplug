@@ -16,7 +16,7 @@ router = APIRouter()
 EXPORTS = {
     "projects": ["_id", "name", "address", "target_type", "finish_type", "purchase_price", "estimated_valuation", "monthly_rent",
                  "refinance_ltv", "refinance_rate", "budget.hard", "budget.soft", "budget.contingency", "currency", "property_type",
-                 "plot_size", "plot_unit", "planning_status", "intended_use", "created_at"],
+                 "plot_size", "plot_unit", "planning_status", "intended_use", "value_without_planning", "value_with_planning", "lat", "lon", "created_at"],
     "line_items": ["_id", "project_id", "name", "category", "supplier", "status", "budgeted", "actual", "created_at"],
     "receipts": ["_id", "project_id", "date", "title", "category", "supplier", "amount", "line_item_id", "storage_path", "created_at"],
     "contacts": ["_id", "project_id", "kind", "name", "role", "phone", "email", "status", "schedule", "cost", "created_at"],
@@ -26,6 +26,7 @@ EXPORTS = {
     "stage_payments": ["_id", "project_id", "quote_id", "label", "amount", "due_date", "status", "paid_at", "created_at"],
     "quote_requests": ["_id", "project_id", "title", "trade", "description", "created_at"],
     "documents": ["_id", "project_id", "title", "doc_type", "filename", "size", "notes", "storage_path", "created_at"],
+    "planning_apps": ["_id", "project_id", "reference", "authority", "description", "submitted_date", "validated_date", "consultation_end", "target_decision_date", "decision", "decision_date", "notes", "created_at"],
     "media": ["_id", "project_id", "title", "phase", "date", "milestone_id", "storage_path", "url", "created_at"],
 }
 
