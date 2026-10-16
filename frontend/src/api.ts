@@ -148,3 +148,5 @@ export type DocFolder = { id: string; title: string; doc_count: number; created_
 export type PortalMember = { id: string; name: string; email: string; role: string; doc_ids: string[]; digest: boolean; handle: string | null; last_login: string | null; invited_at: string | null; portal_url: string | null };
 export const expiryLabel = (d: { expiry_status: string | null; days_left: number | null }) =>
   d.expiry_status === "expired" ? `Expired ${Math.abs(d.days_left ?? 0)} day${Math.abs(d.days_left ?? 0) === 1 ? "" : "s"} ago` : d.expiry_status === "soon" ? (d.days_left === 0 ? "Expires today" : `Expires in ${d.days_left} day${d.days_left === 1 ? "" : "s"}`) : null;
+export type PortalActivity = { id: string; email: string; name: string; kind: "login" | "view" | "download"; doc_id: string | null; doc_title: string | null; doc_type: string | null; at: string };
+export type PortalQuestion = { id: string; name: string; email: string; text: string; created_at: string; reply: string | null; replied_at: string | null };

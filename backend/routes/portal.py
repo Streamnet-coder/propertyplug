@@ -154,6 +154,60 @@ async def remove_member(mid: str, user: User = Depends(current_user)):
     return {"ok": True}
 
 
+async def log_activity(m: dict, kind: str, doc: dict | None = None):
+    await db.portal_activity.insert_one({"owner_id": m["owner_id"], "project_id": m["project_id"], "email": m["email"], "name": m["name"],
+                                         "kind": kind, "doc_id": str(doc["_id"]) if doc else None, "doc_title": doc["title"] if doc else None,
+                                         "doc_type": doc["doc_type"] if doc else None, "at": now_iso()})
+
+
+@router.get("/portal-activity")
+async def portal_activity(user: User = Depends(current_user)):
+    docs = await db.portal_activity.find({"owner_id": user.id, "project_id": await active_pid(user)}).sort("at", -1).to_list(300)
+    return [{"id": str(a["_id"]), **{k: a.get(k) for k in ("email", "name", "kind", "doc_id", "doc_title", "doc_type", "at")}} for a in docs]
+
+
+# ---------------- Questions & comments ----------------
+class QuestionIn(BaseModel):
+    text: str = Field(min_length=2, max_length=2000)
+
+
+class ReplyIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+
+
+def q_out(q: dict) -> dict:
+    return {"id": str(q["_id"]), "name": q["name"], "email": q["email"], "text": q["text"], "created_at": q["created_at"],
+            "reply": q.get("reply"), "replied_at": q.get("replied_at")}
+
+
+@router.get("/portal-questions")
+async def owner_questions(user: User = Depends(current_user)):
+    docs = await db.portal_questions.find({"owner_id": user.id, "project_id": await active_pid(user)}).sort("created_at", -1).to_list(300)
+    return [q_out(q) for q in docs]
+
+
+@router.post("/portal-questions/{qid}/reply")
+async def reply_question(qid: str, body: ReplyIn, user: User = Depends(current_user)):
+    q = await db.portal_questions.find_one({"_id": oid(qid), "owner_id": user.id})
+    if not q:
+        raise HTTPException(404, "Question not found")
+    await db.portal_questions.update_one({"_id": q["_id"]}, {"$set": {"reply": body.text.strip(), "replied_at": now_iso()}})
+    m = await db.portal_members.find_one({"email": q["email"], "project_id": q["project_id"]})
+    p = await db.projects.find_one({"_id": ObjectId(q["project_id"])}, {"name": 1}) or {}
+    await log_message(user.id, q["project_id"], name=q["name"], email=q["email"], channel="web", kind="portal_reply", summary=f"Replied in portal: {body.text.strip()[:200]}")
+    if m and m.get("origin", "").startswith("https://"):
+        html = (f'<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0f172a">'
+                f'<p>Hi {E(q["name"])}, {E(user.name)} replied to your question about <b>{E(p.get("name", "the project"))}</b>.</p>'
+                f'<p style="color:#64748b">You asked: “{E(q["text"][:300])}”</p>'
+                f'<p><a href="{E(m["origin"].rstrip("/"))}/api/portal" style="display:inline-block;background:#0f766e;color:#ffffff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:bold">Read the reply in the portal</a></p>'
+                f'<p style="font-size:12px;color:#888">Sent by {E(EMAIL_FROM_NAME)} on behalf of {E(user.name)}.</p></td></tr></table>')
+        try:
+            await send_email(to=q["email"], subject=f"{user.name} replied about {p.get('name', 'your project')}", html=html, reply_to=await owner_reply_to(user.id))
+        except (EmailError, ValueError) as e:
+            logger.warning(f"Portal reply email failed: {e}")
+    return q_out(await db.portal_questions.find_one({"_id": q["_id"]}))
+
+
 # ---------------- Stakeholder sign-in (one-time email code) ----------------
 class CodeRequest(BaseModel):
     identifier: str = Field(min_length=3, max_length=200)
@@ -207,6 +261,8 @@ async def verify_code(body: CodeVerify):
         raise HTTPException(401, "Incorrect code")
     await db.portal_codes.delete_one({"_id": rec["_id"]})
     await db.portal_members.update_many({"email": email}, {"$set": {"last_login": now_iso()}})
+    async for m in db.portal_members.find({"email": email}):
+        await log_activity(m, "login")
     n = datetime.now(timezone.utc)
     return {"token": jwt.encode({"sub": email, "typ": "portal", "iat": n, "exp": n + timedelta(days=7)}, PORTAL_SECRET, algorithm="HS256")}
 
@@ -246,6 +302,9 @@ async def portal_me(email: str = Depends(portal_email)):
 @router.get("/portal/projects/{pid}")
 async def portal_project(pid: str, week: int = Query(0, ge=0, le=52), email: str = Depends(portal_email)):
     m = await _membership(email, pid)
+    last = await db.portal_activity.find_one({"email": email, "project_id": pid, "kind": "view"}, sort=[("at", -1)])
+    if not last or (datetime.now(timezone.utc) - datetime.fromisoformat(last["at"])).total_seconds() > 3600:
+        await log_activity(m, "view")
     s = await project_summary(Project.from_mongo(await db.projects.find_one({"_id": ObjectId(pid)})))
     docs = await db.documents.find({"_id": {"$in": [oid(i) for i in m["doc_ids"]]}, "project_id": pid}).sort("doc_type", 1).to_list(200)
     return {"name": s["name"], "address": s["address"], "stage": s["current_stage"], "milestones_done": s["milestones_done"],
@@ -264,7 +323,38 @@ async def portal_document(pid: str, did: str, email: str = Depends(portal_email)
     if not d:
         raise HTTPException(404, "Document not found")
     data, _ = await run_in_threadpool(get_object, d["storage_path"])
+    await log_activity(m, "download", d)
     return _attachment(d, data)
+
+
+@router.get("/portal/projects/{pid}/questions")
+async def portal_questions(pid: str, email: str = Depends(portal_email)):
+    await _membership(email, pid)
+    return [q_out(q) for q in await db.portal_questions.find({"project_id": pid, "email": email}).sort("created_at", -1).to_list(200)]
+
+
+@router.post("/portal/projects/{pid}/questions")
+async def ask_question(pid: str, body: QuestionIn, email: str = Depends(portal_email)):
+    m = await _membership(email, pid)
+    if await db.portal_questions.count_documents({"email": email, "project_id": pid, "created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()}}) >= 10:
+        raise HTTPException(429, "Too many questions in the last hour")
+    q = {"owner_id": m["owner_id"], "project_id": pid, "email": email, "name": m["name"], "text": body.text.strip(), "created_at": now_iso()}
+    q["_id"] = (await db.portal_questions.insert_one(q)).inserted_id
+    await log_message(m["owner_id"], pid, name=m["name"], email=email, channel="web", kind="portal_question", direction="in", summary=f"Asked: {q['text'][:200]}")
+    owner = await db.users.find_one({"_id": ObjectId(m["owner_id"])}, {"name": 1})
+    p = await db.projects.find_one({"_id": ObjectId(pid)}, {"name": 1}) or {}
+    to = await owner_reply_to(m["owner_id"])
+    if to:
+        html = (f'<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0f172a">'
+                f'<p style="font-size:12px;letter-spacing:1px;color:#0f766e;font-weight:bold;margin:0">{E(EMAIL_FROM_NAME.upper())} · PORTAL QUESTION</p>'
+                f'<p>Hi {E((owner or {}).get("name", ""))}, <b>{E(m["name"])}</b> ({E(m["role"])}) asked about <b>{E(p.get("name", ""))}</b>:</p>'
+                f'<p style="border-left:3px solid #0f766e;padding-left:12px">{E(q["text"])}</p><p>Reply from the app: Documents → Stakeholder portal → Questions.</p>'
+                f'<p style="font-size:12px;color:#888">Sent by {E(EMAIL_FROM_NAME)} because you manage this project.</p></td></tr></table>')
+        try:
+            await send_email(to=to, subject=f"{m['name']} asked a question about {p.get('name', 'your project')}", html=html)
+        except (EmailError, ValueError) as e:
+            logger.warning(f"Portal question email failed: {e}")
+    return q_out(q)
 
 
 PORTAL_JS = """
@@ -288,6 +378,11 @@ $('#app').innerHTML=`<div class='hdr' id='portal-project'><div class='brand'>BUI
 ${g?`<div class='card' id='portal-digest'><h2>Weekly update · ${week===0?'This week':week===1?'Last week':week+' weeks ago'}</h2><div class='kpis'><div class='kpi'><span>Spent</span><div>${gbp(g.spend.total)}</div></div><div class='kpi'><span>Snags fixed</span><div>${g.snags_fixed.length}</div></div><div class='kpi'><span>Stages done</span><div>${g.milestones_done.length}</div></div><div class='kpi'><span>Open snags</span><div>${g.snags_open_now}</div></div></div>
 ${g.milestones_done.map(m=>`<div class='cap'>✓ ${esc(m.name)}</div>`).join('')}<div style='display:flex;justify-content:space-between;margin-top:10px'><a href='#' id='prev'>← Previous week</a>${week>0?"<a href='#' id='next'>Next week →</a>":"<span></span>"}</div></div>`:''}
 <div class='card' id='portal-docs'><h2>Documents (${p.documents.length})</h2>${p.documents.length?`<table>${p.documents.map((d,i)=>`<tr><td><b>${esc(d.title)}</b><div class='cap'>${esc(d.doc_type)} · ${esc(d.ext.toUpperCase())}${d.expires_on?' · expires '+esc(d.expires_on):''}</div></td><td class='n'><a href='#' class='dl' data-i='${i}'>Download</a></td></tr>`).join('')}</table>`:"<p class='cap'>No documents shared yet.</p>"}</div>`;
+const qs=await(await api(`/portal/projects/${pid}/questions`)).json();
+$('#app').insertAdjacentHTML('beforeend',`<div class='card' id='portal-questions'><h2>Questions & comments</h2><p class='cap'>Ask the project owner anything. You'll get an email when they reply.</p>
+<textarea id='q-text' rows='3' maxlength='2000' style='width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;font-size:15px' placeholder='e.g. When is the kitchen being fitted?'></textarea><button id='q-send' style='margin-top:8px'>Send question</button><p id='q-err' class='over'></p>
+${qs.map(q=>`<div class='q' style='border-top:1px solid #e2e8f0;padding-top:10px;margin-top:10px'><div><b>You</b> <span class='cap'>${new Date(q.created_at).toLocaleString('en-GB')}</span></div><div>${esc(q.text)}</div>${q.reply?`<div style='margin-top:6px;padding:8px 10px;background:#f0fdfa;border-radius:8px' class='q-reply'><b>Reply</b> <span class='cap'>${new Date(q.replied_at).toLocaleString('en-GB')}</span><div>${esc(q.reply)}</div></div>`:"<div class='cap'>Awaiting reply</div>"}</div>`).join('')}</div>`);
+$('#q-send').onclick=async()=>{const v=$('#q-text').value.trim();if(v.length<2)return;$('#q-send').disabled=true;try{await api(`/portal/projects/${pid}/questions`,{method:'POST',body:JSON.stringify({text:v})});project(pid,me)}catch(e){$('#q-err').textContent=e.message;$('#q-send').disabled=false}};
 document.querySelectorAll('.dl').forEach(a=>a.onclick=e=>{e.preventDefault();dl(pid,p.documents[+a.dataset.i]).catch(err=>alert(err.message))});
 $('#logout').onclick=logout;$('#all')&&($('#all').onclick=e=>{e.preventDefault();week=0;home()});$('#prev')&&($('#prev').onclick=e=>{e.preventDefault();week++;project(pid,me)});$('#next')&&($('#next').onclick=e=>{e.preventDefault();week--;project(pid,me)})}
 sessionStorage.getItem('pt')?home().catch(()=>login()):login();

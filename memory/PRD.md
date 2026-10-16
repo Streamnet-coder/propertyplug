@@ -95,3 +95,13 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Expiry reminders: documents.expires_on (YYYY-MM-DD, upload Form/PUT); expiry_status ('expired' | 'soon' ≤30 days | 'ok') + days_left; GET /api/documents/expiring. Dashboard expiry-alert-card; document row badges; expiry field in document-form.
 - Document folder links: POST/GET/DELETE /api/doc-folders {title, doc_ids, origin_url}; public /api/f/{token} (list + per-file /d/{doc_id} + /zip). UI: Documents "Select" mode → FolderSheet; folder button lists/revokes links.
 - Stakeholder portal: owners invite (POST /api/portal-members {name,email,role,handle?,doc_ids,digest,origin_url}; PUT/DELETE/resend) → global handle name@buildassist (portal_handles). Stakeholders sign in at web page /api/portal with email or handle + 6-digit email code (POST /api/portal/request-code, /api/portal/verify; HMAC-hashed, 10-min TTL, 5 attempts, 3 sends/15min, no enumeration). Portal JWT signed with JWT_SECRET+'|portal' and typ=portal (cannot access owner APIs). GET /api/portal/me, /api/portal/projects/{pid}?week=, /api/portal/projects/{pid}/documents/{did}. Owner UI: /portal-access (from Documents header).
+
+## Iteration 14 (Jun 2026)
+- Portal activity: db.portal_activity (login, view throttled 1/hr, download with doc) → GET /api/portal-activity; UI Activity tab on /portal-access (download summary per doc + timeline).
+- Portal questions: stakeholders POST/GET /api/portal/projects/{pid}/questions (10/hr), owner emailed; owner GET /api/portal-questions, POST /api/portal-questions/{id}/reply → stakeholder emailed; logged in message log. UI Questions tab with reply; portal web page #portal-questions card.
+- Over-budget emails: routes/alerts.check_over_budget (on line item create/update, shopping purchase/untick) emails owner once when spend > budget (over_notified flag, reset when back under).
+- Expiry emails: run_expiry_reminders in 15-min scheduler: once when doc enters 30-day window and once after expiry (flags store expires_on so renewals re-arm); grouped per owner.
+- User asked to link app to Buildassist.com custom domain → routed to support (platform/deployment question).
+
+## Deployment Readiness (Jun 2026)
+- Deployment health check: PASS. Lint clean. Old test files/reports (iterations 1-12, backend_test.py) removed.

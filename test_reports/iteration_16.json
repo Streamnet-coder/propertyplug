@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 16 — Portal Activity, Portal Questions, Over-Budget alerts, Expiry reminders. Backend: 5/6 passed, 1 skipped due to Resend 429 rate limit on test env (not a code bug). Frontend: /portal-access tabs (people/activity/questions) and panels render correctly with expected testIDs; stakeholder portal web page at /api/portal exposes required selectors (#portal-questions, #q-text, #q-send, .q-reply via JS).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/alerts (run_expiry_reminders)", "issue": "Delivered-email expiry test skipped — Resend sandbox rate-limited (429 'email rate limit exceeded') after parallel registration flows; retry 3× did not clear. Code path is correct: when email send fails (owner-undeliverable case) the flag is correctly NOT set — verified by test_undeliverable_owner_keeps_flags_unset."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration16.py",
+    "/app/test_reports/pytest/pytest_iteration16.xml"
+  ],
+  "action_items": [
+    "No code changes required. Delivered-email expiry test is environment-flaky because of Resend 2 req/sec rate limit; main agent can self-verify by running test_run_expiry_reminders_delivered_email in isolation after a quiet period, or by stubbing send_email in tests."
+  ],
+  "critical_code_review_comments": [
+    "routes/portal.py: ask_question rate-limit uses iso-string comparison on created_at (lexicographic). Fine for current ISO-8601 UTC format but brittle if format changes.",
+    "routes/alerts.py check_over_budget races: on PUT, over_notified flag is set BEFORE email attempt and never cleared on failure — so a failed email will not retry even if budget stays over. Documented behavior per request, worth noting.",
+    "routes/portal.py log_activity on view throttle: compares last 'view' at within 3600s, but if portal_activity has no entries for user yet the hourly throttle is bypassed by email+pid filter — correctly scoped."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration16.py (new)"
+  ],
+  "success_rate": {"backend": "83% (5/6, 1 skipped)", "frontend": "100%"},
+  "seed_data_creation": "Each test registers short-lived TEST_ users with resend.dev stakeholder emails; portal activity/questions and shopping/line-items are user-scoped and removed via DELETE /api/auth/account in test teardown + tests/cleanup.py.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "test_iteration16.py uses a module-level persistent asyncio loop (_LOOP) because core.db (motor.AsyncIOMotorClient) binds to the first event loop that touches it; calling asyncio.run per test closes the loop and breaks the next async test. If Resend sandbox 429 persists across runs, run tests serially (-o 'addopts=') and sleep between test files; delivered email test will auto-skip rather than fail.",
+  "rca_of_issue": "Resend sandbox tier enforces 2 requests/sec and is shared across the project; parallel registration + alert flows blow past the ceiling. Backend logs 'Owner alert failed for <uid>: Failed to send email' is the expected warning per spec. All non-email assertions pass (flags set/unset, portal activity rows, question rate limit 429 at 11th post, cross-owner 404 on reply, over_notified set/reset by async check_over_budget)."
+}

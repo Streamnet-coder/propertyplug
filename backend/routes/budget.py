@@ -1,3 +1,6 @@
+import asyncio
+
+from routes.alerts import check_over_budget
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, Literal
@@ -49,6 +52,7 @@ async def create_item(body: LineItemIn, user: User = Depends(current_user)):
     li = LineItem(user_id=user.id, project_id=await active_pid(user), **body.model_dump())
     res = await db.line_items.insert_one(li.to_mongo())
     li.id = str(res.inserted_id)
+    asyncio.create_task(check_over_budget(li.id))
     return li.out()
 
 
@@ -58,6 +62,7 @@ async def update_item(item_id: str, body: LineItemIn, user: User = Depends(curre
     r = await db.line_items.update_one({"_id": oid(item_id), "user_id": user.id}, {"$set": body.model_dump()})
     if not r.matched_count:
         raise HTTPException(404, "Not found")
+    asyncio.create_task(check_over_budget(item_id))
     return LineItem.from_mongo(await db.line_items.find_one({"_id": oid(item_id)})).out()
 
 

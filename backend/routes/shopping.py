@@ -1,3 +1,6 @@
+import asyncio
+
+from routes.alerts import check_over_budget
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -93,6 +96,7 @@ async def update_shopping(sid: str, body: ShoppingUpdate, user: User = Depends(c
             if doc and doc.get("receipt_id"):
                 await db.receipts.delete_one({"_id": oid(doc["receipt_id"]), "user_id": user.id})
             upd.update({"receipt_id": None, "actual_cost": None})
+            asyncio.create_task(check_over_budget((doc or {}).get("line_item_id")))
     r = await db.shopping_items.update_one({"_id": oid(sid), "user_id": user.id}, {"$set": upd})
     if not r.matched_count:
         raise HTTPException(404, "Item not found")
@@ -120,6 +124,7 @@ async def purchase_shopping(sid: str, body: PurchaseIn, user: User = Depends(cur
     await db.shopping_items.update_one({"_id": doc["_id"]}, {"$set": {"checked": True, "checked_at": now_iso(), "actual_cost": rec["amount"], "receipt_id": rid}})
     out = ShoppingItem.from_mongo(await db.shopping_items.find_one({"_id": doc["_id"]})).out()
     out["alert"] = None
+    asyncio.create_task(check_over_budget(doc.get("line_item_id")))
     if doc.get("line_item_id"):
         li = await db.line_items.find_one({"_id": oid(doc["line_item_id"])})
         if li:

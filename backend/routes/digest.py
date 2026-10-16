@@ -12,6 +12,7 @@ from pydantic import BaseModel, EmailStr, Field
 from core import E, db, logger, money
 from deps import active_pid, current_user, get_project_doc
 from email_service import EMAIL_FROM_NAME, EmailError, send_email
+from routes.alerts import run_expiry_reminders
 from routes.email_settings import owner_reply_to
 from routes.messages import log_message
 from html_utils import brand_block, owner_branding, page, serve_logo
@@ -256,6 +257,7 @@ async def digest_scheduler():
     while True:
         try:
             await run_weekly_digests()
+            await run_expiry_reminders()
         except Exception as e:
             logger.error(f"Digest scheduler error: {e}")
         await asyncio.sleep(900)

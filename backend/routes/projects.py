@@ -141,7 +141,8 @@ async def delete_project(pid: str, user: User = Depends(current_user)):
         raise HTTPException(404, "Project not found")
     for coll in (db.line_items, db.contacts, db.receipts, db.media, db.milestones, db.quote_requests, db.stage_payments, db.snags, db.snag_links, db.shopping_items, db.documents, db.doc_folders):
         await coll.delete_many({"user_id": user.id, "project_id": pid})
-    await db.portal_members.delete_many({"owner_id": user.id, "project_id": pid})
+    for coll in (db.portal_members, db.portal_activity, db.portal_questions):
+        await coll.delete_many({"owner_id": user.id, "project_id": pid})
     if user.active_project_id == pid:
         await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"active_project_id": None}})
     return {"ok": True}

@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, Switch, Text, View } from "react-native";
 
 import { api, BACKEND_URL, DocItem, PortalMember } from "@/src/api";
 import { Button, Card, Chip, Field, fonts, FormScreen, Icon, radius, space, tap } from "@/src/components/ui";
+import { ActivityPanel, QuestionsPanel, usePortalQuestions } from "@/src/components/portal-panels";
 import { queryClient } from "@/src/query-client";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
@@ -20,6 +21,9 @@ export default function PortalAccess() {
   const docs = useQuery({ queryKey: ["documents"], queryFn: () => api<DocItem[]>("/documents") });
   const [f, setF] = useState({ name: "", email: "", role: "Investor", handle: "" });
   const [open, setOpen] = useState<string | null>(null);
+  const [tab, setTab] = useState<"people" | "activity" | "questions">("people");
+  const questions = usePortalQuestions();
+  const unanswered = (questions.data ?? []).filter((x) => !x.reply).length;
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["portal-members"] });
 
   const add = useMutation({
@@ -56,6 +60,15 @@ export default function PortalAccess() {
         </Pressable>
       </Card>
 
+      <View style={s.chips}>
+        <Chip label="People" icon="users" selected={tab === "people"} onPress={() => setTab("people")} testID="portal-tab-people" />
+        <Chip label="Activity" icon="activity" selected={tab === "activity"} onPress={() => setTab("activity")} testID="portal-tab-activity" />
+        <Chip label={unanswered ? `Questions (${unanswered})` : "Questions"} icon="message-square" selected={tab === "questions"} onPress={() => setTab("questions")} testID="portal-tab-questions" />
+      </View>
+      {tab === "activity" && <ActivityPanel />}
+      {tab === "questions" && <QuestionsPanel />}
+      {tab === "people" && (
+      <>
       <Text style={s.section}>Invite a stakeholder</Text>
       <Field label="Name" value={f.name} onChangeText={(v) => setF({ ...f, name: v })} placeholder="e.g. Dave Patel" testID="portal-name-input" />
       <Field label="Email (codes are sent here)" value={f.email} onChangeText={(v) => setF({ ...f, email: v })} keyboardType="email-address" autoCapitalize="none" testID="portal-email-input" />
@@ -106,6 +119,8 @@ export default function PortalAccess() {
           )}
         </Card>
       ))}
+      </>
+      )}
     </FormScreen>
   );
 }
