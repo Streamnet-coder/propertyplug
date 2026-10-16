@@ -138,3 +138,15 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 
 ## Expiry heads-up (Jun 2026)
 - GET /api/portal-members/expiring (all owner projects; ends within 7 days or ended last 7), POST /api/portal-members/{id}/extend {days} (from max(today,end)). ExpiringAccessCard on dashboard + portal-access.
+
+## Co-owners + 3-tier pricing (Jun 2026)
+- co_owners {owner_id, email}. deps.effective(): when user.acting_owner_id set (via /projects/{id}/activate on shared project) and still co-owner, current_user returns OWNER User with co-owner's active_project_id + real_id. real_user dependency for /auth/me, account delete, plan, payments, export, referrals, projects list/create/activate/delete, portfolio/map, co-owner mgmt.
+- /projects lists own + shared (shared, owner_name). Co-owners can't delete projects (403).
+- /co-owners GET/POST/DELETE, /co-owners/shared-with-me, DELETE /co-owners/shared/{owner_id}.
+- Pricing: PRO_TIERS monthly £19.99 (31d), yearly £199 (365d), lifetime £499; Stripe one-off checkout with tier; pro_until lapses to basic in load_user. /payments/tiers.
+
+## Co-owners + 3-tier pricing (Jun 2026)
+- co_owners {owner_id, email}. deps.effective(): when user.acting_owner_id set (via /projects/{id}/activate on shared project) and still co-owner, current_user returns OWNER User with co-owner's active_project_id + real_id. real_user dependency for /auth/me, account delete, plan, payments, export, referrals, projects list/create/activate/delete, portfolio/map, co-owner mgmt.
+- /projects lists own + shared (shared, owner_name). Co-owners can't delete projects (403).
+- /co-owners GET/POST/DELETE, /co-owners/shared-with-me, DELETE /co-owners/shared/{owner_id}.
+- Pricing: PRO_TIERS monthly 19.99 GBP (31d), yearly 199 (365d), lifetime 499; Stripe one-off checkout with tier; pro_until lapses to basic in load_user. /payments/tiers.

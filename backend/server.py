@@ -7,13 +7,13 @@ from storage import init_storage
 import asyncio
 
 from routes import (ai, auth, branding, budget, contacts, digest, documents, portal, email_settings, export, media, messages, ratings, milestones, payments, projects, quotes,
-                    referrals, share, shopping, snags, stage_payments, trades, fx, planning)
+                    referrals, share, shopping, snags, stage_payments, trades, fx, planning, co_owners)
 
 app = FastAPI()
 api = APIRouter(prefix="/api")
 
 for m in (auth, projects, budget, contacts, media, ai, payments, trades, milestones, branding, referrals, share, quotes,
-          stage_payments, snags, shopping, digest, export, messages, email_settings, ratings, documents, portal, fx, planning):
+          stage_payments, snags, shopping, digest, export, messages, email_settings, ratings, documents, portal, fx, planning, co_owners):
     api.include_router(m.router)
 
 
@@ -64,6 +64,8 @@ async def startup():
     await db.trade_ratings.create_index([("user_id", 1), ("assignee_lc", 1)])
     await db.messages.create_index([("user_id", 1), ("project_id", 1), ("created_at", -1)])
     await db.projects.create_index("digest_token", sparse=True)
+    await db.co_owners.create_index([("owner_id", 1), ("email", 1)], unique=True)
+    await db.co_owners.create_index("email")
     asyncio.create_task(digest.digest_scheduler())
     try:
         init_storage()

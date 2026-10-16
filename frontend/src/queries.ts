@@ -24,7 +24,7 @@ export const useQuotes = () => useQuery({ queryKey: ["quotes"], queryFn: () => a
 export const useQuote = (id: string) =>
   useQuery({ queryKey: ["quotes", id], queryFn: () => api<QuoteRequest>(`/quotes/${id}`), refetchInterval: 10000 });
 
-export type ProjectRow = Project & { active: boolean };
+export type ProjectRow = Project & { active: boolean; shared: boolean; owner_name: string | null };
 export const projectsQuery = { queryKey: ["projects"], queryFn: () => api<ProjectRow[]>("/projects"), staleTime: 30000 };
 export const useProjects = () => useQuery(projectsQuery);
 export const prefetchProjects = () => queryClient.prefetchQuery(projectsQuery);

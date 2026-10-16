@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 
 from core import db
-from deps import current_user
+from deps import current_user, real_user
 from models import User
 
 router = APIRouter()
@@ -47,7 +47,7 @@ async def _csv(name: str, cols: list, uid: str) -> str:
 
 
 @router.get("/export")
-async def export_data(user: User = Depends(current_user)):
+async def export_data(user: User = Depends(real_user)):
     """All of the user's data as a ZIP of CSV spreadsheets (one per data type)."""
     mem = io.BytesIO()
     with zipfile.ZipFile(mem, "w", zipfile.ZIP_DEFLATED) as z:

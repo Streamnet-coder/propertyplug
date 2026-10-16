@@ -26,6 +26,11 @@ class User(BaseDocument):
     signup_source: Optional[str] = None
     referred_by: Optional[str] = None
     referral_count: int = 0
+    pro_tier: Optional[Literal["monthly", "yearly", "lifetime"]] = None
+    pro_until: Optional[str] = None
+    acting_owner_id: Optional[str] = None  # set while a co-owner has one of this owner's projects open
+    real_id: Optional[str] = Field(None, exclude=True)  # runtime only: the co-owner actually signed in
+    real_name: Optional[str] = Field(None, exclude=True)
     created_at: str = Field(default_factory=now_iso)
 
 

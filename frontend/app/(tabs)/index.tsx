@@ -101,6 +101,12 @@ export default function Home() {
               </Pressable>
             </View>
             <View style={{ marginTop: "auto", gap: space.xs }}>
+              {user?.acting_as && (
+                <View style={s.coPill} testID="co-owner-banner">
+                  <Icon name="users" size={12} color={colors.onSurfaceInverse} />
+                  <Text style={s.switchText}>Co-owner · {user.acting_as.owner_name}&apos;s project</Text>
+                </View>
+              )}
               <Text style={s.heroTitle} testID="project-name">{p.name}</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                 <Icon name="map-pin" size={13} color={colors.onSurfaceInverse} />
@@ -371,6 +377,7 @@ const useStyles = makeStyles((c) => ({
   muted: { fontFamily: fonts.regular, fontSize: 12, color: c.muted },
   hero: { height: 260, borderRadius: radius.lg, overflow: "hidden", padding: space.lg, backgroundColor: c.surfaceInverse },
   heroTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  coPill: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, backgroundColor: "rgba(255,255,255,0.18)" },
   switchBtn: {
     flexDirection: "row",
     alignItems: "center",

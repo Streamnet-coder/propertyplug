@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 25 — Frontend verification of Co-owner access + new 3-tier pricing. All requested UI flows pass end-to-end on mobile viewport (390x844). Profile (/profile via profile-button): tier cards tier-monthly / tier-yearly / tier-lifetime render correct prices ('Monthly £19.99 per month', 'SAVE 17% Yearly £199 per year', 'BEST VALUE Lifetime £499 one-off'); default upgrade-pro-button reads 'Pay £199 · Yearly' (yearly is the default), selecting tier-lifetime switches to 'Pay £499 · Lifetime' and tier-monthly to 'Pay £19.99 · Monthly'. profile-link-co-owners navigates to co-owners-screen. Owner invite flow: co-owner-invite-button is correctly disabled (aria-disabled=true) when email is invalid ('notanemail'); after entering test_co_ui_83448@example.com and tapping Make co-owner, a co-owner-{id} card appeared under 'Your co-owners (1)' showing 'Invited · waiting for them to sign up' plus a Remove action (co-owner-remove-{id}). Co-owner journey: registered a fresh account with the invited email (name Test Coowner, Passw0rd1) via /auth, landed on home-screen; dashboard switch-project-button → projects-screen shows exactly one project-shared-badge-{id} with text 'Co-owner · Demo Builder' and NO project-delete-{id} on the shared row (verified via is_visible == False). Tapping project-row-{id} activated the shared project and returned to the dashboard, where co-owner-banner appears over the hero reading 'Co-owner · Demo Builder's project', project-name shows 'Nottingham Victorian Refurb' and project-total-spent shows '£20,496 / £48,500' — demo's budget/data is correctly loaded. Profile shows co-owner-plan-note: 'You're working in Demo Builder's projects as a co-owner. Features there follow their plan (Basic). Your own billing is below.' Co-owners screen now shows a shared-owner-{owner_id} card 'Demo Builder · demo@mybuilder.app · 1 project · open them from My projects' with a Leave action (shared-leave-{id}); tapping Leave reveals shared-leave-confirm-{id} and tapping confirm removes the shared-owner card and triggers an auth refresh (co-owner-plan-note gone, 'Your co-owners (0) · Nobody yet.' now shown). The projects list after leave contains 0 project-shared-badge-* entries. All testIDs listed in the request were found and worked. Cleanup done: DELETE /api/auth/account with password 200 ok; subsequent login returns 401; demo's /co-owners is [] and active project is 'Nottingham Victorian Refurb'. No deprecated react-native packages touched in co-owners.tsx / profile.tsx / projects.tsx / (tabs)/index.tsx. One pre-existing non-blocking console warning observed app-wide (not introduced by this feature): 'shadow* style props are deprecated. Use boxShadow.' and 'props.pointerEvents is deprecated. Use style.pointerEvents' — these come from library-level styles and the Switch wrapper; worth noting for a future cleanup but do not affect behaviour.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "profile.tsx Switch wrapper", "issue": "Uses deprecated prop `pointerEvents` on <View> instead of style.pointerEvents. Reference: /app/frontend/app/profile.tsx:171 (<View pointerEvents=\"none\">...). Low priority — purely a console warning, no runtime impact in this feature."}
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_25.json"
+  ],
+  "action_items": [
+    "(Optional nit) /app/frontend/app/profile.tsx:171 — swap <View pointerEvents=\"none\"> for <View style={{ pointerEvents: 'none' }}> to silence RNW deprecation warning.",
+    "(Optional nit) RN Web shadow* props deprecation warning appears from a shared style (not from the files under review). If any newly-authored card style uses shadowColor/shadowOffset/..., migrate to boxShadow when convenient.",
+    "No functional action items from this iteration — co-owner access + 3-tier pricing UI are verified green and ready to ship."
+  ],
+  "critical_code_review_comments": [
+    "profile.tsx:21-25 TIERS array hard-codes £19.99/£199/£499 and corresponding labels; upgrade-pro-button title correctly interpolates both the price and the TIERS[].label — no risk of mismatch.",
+    "profile.tsx:36 default tier state is 'yearly' which matches the 'SAVE 17%' highlighted card — good default for conversion.",
+    "profile.tsx:115-119 co-owner-plan-note gated on user.acting_as; text reads user.plan (effective plan, i.e. owner's plan) which matches spec — co-owners see owner's plan name.",
+    "co-owners.tsx:56 invite-button disabled check `/^\\S+@\\S+\\.\\S+$/.test(email.trim())` correctly rejects 'notanemail' and permits valid addresses (verified aria-disabled=true on invalid input).",
+    "co-owners.tsx:39-43 leave mutation invalidates ALL queries then refreshes auth so acting_as flips off and co-owner-banner/plan-note disappear without manual reload — confirmed live.",
+    "projects.tsx:85-91 shared pill only renders when p.shared is true; delete button block at :106 is gated by `!p.active && !p.shared` so shared projects never offer delete — matches spec.",
+    "(tabs)/index.tsx:104-109 co-owner-banner rendered only when user.acting_as present — correctly disappears after Leave once /auth/me is refreshed."
+  ],
+  "updated_files": [
+    "/app/test_reports/iteration_25.json (new)"
+  ],
+  "success_rate": {"backend": "n/a (frontend only run; backend was pre-verified in iteration 24 and test_iteration25.py per request)", "frontend": "100% — tier cards & button labels, invite disabled validation, invite card creation, co-owner registration, shared badge, no delete on shared row, project activation, co-owner banner + demo project data, co-owner-plan-note copy, shared-owner card + Leave/confirm, state cleanup after Leave (banner gone, projects list has 0 shared rows, co-owners empty)"},
+  "seed_data_creation": "Owner demo@mybuilder.app invited test_co_ui_83448@example.com → that user registered with Passw0rd1 → activated demo's project → left → own account deleted via DELETE /api/auth/account. Post-cleanup state verified: login for test email returns 401, demo /co-owners is [], demo active project is 'Nottingham Victorian Refurb'. No residual test data remains.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Co-owner UX verified. Important selector notes for future runs: (a) After entering/leaving FormScreen modals (co-owners, profile), the underlying home-screen testID remains in the DOM but hidden; use data-testid state + screen check carefully — closing the FormScreen requires clicking its close button (ue405 X icon in header, no stable testID yet; worth adding a `form-close-button` testID). (b) Co-owner invite card testID is `co-owner-{id}` where id is a Mongo ObjectId; use CSS selector `[data-testid^=\"co-owner-\"]` and filter out input/button/empty/remove-* variants when scanning. (c) The sharing demo project id changes per demo seed but there is always exactly 1 demo project named 'Nottingham Victorian Refurb'; expect project-total-spent around '£20,496 / £48,500'. (d) Login endpoint sometimes returns 502 for 1-2s on cold connects — add retries. (e) Deprecation console warnings (shadow*, pointerEvents) are expected and NOT regressions."
+}

@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, gbp, Project, setCurrency } from "@/src/api";
 import { Button, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { PortfolioCard } from "@/src/components/portfolio-card";
+import { useAuth } from "@/src/auth";
 import { queryClient } from "@/src/query-client";
 import { useProjects } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -20,12 +21,14 @@ export default function Projects() {
   const insets = useSafeAreaInsets();
   const [confirm, setConfirm] = useState<string | null>(null);
   const q = useProjects();
+  const { refresh } = useAuth();
 
   const activate = useMutation({
     mutationFn: (id: string) => api<Project>(`/projects/${id}/activate`, { method: "POST" }),
     onSuccess: async (p) => {
       setCurrency(p.currency);
       await queryClient.invalidateQueries();
+      await refresh(); // plan + co-owner context follow the project's owner
       toast("Switched project");
       router.back();
     },
@@ -79,6 +82,12 @@ export default function Projects() {
                   <View style={{ flex: 1 }}>
                     <Text style={s.name} numberOfLines={1}>{p.name}</Text>
                     <Text style={s.muted} numberOfLines={1}>{p.property_type === "land" ? `Land · ${p.plot_size ? `${p.plot_size} ${p.plot_unit} · ` : ""}` : ""}{p.address || "No address"}</Text>
+                    {p.shared && (
+                      <View style={s.sharedPill} testID={`project-shared-badge-${p.id}`}>
+                        <Icon name="users" size={11} color={colors.brand} />
+                        <Text style={s.sharedText}>Co-owner · {p.owner_name}</Text>
+                      </View>
+                    )}
                   </View>
                   <View style={s.curPill} testID={`project-currency-badge-${p.id}`}><Text style={s.curText}>{p.currency}</Text></View>
                   {p.active ? (
@@ -94,7 +103,7 @@ export default function Projects() {
                   <Text style={s.muted}>{p.line_item_count} items</Text>
                 </View>
                 <View style={s.track}><View style={[s.fill, { width: `${pct}%` }]} /></View>
-                {!p.active && (
+                {!p.active && !p.shared && (
                   confirm === p.id ? (
                     <View style={{ flexDirection: "row", gap: space.sm }}>
                       <Button small variant="outline" title="Cancel" onPress={() => setConfirm(null)} style={{ flex: 1 }} testID={`project-delete-cancel-${p.id}`} />
@@ -145,5 +154,7 @@ const useStyles = makeStyles((c) => ({
   fill: { height: 6, borderRadius: 3, backgroundColor: c.brandPrimary },
   cta: { position: "absolute", left: space.lg, right: space.lg },
   curPill: { borderWidth: 1, borderColor: c.border, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.pill },
+  sharedPill: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", marginTop: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.pill, backgroundColor: c.brandTertiary },
+  sharedText: { fontFamily: fonts.semibold, fontSize: 11, color: c.brand },
   curText: { fontFamily: fonts.bold, fontSize: 10, color: c.muted, letterSpacing: 0.4 },
 }));

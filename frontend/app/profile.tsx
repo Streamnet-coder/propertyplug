@@ -18,6 +18,12 @@ const PRO_FEATURES: { icon: IconName; text: string }[] = [
   { icon: "building-2", text: "Stakeholder & solicitor link" },
 ];
 
+const TIERS = [
+  { id: "monthly", label: "Monthly", price: "£19.99", per: "per month", badge: "" },
+  { id: "yearly", label: "Yearly", price: "£199", per: "per year", badge: "Save 17%" },
+  { id: "lifetime", label: "Lifetime", price: "£499", per: "one-off", badge: "Best value" },
+] as const;
+
 export default function Profile() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -27,13 +33,16 @@ export default function Profile() {
   const { user, setUser, signOut, refresh } = useAuth();
   const referrals = useReferrals();
   const [paying, setPaying] = useState(false);
+  const [tier, setTier] = useState<(typeof TIERS)[number]["id"]>("yearly");
   const [toggling, setToggling] = useState(false);
   const poll = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => () => { if (poll.current) clearInterval(poll.current); }, []);
 
   if (!user) return null;
-  const isPro = user.plan === "pro";
+  const isPro = user.own_plan === "pro";
+  const lifetime = user.pro_tier === "lifetime" && isPro;
+  const paidActive = isPro && !!user.pro_tier;
   const trialDays = Math.max(0, Math.ceil((new Date(user.trial_ends).getTime() - Date.now()) / 86400000));
 
   const togglePlan = async (v: boolean) => {
@@ -52,7 +61,7 @@ export default function Profile() {
   const upgrade = async () => {
     setPaying(true);
     try {
-      const { url, session_id } = await api<{ url: string; session_id: string }>("/payments/checkout", { body: { origin_url: BACKEND_URL } });
+      const { url, session_id } = await api<{ url: string; session_id: string }>("/payments/checkout", { body: { origin_url: BACKEND_URL, tier } });
       let tries = 0;
       if (poll.current) clearInterval(poll.current);
       poll.current = setInterval(async () => {
@@ -99,19 +108,31 @@ export default function Profile() {
             <Text style={s.muted} testID="profile-email">{user.email}</Text>
           </View>
           <View style={[s.planBadge, isPro && { backgroundColor: colors.brandPrimary }]}>
-            <Text style={[s.planText, isPro && { color: colors.onBrandPrimary }]} testID="profile-plan-badge">{user.plan.toUpperCase()}</Text>
+            <Text style={[s.planText, isPro && { color: colors.onBrandPrimary }]} testID="profile-plan-badge">{user.own_plan.toUpperCase()}</Text>
           </View>
         </Card>
 
-        {!user.paid_pro && (
+        {user.acting_as && (
+          <Card style={{ flexDirection: "row", gap: space.sm, alignItems: "center" }} testID="co-owner-plan-note">
+            <Icon name="users" size={20} color={colors.brand} />
+            <Text style={[s.muted, { flex: 1 }]}>You&apos;re working in {user.acting_as.owner_name}&apos;s projects as a co-owner. Features there follow their plan ({user.plan === "pro" ? "Pro" : "Basic"}). Your own billing is below.</Text>
+          </Card>
+        )}
+        {paidActive && (
+          <Card style={{ flexDirection: "row", gap: space.sm, alignItems: "center" }} testID="pro-active-card">
+            <Icon name="badge-check" size={22} color={colors.success} />
+            <Text style={[s.name, { flex: 1 }]}>
+              {lifetime ? "Lifetime Pro is active. Thanks for upgrading!" : `Pro ${user.pro_tier} is active until ${new Date(user.pro_until!).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`}
+            </Text>
+          </Card>
+        )}
+        {!lifetime && (
           <View style={s.pro} testID="upgrade-card">
             <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
               <Icon name="crown" size={22} color={colors.brandPrimary} />
-              <Text style={s.proTitle}>Builder Assist Pro</Text>
+              <Text style={s.proTitle}>{paidActive ? "Extend or go lifetime" : "Builder Assist Pro"}</Text>
             </View>
-            <Text style={s.proSub} testID="upgrade-card-subtitle">
-              {isPro ? "You're previewing Pro on your trial. Keep it forever with a one-time £19 upgrade." : "Built for BRRR investors & developers. One-time £19 upgrade."}
-            </Text>
+            <Text style={s.proSub} testID="upgrade-card-subtitle">Built for BRRR investors & developers. Co-owners on your projects get Pro too.</Text>
             <View style={{ gap: space.sm, marginVertical: space.md }}>
               {PRO_FEATURES.map((f) => (
                 <View key={f.text} style={{ flexDirection: "row", gap: space.sm, alignItems: "center" }}>
@@ -120,7 +141,18 @@ export default function Profile() {
                 </View>
               ))}
             </View>
-            <Button title={paying ? "Waiting for payment…" : "Upgrade to Pro · £19"} icon="credit-card" loading={paying} onPress={upgrade} testID="upgrade-pro-button" />
+            <View style={{ flexDirection: "row", gap: space.sm, marginBottom: space.md }}>
+              {TIERS.map((t) => (
+                <Pressable key={t.id} onPress={() => { tap(); setTier(t.id); }} style={[s.tier, tier === t.id && s.tierOn]} testID={`tier-${t.id}`}>
+                  {t.badge ? <Text style={s.tierBadge}>{t.badge}</Text> : null}
+                  <Text style={s.tierLabel}>{t.label}</Text>
+                  <Text style={s.tierPrice}>{t.price}</Text>
+                  <Text style={s.tierPer}>{t.per}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Button title={paying ? "Waiting for payment…" : `Pay ${TIERS.find((t) => t.id === tier)!.price} · ${TIERS.find((t) => t.id === tier)!.label}`} icon="credit-card" loading={paying} onPress={upgrade} testID="upgrade-pro-button" />
+            {tier !== "lifetime" && <Text style={[s.proSub, { textAlign: "center" }]}>One payment per period, no auto-renew. Renewing early adds to your remaining time.</Text>}
             {paying && (
               <Pressable onPress={() => { if (poll.current) clearInterval(poll.current); setPaying(false); }} testID="cancel-payment-wait" style={{ alignItems: "center", paddingTop: space.sm }}>
                 <Text style={[s.muted, { color: colors.onSurfaceInverse }]}>Cancel</Text>
@@ -128,18 +160,12 @@ export default function Profile() {
             )}
           </View>
         )}
-        {user.paid_pro && (
-          <Card style={{ flexDirection: "row", gap: space.sm, alignItems: "center" }} testID="pro-active-card">
-            <Icon name="badge-check" size={22} color={colors.success} />
-            <Text style={s.name}>Pro is active. Thanks for upgrading!</Text>
-          </Card>
-        )}
 
         <Card style={{ gap: space.md }}>
           <View style={s.row}>
             <View style={{ flex: 1 }}>
               <Text style={s.rowTitle}>Pro preview mode</Text>
-              <Text style={s.muted}>{user.paid_pro ? "Switch between Basic & Pro views" : `Try Pro during your trial · ${trialDays} days left`}</Text>
+              <Text style={s.muted}>{paidActive ? "Switch between Basic & Pro views" : `Try Pro during your trial · ${trialDays} days left`}</Text>
             </View>
             <Pressable testID="plan-toggle-switch" disabled={toggling} onPress={() => { tap(); togglePlan(!isPro); }} hitSlop={8}>
               <View pointerEvents="none">
@@ -179,6 +205,7 @@ export default function Profile() {
         <Card style={{ paddingVertical: space.xs }}>
           {[
             { icon: "folder-open" as IconName, label: "My projects", onPress: () => router.push("/projects"), id: "projects" },
+            { icon: "users" as IconName, label: "Co-owners", onPress: () => router.push("/co-owners"), id: "co-owners" },
             { icon: "milestone" as IconName, label: "Milestone timeline", onPress: () => router.push("/timeline"), id: "timeline" },
             { icon: "file-text" as IconName, label: "Quote requests", onPress: () => router.push("/quotes"), id: "quotes" },
             { icon: "share-2" as IconName, label: "Share report with lenders", onPress: () => router.push("/share-report"), id: "share" },
@@ -230,6 +257,12 @@ const useStyles = makeStyles((c) => ({
   planText: { fontFamily: fonts.extrabold, fontSize: 11, color: c.brandPrimary, letterSpacing: 0.6 },
   pro: { backgroundColor: c.surfaceInverse, borderRadius: radius.lg, padding: space.lg },
   proTitle: { fontFamily: fonts.extrabold, fontSize: 20, color: c.onSurfaceInverse },
+  tier: { flex: 1, borderRadius: radius.md, borderWidth: 1.5, borderColor: c.borderStrong, padding: space.sm, alignItems: "center", gap: 2, minHeight: 92, justifyContent: "center" },
+  tierOn: { borderColor: c.brandPrimary, backgroundColor: c.surface },
+  tierBadge: { fontFamily: fonts.bold, fontSize: 9, color: c.brandPrimary, letterSpacing: 0.4, textTransform: "uppercase" },
+  tierLabel: { fontFamily: fonts.semibold, fontSize: 12, color: c.muted },
+  tierPrice: { fontFamily: fonts.extrabold, fontSize: 18, color: c.brandPrimary },
+  tierPer: { fontFamily: fonts.regular, fontSize: 11, color: c.muted },
   proSub: { fontFamily: fonts.regular, fontSize: 13, color: c.onSurfaceInverse, opacity: 0.8, marginTop: space.xs },
   proFeature: { fontFamily: fonts.medium, fontSize: 14, color: c.onSurfaceInverse },
   row: { flexDirection: "row", alignItems: "center", gap: space.md },

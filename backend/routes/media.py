@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import uuid
 from core import db, now_iso, oid, bearer, APP_NAME
 from models import User, Media
-from deps import current_user, decode_uid, active_pid
+from deps import current_user, user_from_token, active_pid
 from storage import put_object, get_object
 
 router = APIRouter()
@@ -33,7 +33,7 @@ async def download(path: str, token: Optional[str] = None, cred: HTTPAuthorizati
     raw = cred.credentials if cred else token
     if not raw:
         raise HTTPException(401, "Not authenticated")
-    uid = decode_uid(raw)
+    uid = (await user_from_token(raw)).id
     rec = await db.files.find_one({"storage_path": path, "owner_id": uid, "is_deleted": False})
     if not rec:
         raise HTTPException(404, "File not found")

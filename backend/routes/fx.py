@@ -9,9 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from core import db, logger
-from deps import current_user
+from deps import current_user, effective, real_user
 from models import Currency, Project, User
-from routes.projects import project_summaries
+from routes.projects import accessible_projects, project_summaries
 
 router = APIRouter()
 
@@ -54,16 +54,17 @@ class HomeIn(BaseModel):
 
 
 @router.put("/portfolio/home-currency")
-async def set_home_currency(body: HomeIn, user: User = Depends(current_user)):
+async def set_home_currency(body: HomeIn, user: User = Depends(real_user)):
     await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"home_currency": body.currency}})
     return {"home_currency": body.currency}
 
 
 @router.get("/portfolio/map")
-async def portfolio_map(user: User = Depends(current_user)):
-    """Every project with a map pin. Addresses are geocoded once via Nominatim (cached on the project); manual pins win."""
-    active = (await db.users.find_one({"_id": ObjectId(user.id)}, {"active_project_id": 1}) or {}).get("active_project_id")
-    docs = await db.projects.find({"user_id": user.id}, {"comparables": 0}).sort("_id", 1).to_list(500)
+async def portfolio_map(user: User = Depends(real_user)):
+    """Every accessible project (own + co-owned) with a map pin. Addresses are geocoded once via Nominatim (cached on the project); manual pins win."""
+    from routes.projects import shared_owners
+    active = (await effective(user)).active_project_id
+    docs = await db.projects.find({"user_id": {"$in": [user.id, *await shared_owners(user)]}}, {"comparables": 0}).sort("_id", 1).to_list(1000)
     todo = [d for d in docs if d.get("address", "").strip() and (d.get("geocoded_for") != d["address"] or "country" not in d)]
     if todo:
         async with httpx.AsyncClient(timeout=8, headers={"User-Agent": "builder-assist/1.0 (support@mybuilder.app)"}) as c:
@@ -96,10 +97,9 @@ async def portfolio_map(user: User = Depends(current_user)):
 
 
 @router.get("/portfolio")
-async def portfolio(user: User = Depends(current_user)):
+async def portfolio(user: User = Depends(real_user)):
     home = (await db.users.find_one({"_id": ObjectId(user.id)}, {"home_currency": 1}) or {}).get("home_currency") or "GBP"
-    docs = await db.projects.find({"user_id": user.id}, {"comparables": 0}).to_list(500)
-    summaries = await project_summaries([Project.from_mongo(d) for d in docs])
+    summaries = await accessible_projects(user)
     fx = await get_rates()
     rates = fx["rates"]
     keys = ("purchase_price", "estimated_valuation", "total_budget", "total_spent")

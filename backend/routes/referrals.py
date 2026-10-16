@@ -5,7 +5,7 @@ from bson import ObjectId
 import re
 from core import db, now_iso, E
 from models import User
-from deps import current_user
+from deps import current_user, real_user
 from html_utils import page
 from seed import create_user
 
@@ -44,7 +44,7 @@ async def credit_referrer(by: str, new_user: User, source: str):
 
 
 @router.get("/referrals")
-async def my_referrals(user: User = Depends(current_user)):
+async def my_referrals(user: User = Depends(real_user)):
     docs = await db.referrals.find({"referrer_id": user.id}).sort("created_at", -1).to_list(100)
     return {"count": len(docs), "months_earned": len(docs), "trial_ends": user.trial_ends,
             "recent": [{"name": d["name"].split(" ")[0], "source": d["source"], "date": d["created_at"][:10]} for d in docs[:20]]}

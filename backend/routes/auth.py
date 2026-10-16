@@ -6,7 +6,7 @@ import bcrypt
 import time
 from core import db
 from models import User
-from deps import current_user, user_out, make_token
+from deps import current_user, effective, real_user, user_out, make_token
 from seed import create_user
 
 router = APIRouter()
@@ -38,8 +38,8 @@ async def login(body: LoginIn):
 
 
 @router.get("/auth/me")
-async def me(user: User = Depends(current_user)):
-    return user_out(user)
+async def me(user: User = Depends(real_user)):
+    return user_out(user, await effective(user))
 
 
 class DeleteAccountIn(BaseModel):
@@ -52,7 +52,7 @@ USER_COLLECTIONS = ("line_items", "contacts", "receipts", "media", "milestones",
 
 
 @router.delete("/auth/account")
-async def delete_account(body: DeleteAccountIn, user: User = Depends(current_user)):
+async def delete_account(body: DeleteAccountIn, user: User = Depends(real_user)):
     now = time.time()
     recent = [t for t in _failed.get(user.id, []) if now - t < 900]
     if len(recent) >= 5:
@@ -67,6 +67,7 @@ async def delete_account(body: DeleteAccountIn, user: User = Depends(current_use
     await db.referrals.delete_many({"$or": [{"referrer_id": user.id}, {"new_user_id": user.id}]})
     for coll in (db.portal_members, db.portal_activity, db.portal_questions):
         await coll.delete_many({"owner_id": user.id})
+    await db.co_owners.delete_many({"$or": [{"owner_id": user.id}, {"email": user.email}]})
     # User doc last so a failed run can be retried with the same token
     await db.users.delete_one({"_id": ObjectId(user.id)})
     return {"ok": True}
@@ -77,7 +78,7 @@ class PlanIn(BaseModel):
 
 
 @router.post("/auth/plan")
-async def set_plan(body: PlanIn, user: User = Depends(current_user)):
+async def set_plan(body: PlanIn, user: User = Depends(real_user)):
     await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"plan": body.plan}})
     user.plan = body.plan
-    return user_out(user)
+    return user_out(user, await effective(user))

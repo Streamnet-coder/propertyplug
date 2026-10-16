@@ -56,7 +56,8 @@ export function gbp(n: number, decimals = 0, cur: CurrencyCode = currency) {
   return `${neg ? "-" : ""}${CURRENCIES[cur]}${withCommas}${dec ? "." + dec : ""}`;
 }
 
-export type User = { id: string; name: string; email: string; plan: "basic" | "pro"; paid_pro: boolean; trial_ends: string; active_project_id?: string | null };
+export type User = { id: string; name: string; email: string; plan: "basic" | "pro"; own_plan: "basic" | "pro"; paid_pro: boolean; trial_ends: string; active_project_id?: string | null;
+  pro_tier: "monthly" | "yearly" | "lifetime" | null; pro_until: string | null; acting_as: { owner_id: string; owner_name: string } | null };
 export type Category = "Hard Cost" | "Soft Cost" | "Contingency";
 export type Project = {
   id: string;

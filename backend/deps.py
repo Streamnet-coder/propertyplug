@@ -26,13 +26,46 @@ async def load_user(uid: str) -> User:
         doc = None
     if not doc:
         raise HTTPException(401, "User not found")
-    return User.from_mongo(doc)
+    u = User.from_mongo(doc)
+    # Monthly/yearly Pro passes lapse back to Basic; lifetime never does.
+    if u.plan == "pro" and u.pro_tier in ("monthly", "yearly") and u.pro_until and u.pro_until < datetime.now(timezone.utc).isoformat():
+        await db.users.update_one({"_id": doc["_id"]}, {"$set": {"plan": "basic"}})
+        u.plan = "basic"
+    return u
 
 
-async def current_user(cred: HTTPAuthorizationCredentials = Depends(bearer)) -> User:
+async def real_user(cred: HTTPAuthorizationCredentials = Depends(bearer)) -> User:
+    """The signed-in person themselves (billing, account, project list, co-owner management)."""
     if not cred:
         raise HTTPException(401, "Not authenticated")
     return await load_user(decode_uid(cred.credentials))
+
+
+async def effective(u: User) -> User:
+    """When a co-owner has a shared project open, act as that project's owner so every data route works unchanged.
+    The returned owner object keeps the co-owner's own active project and remembers who is really signed in (real_id)."""
+    if not u.acting_owner_id or u.acting_owner_id == u.id:
+        return u
+    if await db.co_owners.find_one({"owner_id": u.acting_owner_id, "email": u.email}):
+        try:
+            owner = await load_user(u.acting_owner_id)
+        except HTTPException:
+            owner = None
+        if owner:
+            owner.active_project_id, owner.real_id, owner.real_name = u.active_project_id, u.id, u.name
+            return owner
+    # Access was removed: fall back to their own projects.
+    await db.users.update_one({"_id": ObjectId(u.id)}, {"$set": {"acting_owner_id": None, "active_project_id": None}})
+    u.acting_owner_id = u.active_project_id = None
+    return u
+
+
+async def current_user(cred: HTTPAuthorizationCredentials = Depends(bearer)) -> User:
+    return await effective(await real_user(cred))
+
+
+async def user_from_token(raw: str) -> User:
+    return await effective(await load_user(decode_uid(raw)))
 
 
 async def pro_user(user: User = Depends(current_user)) -> User:
@@ -41,9 +74,12 @@ async def pro_user(user: User = Depends(current_user)) -> User:
     return user
 
 
-def user_out(u: User):
-    return {"id": u.id, "name": u.name, "email": u.email, "plan": u.plan, "paid_pro": u.paid_pro, "trial_ends": u.trial_ends,
-            "active_project_id": u.active_project_id}
+def user_out(u: User, eff: User | None = None):
+    """eff = the effective (possibly owner) user: plan follows the project owner on shared projects."""
+    eff = eff or u
+    return {"id": u.id, "name": u.name, "email": u.email, "plan": eff.plan, "own_plan": u.plan, "paid_pro": u.paid_pro, "trial_ends": u.trial_ends,
+            "pro_tier": u.pro_tier, "pro_until": u.pro_until, "active_project_id": u.active_project_id,
+            "acting_as": {"owner_id": eff.id, "owner_name": eff.name} if eff.id != u.id else None}
 
 
 async def active_pid(user: User) -> str:
@@ -54,7 +90,7 @@ async def active_pid(user: User) -> str:
     if not doc:
         raise HTTPException(404, "Project not found")
     pid = str(doc["_id"])
-    await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"active_project_id": pid}})
+    await db.users.update_one({"_id": ObjectId(user.real_id or user.id)}, {"$set": {"active_project_id": pid}})
     user.active_project_id = pid
     return pid
 

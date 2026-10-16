@@ -4,7 +4,7 @@ from typing import Literal, Optional
 from bson import ObjectId
 from core import db, oid
 from models import User, Budget, Currency, Project
-from deps import current_user, pro_user, active_pid, get_project_doc
+from deps import current_user, effective, pro_user, real_user, active_pid, get_project_doc
 from seed import seed_milestones
 
 router = APIRouter()
@@ -133,18 +133,35 @@ class ProjectCreate(BaseModel):
     lon: Optional[float] = Field(None, ge=-180, le=180)
 
 
-@router.get("/projects")
-async def list_projects(user: User = Depends(current_user)):
-    pid = await active_pid(user)
-    docs = await db.projects.find({"user_id": user.id}, {"comparables": 0}).sort("_id", 1).to_list(500)
+async def shared_owners(user: User) -> dict:
+    """{owner_id: owner_name} for every owner who made this person a co-owner."""
+    ids = [c["owner_id"] async for c in db.co_owners.find({"email": user.email}, {"owner_id": 1})]
+    return {str(u["_id"]): u["name"] async for u in db.users.find({"_id": {"$in": [ObjectId(i) for i in ids]}}, {"name": 1})}
+
+
+async def accessible_projects(user: User) -> list:
+    """The person's own projects followed by all projects of owners who share with them (current and future)."""
+    owners = await shared_owners(user)
+    docs = await db.projects.find({"user_id": {"$in": [user.id, *owners]}}, {"comparables": 0}).sort("_id", 1).to_list(1000)
+    docs.sort(key=lambda d: d["user_id"] != user.id)
     out = await project_summaries([Project.from_mongo(d) for d in docs])
+    for d, s in zip(docs, out):
+        s["shared"] = d["user_id"] != user.id
+        s["owner_name"] = owners.get(d["user_id"]) if s["shared"] else None
+    return out
+
+
+@router.get("/projects")
+async def list_projects(user: User = Depends(real_user)):
+    pid = await active_pid(await effective(user))
+    out = await accessible_projects(user)
     for s in out:
         s["active"] = s["id"] == pid
     return out
 
 
 @router.post("/projects")
-async def create_project(body: ProjectCreate, user: User = Depends(current_user)):
+async def create_project(body: ProjectCreate, user: User = Depends(real_user)):
     if not body.name.strip():
         raise HTTPException(400, "Project name is required")
     if body.property_type == "land":
@@ -152,21 +169,26 @@ async def create_project(body: ProjectCreate, user: User = Depends(current_user)
     p = Project(user_id=user.id, pin_manual=body.lat is not None and body.lon is not None, **body.model_dump())
     p.id = str((await db.projects.insert_one(p.to_mongo())).inserted_id)
     await seed_milestones(user.id, p.id)
-    await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"active_project_id": p.id}})
+    await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"active_project_id": p.id, "acting_owner_id": None}})
     return await project_summary(p)
 
 
 @router.post("/projects/{pid}/activate")
-async def activate_project(pid: str, user: User = Depends(current_user)):
-    doc = await db.projects.find_one({"_id": oid(pid), "user_id": user.id})
-    if not doc:
+async def activate_project(pid: str, user: User = Depends(real_user)):
+    doc = await db.projects.find_one({"_id": oid(pid)})
+    if not doc or (doc["user_id"] != user.id and doc["user_id"] not in await shared_owners(user)):
         raise HTTPException(404, "Project not found")
-    await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"active_project_id": pid}})
+    acting = None if doc["user_id"] == user.id else doc["user_id"]
+    await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"active_project_id": pid, "acting_owner_id": acting}})
     return await project_summary(Project.from_mongo(doc))
 
 
 @router.delete("/projects/{pid}")
-async def delete_project(pid: str, user: User = Depends(current_user)):
+async def delete_project(pid: str, user: User = Depends(real_user)):
+    if not await db.projects.find_one({"_id": oid(pid), "user_id": user.id}, {"_id": 1}):
+        if await db.projects.find_one({"_id": oid(pid)}, {"_id": 1}):
+            raise HTTPException(403, "Only the project owner can delete this project")
+        raise HTTPException(404, "Project not found")
     if await db.projects.count_documents({"user_id": user.id}) <= 1:
         raise HTTPException(400, "You need at least one project")
     r = await db.projects.delete_one({"_id": oid(pid), "user_id": user.id})

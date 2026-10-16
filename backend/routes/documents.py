@@ -15,7 +15,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 
 from core import APP_NAME, E, bearer, db, now_iso, oid
-from deps import active_pid, current_user, decode_uid
+from deps import active_pid, current_user, user_from_token
 from html_utils import page
 from models import User
 from storage import get_object, put_object
@@ -146,9 +146,8 @@ async def download_all(doc_type: Optional[str] = Query(None), token: Optional[st
     raw = cred.credentials if cred else token
     if not raw:
         raise HTTPException(401, "Not authenticated")
-    uid = decode_uid(raw)
-    u = await db.users.find_one({"_id": ObjectId(uid)}, {"active_project_id": 1}) or {}
-    q = {"user_id": uid, "project_id": u.get("active_project_id"), **({"doc_type": doc_type} if doc_type else {})}
+    u = await user_from_token(raw)
+    q = {"user_id": u.id, "project_id": await active_pid(u), **({"doc_type": doc_type} if doc_type else {})}
     docs = await db.documents.find(q).sort("doc_type", 1).to_list(500)
     if not docs:
         raise HTTPException(404, "No documents to download")
@@ -161,7 +160,7 @@ async def download_document(did: str, token: Optional[str] = None, cred: HTTPAut
     raw = cred.credentials if cred else token
     if not raw:
         raise HTTPException(401, "Not authenticated")
-    d = await _own(did, decode_uid(raw))
+    d = await _own(did, (await user_from_token(raw)).id)
     data, _ = await run_in_threadpool(get_object, d["storage_path"])
     return _attachment(d, data)
 

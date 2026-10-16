@@ -22,7 +22,8 @@ db = client[os.environ['DB_NAME']]
 JWT_SECRET = os.environ['JWT_SECRET']
 EMERGENT_KEY = os.environ['EMERGENT_LLM_KEY']
 STRIPE_API_KEY = os.environ['STRIPE_API_KEY']
-PRO_PRICE_GBP = 19.0
+PRO_TIERS = {"monthly": {"price": 19.99, "days": 31, "label": "Monthly"}, "yearly": {"price": 199.0, "days": 365, "label": "Yearly"},
+             "lifetime": {"price": 499.0, "days": None, "label": "Lifetime"}}
 APP_NAME = "my-builder-app"
 
 bearer = HTTPBearer(auto_error=False)
