@@ -105,7 +105,7 @@ export type PlanningApp = {
   notes: string;
   days_to_decision: number | null;
 };
-export type MapPin = Pick<Project, "id" | "name" | "address" | "lat" | "lon" | "pin_manual" | "property_type" | "currency" | "total_spent" | "total_budget" | "estimated_valuation"> & { active: boolean };
+export type MapPin = Pick<Project, "id" | "name" | "address" | "lat" | "lon" | "pin_manual" | "property_type" | "currency" | "total_spent" | "total_budget" | "estimated_valuation"> & { active: boolean; country: string | null };
 type PortfolioSums = { purchase_price: number; estimated_valuation: number; total_budget: number; total_spent: number };
 export type Portfolio = {
   home_currency: CurrencyCode;

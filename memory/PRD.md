@@ -120,3 +120,6 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - /api/planning CRUD (planning_apps), days_to_decision; dashboard PlanningCard reminder (no email). LandUplift card.
 - /api/portfolio/map + portfolio-map screen (Leaflet/OSM; WebView native, iframe web).
 - Fixed: backend EMERGENT_LLM_KEY was stale after fork -> object storage 401; updated. Tested iteration 19.
+
+## Map Filters (Jun 2026)
+- /api/portfolio/map returns country (Nominatim addressdetails, accept-language=en, cached). Map screen filters: type, currency, country + clear. Tested iteration 20.

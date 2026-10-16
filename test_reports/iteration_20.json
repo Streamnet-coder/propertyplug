@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 20 — Portfolio Map Filters (land/property/country/currency). Backend 7/7 pytest tests pass covering GET /api/portfolio/map `country` field: present on every pin, derived from Nominatim addressdetails and cached on the project (second call fast, no re-geocode), null when address missing, manual-pin projects keep their lat/lon but still get `country` learned from the geocoded address, multi-currency/multi-type/multi-country mix returned. Note: Nominatim localises Spain as 'España' (not 'Spain') — the UI chip renders accordingly. Frontend UI verified end-to-end on 390x844 viewport: demo login → projects → portfolio-map-screen loads with map-filters bar containing map-filter-type-all/-residential/-land, map-filter-currency-GBP/-EUR, map-filter-country-all + per-country chips (map-filter-country-united-kingdom, map-filter-country-españa). Created a EUR land project at 'Calle Mayor 1, Madrid, Spain' alongside the existing GBP UK residential; verified: Land filter → 1 row (Madrid), EUR filter → 1 row (Madrid, pin-count '1/1 on map · 2 total'), EUR+España combo → 1 row, España alone → 1 row, España+GBP → 0 rows with map-filter-empty + map-clear-filters visible, Clear filters resets to 2/2 on map, United Kingdom chip → 1 row (Nottingham). Map pins update to match filter. Each row shows country·currency subline. Cleanup: TEST_iter20_Madrid Plot deleted, Nottingham Victorian Refurb re-activated.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/portfolio/map", "issue": "Country name is returned in Nominatim's localised form (e.g. 'España' instead of 'Spain', 'Deutschland' instead of 'Germany'). This causes inconsistent user-facing labels and testID slugs. Consider passing `accept-language=en` to Nominatim so UI shows canonical English names. Reference: /app/backend/routes/fx.py:75."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "portfolio-map-screen", "issues": ["Country chip label follows the Nominatim locale (shows 'España' rather than 'Spain'); the testID slug becomes 'map-filter-country-españa' which contains a non-ASCII character — functional but fragile for automation. Consider normalising country names (en locale) or using an ASCII-safe slug (unidecode)."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration20.py",
+    "/app/test_reports/pytest/pytest_iteration20.xml"
+  ],
+  "action_items": [
+    "(Minor) Pass `accept-language=en` to Nominatim in routes/fx.py:portfolio_map so country names come back canonical (Spain, Germany, ...) rather than localised (España, Deutschland). This also stabilises the UI slug 'map-filter-country-<slug>' to ASCII.",
+    "(Pre-existing, unrelated) POST /api/documents still fails with 500 because EMERGENT_LLM_KEY lacks objstore scope (401 at integrations.emergentagent.com/objstore/api/v1/storage/init). Reported in iter 19 — not caused by iter 20."
+  ],
+  "critical_code_review_comments": [
+    "routes/fx.py:portfolio_map correctly caches country on the project (persists via geocoded_for + country) and respects Nominatim's 1 req/s + 10/call cap — great.",
+    "routes/fx.py:67 uses `d.get('geocoded_for') != d['address'] or 'country' not in d` to decide re-geocoding — this is backward-compatible for pre-existing projects that have geocoded_for but no country.",
+    "portfolio-map.tsx uses `(p.country ?? 'Unknown')` for grouping — matches spec. The filter predicate is pure/memoised and recomputes correctly on chip changes.",
+    "portfolio-map.tsx `map-pin-count` text appends ' · N total' only when `filtered` is true (type!=='all' || country || cur) — matches spec exactly.",
+    "map-filter-country-{slug} uses `c.replace(/\\s+/g, '-').toLowerCase()`. For non-ASCII country names (España) the slug keeps the ñ; consider adding `.normalize('NFKD').replace(/[\\u0300-\\u036f]/g,'')` for ASCII-safe slugs if backend starts returning localised names.",
+    "Chip from ui components has adequate touch targets (confirmed via screenshot — chips are well-sized on 390x844)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration20.py (new)",
+    "/app/test_reports/iteration_20.json (new)",
+    "/app/test_reports/pytest/pytest_iteration20.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (all filter combinations verified)"},
+  "seed_data_creation": "Backend tests: fresh TEST_iter20_<uuid>@mybuilder.app user, deleted via DELETE /api/auth/account at teardown; per-test projects auto-cleaned. UI test: created 'TEST_iter20_Madrid Plot' (EUR land, Madrid, Spain) under demo account, deleted after testing; Nottingham Victorian Refurb re-activated as demo's active project.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Demo account restored to active=Nottingham Victorian Refurb (GBP residential). GET /api/portfolio/map now includes `country` field (null for projects without an address). Nominatim country strings are localised ('España' for Spain) — if main agent adds `accept-language=en`, update tests that assert 'España'/'Spain' accordingly. Portfolio map UI chips use lowercase, space→dash slug of the country string for testID (map-filter-country-united-kingdom, map-filter-country-españa). Known broken (pre-existing env issue): POST /api/documents 500 due to objstore 401."
+}

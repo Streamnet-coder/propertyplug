@@ -1,11 +1,11 @@
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api, gbp, MapPin, Project, setCurrency } from "@/src/api";
-import { Button, fonts, Icon, radius, space, tap } from "@/src/components/ui";
+import { Button, Chip, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { mapHtml } from "@/src/components/map-html";
 import { PortfolioMapView } from "@/src/components/portfolio-map-view";
 import { queryClient } from "@/src/query-client";
@@ -20,7 +20,17 @@ export default function PortfolioMap() {
   const toast = useToast();
   const insets = useSafeAreaInsets();
   const q = usePortfolioMap();
-  const pins = useMemo(() => q.data ?? [], [q.data]);
+  const all = useMemo(() => q.data ?? [], [q.data]);
+  const [type, setType] = useState<"all" | "residential" | "land">("all");
+  const [country, setCountry] = useState<string | null>(null);
+  const [cur, setCur] = useState<string | null>(null);
+  const countries = useMemo(() => [...new Set(all.map((p) => p.country ?? "Unknown"))].sort(), [all]);
+  const currencies = useMemo(() => [...new Set(all.map((p) => p.currency))].sort(), [all]);
+  const pins = useMemo(
+    () => all.filter((p) => (type === "all" || p.property_type === type) && (!country || (p.country ?? "Unknown") === country) && (!cur || p.currency === cur)),
+    [all, type, country, cur],
+  );
+  const filtered = type !== "all" || !!country || !!cur;
   const html = useMemo(() => mapHtml(pins, { brand: colors.brand, land: colors.accent, active: colors.brandPrimary }), [pins, colors]);
   const missing = pins.filter((p) => p.lat == null);
 
@@ -52,14 +62,37 @@ export default function PortfolioMap() {
         </View>
       ) : (
         <>
+          <View style={s.filters} testID="map-filters">
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
+              {(["all", "residential", "land"] as const).map((t) => (
+                <Chip key={t} label={{ all: "All", residential: "Property", land: "Land" }[t]} selected={type === t} onPress={() => setType(t)} testID={`map-filter-type-${t}`} />
+              ))}
+              <View style={s.sep} />
+              {currencies.map((c) => (
+                <Chip key={c} label={c} selected={cur === c} onPress={() => setCur(cur === c ? null : c)} testID={`map-filter-currency-${c}`} />
+              ))}
+            </ScrollView>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
+              <Chip label="All countries" icon="globe" selected={!country} onPress={() => setCountry(null)} testID="map-filter-country-all" />
+              {countries.map((c) => (
+                <Chip key={c} label={c} selected={country === c} onPress={() => setCountry(country === c ? null : c)} testID={`map-filter-country-${c.replace(/\s+/g, "-").toLowerCase()}`} />
+              ))}
+            </ScrollView>
+          </View>
           <View style={{ flex: 1 }}><PortfolioMapView html={html} /></View>
           <ScrollView style={s.list} contentContainerStyle={{ padding: space.lg, gap: space.sm, paddingBottom: insets.bottom + space.lg }}>
             <View style={s.legend}>
               <Dot color={colors.brandPrimary} label="Active" />
               <Dot color={colors.brand} label="Property" />
               <Dot color={colors.accent} label="Land" />
-              <Text style={[s.muted, { marginLeft: "auto" }]} testID="map-pin-count">{pins.length - missing.length}/{pins.length} on map</Text>
+              <Text style={[s.muted, { marginLeft: "auto" }]} testID="map-pin-count">{pins.length - missing.length}/{pins.length} on map{filtered ? ` · ${all.length} total` : ""}</Text>
             </View>
+            {pins.length === 0 && (
+              <View style={{ alignItems: "center", gap: space.sm, paddingVertical: space.md }} testID="map-filter-empty">
+                <Text style={s.muted}>No properties match these filters.</Text>
+                <Button small variant="outline" title="Clear filters" onPress={() => { setType("all"); setCountry(null); setCur(null); }} testID="map-clear-filters" />
+              </View>
+            )}
             {pins.map((p) => (
               <View key={p.id} style={s.row} testID={`map-row-${p.id}`}>
                 <Icon name={p.property_type === "land" ? "land-plot" : "house"} size={18} color={p.lat == null ? colors.muted : colors.brand} />
@@ -68,6 +101,7 @@ export default function PortfolioMap() {
                   <Text style={s.muted} numberOfLines={1}>
                     {p.lat == null ? (p.address ? "Address not found · add a pin" : "No address · add a pin") : `${p.address} · ${gbp(p.estimated_valuation, 0, p.currency)}`}
                   </Text>
+                  {p.country && <Text style={s.muted} numberOfLines={1}>{p.country} · {p.currency}</Text>}
                 </View>
                 <Pressable onPress={() => { tap(); fixPin.mutate(p); }} hitSlop={8} testID={`map-fix-pin-${p.id}`} style={s.fix}>
                   {fixPin.isPending && fixPin.variables?.id === p.id ? <ActivityIndicator size="small" color={colors.brand} /> : <Text style={s.fixText}>{p.lat == null ? "Add pin" : "Edit"}</Text>}
@@ -98,6 +132,9 @@ const useStyles = makeStyles((c) => ({
   back: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.surfaceTertiary, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontFamily: fonts.bold, fontSize: 17, color: c.onSurface },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.md },
+  filters: { backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, paddingVertical: space.sm, gap: space.sm },
+  chips: { gap: space.sm, paddingHorizontal: space.lg, alignItems: "center" },
+  sep: { width: 1, height: 24, backgroundColor: c.border },
   list: { maxHeight: 280, backgroundColor: c.surface, borderTopWidth: 1, borderTopColor: c.border },
   legend: { flexDirection: "row", alignItems: "center", gap: space.md },
   row: { flexDirection: "row", alignItems: "center", gap: space.md, paddingVertical: space.sm },

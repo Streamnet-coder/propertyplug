@@ -64,26 +64,32 @@ async def portfolio_map(user: User = Depends(current_user)):
     """Every project with a map pin. Addresses are geocoded once via Nominatim (cached on the project); manual pins win."""
     active = (await db.users.find_one({"_id": ObjectId(user.id)}, {"active_project_id": 1}) or {}).get("active_project_id")
     docs = await db.projects.find({"user_id": user.id}, {"comparables": 0}).sort("_id", 1).to_list(500)
-    todo = [d for d in docs if not d.get("pin_manual") and d.get("address", "").strip() and d.get("geocoded_for") != d["address"]]
+    todo = [d for d in docs if d.get("address", "").strip() and (d.get("geocoded_for") != d["address"] or "country" not in d)]
     if todo:
         async with httpx.AsyncClient(timeout=8, headers={"User-Agent": "builder-assist/1.0 (support@mybuilder.app)"}) as c:
             for i, d in enumerate(todo[:10]):  # Nominatim policy: max 1 req/sec; cap per call
                 if i:
                     await asyncio.sleep(1.1)
-                lat = lon = None
+                lat = lon = country = None
                 try:
-                    r = await c.get("https://nominatim.openstreetmap.org/search", params={"q": d["address"], "format": "json", "limit": 1})
+                    r = await c.get("https://nominatim.openstreetmap.org/search", params={"q": d["address"], "format": "json", "limit": 1, "addressdetails": 1, "accept-language": "en"})
                     r.raise_for_status()
                     hit = r.json()
                     if hit:
                         lat, lon = float(hit[0]["lat"]), float(hit[0]["lon"])
+                        country = (hit[0].get("address") or {}).get("country")
                 except Exception as e:
                     logger.warning(f"Geocode failed for {d['_id']}: {e}")
                     continue  # retry next time
-                d.update(lat=lat, lon=lon, geocoded_for=d["address"])
-                await db.projects.update_one({"_id": d["_id"]}, {"$set": {"lat": lat, "lon": lon, "geocoded_for": d["address"]}})
+                upd = {"geocoded_for": d["address"], "country": country}
+                if not d.get("pin_manual"):  # manual pins keep their coordinates; we only learn the country
+                    upd.update(lat=lat, lon=lon)
+                d.update(upd)
+                await db.projects.update_one({"_id": d["_id"]}, {"$set": upd})
     summaries = {s["id"]: s for s in await project_summaries([Project.from_mongo(d) for d in docs])}
+    countries = {str(d["_id"]): d.get("country") for d in docs}
     return [{"id": s["id"], "name": s["name"], "address": s["address"], "lat": s["lat"], "lon": s["lon"], "pin_manual": s["pin_manual"],
+             "country": countries[s["id"]] or None,
              "property_type": s["property_type"], "currency": s["currency"], "total_spent": s["total_spent"], "total_budget": s["total_budget"],
              "estimated_valuation": s["estimated_valuation"], "active": s["id"] == active} for s in summaries.values()]
 
