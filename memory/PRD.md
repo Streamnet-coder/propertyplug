@@ -135,3 +135,6 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 
 ## Portal access end dates (Jun 2026)
 - portal_members.expires_on (YYYY-MM-DD, access through that day). active_q() filters login/_resolve/_account_by_code/portal_me; _membership 403 when expired. Teammates inherit lead's end date. Owner UI AccessEndPicker (presets/date/no end).
+
+## Expiry heads-up (Jun 2026)
+- GET /api/portal-members/expiring (all owner projects; ends within 7 days or ended last 7), POST /api/portal-members/{id}/extend {days} (from max(today,end)). ExpiringAccessCard on dashboard + portal-access.

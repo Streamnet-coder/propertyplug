@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 24 \u2014 Expiry Heads-Up (owners see which stakeholders' portal access ends this week and extend in one tap). Backend: 10/10 pytest tests in /app/backend/tests/test_iteration24.py pass (6.7s). Covered: (a) GET /api/portal-members/expiring returns members with expires_on within next 7 days (inclusive today) or ended within last 7 days; excludes >7 days out, no end date, and other-owner members (verified via a freshly registered second owner); 401 without auth; (b) response fields match spec: id,name,email,role,company,project_id,project_name,expires_on,expired,days_left; project_name resolves from projects collection; sort order is expires_on ascending (ended -2d, +1d, +5d); (c) POST /api/portal-members/{id}/extend adds days to current expires_on when still active (end+3 \u2192 end+33) and defaults to 30; (d) expired member: new end = today + days (not past+days); row.expired flips back to false in /portal-members; (e) days validation: 0, -1, 367 \u2192 422 (pydantic ge=1,le=366); (f) extending another owner's member \u2192 404; (g) after extend, the member is removed from /portal-members/expiring once new end > 7 days out. Mobile UI (390x844, demo@mybuilder.app): seeded one future-ending member (Alice HU, +2 days) and one ended-3-days-ago member (Bob Ended, via direct db update). Dashboard: scrolled past hero/quick-actions and found expiring-access-card rendered with 2 rows; expiring-row-{id} shows name\u00b7company and expiring-when-{id} with 'Ends Sun 18 Oct' (future) and 'Ended 13 Oct 2026' (red, past); project_name appended via ' \u00b7 Nottingham Victorian Refurb'; expiring-extend-{id} buttons labelled '+30 days' and 'Restore +30d'. Clicking expiring-access-open navigated to /portal-access and portal-access-screen testID present. On portal-access-screen the same ExpiringAccessCard renders at top (both rows); clicking expiring-extend-{id} on each row: future row disappeared and portal-member-expiry-{id} badge updated from 'Access until 18 Oct 2026' to 'Access until 17 Nov 2026' (+2d\u219232d); ended row disappeared and badge updated to 'Access until 15 Nov 2026' (today+30, confirming expired path uses max(today, cur)); toast 'Bob Ended's access now runs until 15 Nov 2026' visible. Card auto-hides when both rows cleared (component returns null for empty rows). No deprecated packages touched by this feature. No react-native issues detected.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration24.py",
+    "/app/test_reports/pytest/pytest_iteration24.xml"
+  ],
+  "action_items": [
+    "(Nit) ExpiringAccessCard useQuery has no staleTime \u2014 after one-tap extend, invalidateQueries(['portal-members']) triggers a refetch that drops the row, which is correct. However when navigating from dashboard \u2192 portal-access, both screens mount their own ExpiringAccessCard sharing the queryKey ['portal-members','expiring']; this works but means two Pressable elements with the same testID are mounted. Not a bug (dashboard is hidden behind the portal-access modal/overlay) but tests must scope with [data-testid='portal-access-screen'] prefix. Consider documenting or giving each location a distinct container testID.",
+    "(Nit) GET /api/portal-members/expiring accepts ?days=1..60 but the UI always calls with no param (defaults to 7); nothing wrong, just a reminder the endpoint is a bit more general than the heads-up card uses. Fine as-is."
+  ],
+  "critical_code_review_comments": [
+    "routes/portal.py:expiring_members() ordering is by stringified ISO date which is lexicographically correct for YYYY-MM-DD. Good.",
+    "routes/portal.py:extend_member() computes base = max(today, cur_end) when expired \u2014 matches spec exactly: new end for an expired member is today+days, for a still-active member it's current_end+days.",
+    "routes/portal.py:extend_member() filters by {'owner_id': user.id} so cross-owner extend \u2192 404. Confirmed with second owner.",
+    "routes/portal.py:ExtendIn validates days as ge=1,le=366 \u2014 verified bad values yield 422 before any auth/ownership check.",
+    "components/expiring-access-card.tsx:when() function uses days_left for 'today'/'tomorrow' and otherwise formats as 'Ends Mon 20 Oct'; for expired uses fmtEnd(e.expires_on) prefixed with 'Ended '. Matches spec wording.",
+    "components/expiring-access-card.tsx:border color flips to error when any row is expired; icon color follows the same rule. Matches design intent.",
+    "components/expiring-access-card.tsx:returns null when rows.length === 0 \u2014 both dashboard and portal-access correctly hide the card when the window is empty (verified live after extending the two seeded members)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration24.py (new)",
+    "/app/test_reports/pytest/pytest_iteration24.xml (new)",
+    "/app/test_reports/iteration_24.json (new)"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (dashboard card, portal-access card, future +30, ended Restore+30, badge update, row disappearance, empty-card auto-hide)"},
+  "seed_data_creation": "Backend tests: per-test uuid-tagged test_* emails cleaned up via fixture teardown; one secondary owner (test_otherowner_<uuid>@example.com) created via /auth/register and deleted after module. UI: 2 seeded members (test_ui_headsup_<rand>@example.com +2 days, test_ui_hu_ended_<rand>@example.com directly set to today-3 in db). After the UI run both were extended; a post-run script removed any remaining test_* members/accounts/handles/activity (2 members, 2 accounts, 2 handles deleted). No persistent test fixtures remain.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Expiry Heads-Up feature verified end-to-end. Important: the ExpiringAccessCard is mounted on BOTH the (tabs)/index.tsx dashboard AND inside app/portal-access.tsx FormScreen. During portal-access testing the dashboard copy is still in the DOM behind the FormScreen so [data-testid='expiring-extend-{id}'] matches two elements \u2014 ALWAYS scope with [data-testid='portal-access-screen'] prefix on that screen (first .click() will try the hidden one and raise 'not visible'). The queryKey ['portal-members','expiring'] is invalidated via invalidateQueries(['portal-members']) wildcard \u2014 so any mutation on a member refreshes the heads-up list. If the 7-day window is empty, the card returns null (not just hides) which also removes the testID from the DOM; use that as the 'card gone' assertion. Direct db simulation of ended state uses db.portal_members.update_one(...,{'$set':{'expires_on': PAST_ISO}}). For the second-owner isolation test, register a fresh user via /api/auth/register (which seeds a demo project) and use that owner's token to invite a member. Note: today in this env is 2026-10-16 \u2014 adjust any date-sensitive manual tests accordingly."
+}

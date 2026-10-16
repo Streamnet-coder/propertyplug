@@ -196,6 +196,34 @@ async def add_member(body: MemberIn, user: User = Depends(current_user)):
     return {**await member_out(m), "email_sent": sent}
 
 
+@router.get("/portal-members/expiring")
+async def expiring_members(days: int = Query(7, ge=1, le=60), user: User = Depends(current_user)):
+    """Across all the owner's projects: access ending within `days`, plus access that ended in the last 7 days (so it can be restored)."""
+    today = date.today()
+    lo, hi = (today - timedelta(days=7)).isoformat(), (today + timedelta(days=days)).isoformat()
+    docs = await db.portal_members.find({"owner_id": user.id, "expires_on": {"$gte": lo, "$lte": hi}}).sort("expires_on", 1).to_list(100)
+    names = {str(p["_id"]): p["name"] for p in await db.projects.find({"_id": {"$in": list({ObjectId(d["project_id"]) for d in docs})}}, {"name": 1}).to_list(100)}
+    return [{"id": str(d["_id"]), "name": d["name"], "email": d["email"], "role": d["role"], "company": d.get("company", ""), "project_id": d["project_id"],
+             "project_name": names.get(d["project_id"], ""), "expires_on": d["expires_on"], "expired": is_expired(d),
+             "days_left": (date.fromisoformat(d["expires_on"]) - today).days} for d in docs]
+
+
+class ExtendIn(BaseModel):
+    days: int = Field(30, ge=1, le=366)
+
+
+@router.post("/portal-members/{mid}/extend")
+async def extend_member(mid: str, body: ExtendIn, user: User = Depends(current_user)):
+    """One-tap extension: adds days to the current end date (or to today if it already passed)."""
+    m = await db.portal_members.find_one({"_id": oid(mid), "owner_id": user.id})
+    if not m:
+        raise HTTPException(404, "Not found")
+    base = max(date.today(), date.fromisoformat(m["expires_on"])) if m.get("expires_on") else date.today()
+    new = (base + timedelta(days=body.days)).isoformat()
+    await db.portal_members.update_one({"_id": m["_id"]}, {"$set": {"expires_on": new}})
+    return {"id": mid, "expires_on": new}
+
+
 @router.put("/portal-members/{mid}")
 async def update_member(mid: str, body: MemberUpdate, user: User = Depends(current_user)):
     m = await db.portal_members.find_one({"_id": oid(mid), "owner_id": user.id})
