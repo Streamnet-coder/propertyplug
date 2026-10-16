@@ -105,3 +105,7 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 
 ## Deployment Readiness (Jun 2026)
 - Deployment health check: PASS. Lint clean. Old test files/reports (iterations 1-12, backend_test.py) removed.
+
+## Spend Trend Charts (Jun 2026)
+- GET /api/line-items/trend: cumulative daily spend (line item actuals by created_at + linked receipts by date) vs total budget, per active project.
+- Budget tab: 'Spend vs budget' line chart + 'By category' bars (src/components/spend-charts.tsx). Tested iteration 17.

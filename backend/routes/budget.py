@@ -72,6 +72,28 @@ async def delete_item(item_id: str, user: User = Depends(current_user)):
     return {"ok": True}
 
 
+@router.get("/line-items/trend")
+async def spend_trend(user: User = Depends(current_user)):
+    """Cumulative spend per day (line item actuals by creation date + linked receipts by receipt date) vs total budget."""
+    pid = await active_pid(user)
+    items = await db.line_items.find({"user_id": user.id, "project_id": pid}, {"budgeted": 1, "actual": 1, "created_at": 1}).to_list(1000)
+    ids = {str(d["_id"]) for d in items}
+    daily: dict[str, float] = {}
+    for d in items:
+        if d.get("actual"):
+            day = d["created_at"][:10]
+            daily[day] = daily.get(day, 0) + d["actual"]
+    async for r in db.receipts.find({"project_id": pid, "line_item_id": {"$in": list(ids)}}, {"amount": 1, "date": 1}):
+        day = (r.get("date") or "")[:10]
+        if day:
+            daily[day] = daily.get(day, 0) + r["amount"]
+    total, points = 0.0, []
+    for day in sorted(daily):
+        total += daily[day]
+        points.append({"date": day, "spent": round(total, 2)})
+    return {"budget": round(sum(d.get("budgeted", 0) for d in items), 2), "points": points}
+
+
 class ReceiptIn(BaseModel):
     title: str
     amount: float

@@ -9,7 +9,8 @@ import { Button, Chip, EmptyState, fonts, Icon, radius, space, tap } from "@/src
 import { PdfButton } from "@/src/components/pdf-button";
 import { usesNativeTabs } from "@/src/navigation";
 import { shareBudgetPdf } from "@/src/report";
-import { invalidate, useLineItems } from "@/src/queries";
+import { invalidate, useLineItems, useSpendTrend } from "@/src/queries";
+import { CategoryBars, SpendTrendChart } from "@/src/components/spend-charts";
 import { makeStyles, useTheme } from "@/src/theme";
 
 const FILTERS: ("All" | Category | "Alerts")[] = ["All", "Hard Cost", "Soft Cost", "Contingency", "Alerts"];
@@ -22,6 +23,7 @@ export default function Budget() {
   const { colors } = useTheme();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
   const q = useLineItems();
+  const trend = useSpendTrend();
 
   const items = useMemo(() => (q.data ?? []).filter((i) => filter === "All" || (filter === "Alerts" ? !!i.alert : i.category === filter)), [q.data, filter]);
   const totals = items.reduce((a, i) => ({ b: a.b + i.budgeted, a: a.a + i.spent }), { b: 0, a: 0 });
@@ -147,6 +149,8 @@ export default function Budget() {
                   <Text style={[s.sumVal, { color: totals.b - totals.a < 0 ? colors.error : colors.success }]}>{gbp(totals.b - totals.a)}</Text>
                 </View>
               </View>
+              {trend.data && <SpendTrendChart trend={trend.data} />}
+              <CategoryBars items={q.data ?? []} />
             </View>
           }
           ListEmptyComponent={<EmptyState icon="clipboard-list" title="No line items logged" subtitle="Add your first cost to start tracking variance." testID="budget-empty" />}

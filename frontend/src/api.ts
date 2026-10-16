@@ -108,6 +108,7 @@ export type Snag = { id: string; room: string; description: string; priority: "l
 export type Referrals = { count: number; months_earned: number; trial_ends: string; recent: { name: string; source: string; date: string }[] };
 export type VarianceAlert = "over" | "near" | null;
 export type LineItem = { id: string; category: Category; name: string; budgeted: number; actual: number; supplier: string; status: string; linked_spend: number; spent: number; alert: VarianceAlert };
+export type SpendTrend = { budget: number; points: { date: string; spent: number }[] };
 export type ContactKind = "trade" | "subcontractor" | "stakeholder";
 export type Contact = { id: string; kind: ContactKind; name: string; role: string; phone: string; email: string; status: string; schedule: string; cost: string };
 export type Receipt = { id: string; title: string; amount: number; date: string; category: string; supplier: string; storage_path?: string | null };

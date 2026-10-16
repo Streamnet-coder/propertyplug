@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { api, Branding, Comparable, Contact, ContactKind, Contract, Digest, LineItem, MediaItem, Milestone, Project, QuoteRequest, Receipt, Referrals, ShoppingItem, Snag } from "@/src/api";
+import { api, Branding, Comparable, Contact, ContactKind, Contract, Digest, LineItem, MediaItem, Milestone, Project, QuoteRequest, Receipt, Referrals, ShoppingItem, Snag, SpendTrend } from "@/src/api";
 import { queryClient } from "@/src/query-client";
 
 export const useProject = () => useQuery({ queryKey: ["project"], queryFn: () => api<Project>("/project") });
 export const useLineItems = () => useQuery({ queryKey: ["line-items"], queryFn: () => api<LineItem[]>("/line-items") });
+export const useSpendTrend = () => useQuery({ queryKey: ["line-items", "trend"], queryFn: () => api<SpendTrend>("/line-items/trend") });
 export const useReceipts = () => useQuery({ queryKey: ["receipts"], queryFn: () => api<Receipt[]>("/receipts") });
 export const useMedia = () => useQuery({ queryKey: ["media"], queryFn: () => api<MediaItem[]>("/media") });
 export const useContacts = (kind: ContactKind, enabled = true) =>

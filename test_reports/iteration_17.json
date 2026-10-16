@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 17 — Spend Trend Chart feature (GET /api/line-items/trend + Budget tab charts). Backend: 8/8 pytest tests pass covering contract, auth, empty-points, cumulative math (actuals by created_at, linked receipts by date, same-day combined), unlinked receipts ignored, per-active-project scoping, and shopping-purchase → trend end-to-end. Frontend: Budget tab renders spend-trend-chart (status 98% used), spend-trend-status, category-bars-chart with all three category-bar-{hard-cost|soft-cost|contingency} rows showing correct £spent / £budgeted. SpendTrend sums exactly match sum(spent) across GET /api/line-items (£18,300 / £18,700 on demo seed).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "budget", "issues": ["With only a single trend point (demo seed), the SpendTrendChart renders just one circle at mid-width and the budget dashed line — visually the chart looks sparse until a 2nd actual is logged. Not a bug (pts.length===1 path is intentional) but main agent may want a hint like 'Add another actual to see trend' for 1-point case."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration17.py",
+    "/app/test_reports/pytest/pytest_iteration17.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/budget.py spend_trend: uses d['created_at'][:10] which assumes ISO-UTC string — safe given models.now_iso convention. If created_at ever stored as datetime, slicing would break; consider explicit date coercion.",
+    "routes/budget.py spend_trend: iterates all receipts twice via async for and sums by r.get('date')[:10]; empty-string date receipts are silently dropped (correct). Final `sum(d.get('budgeted', 0))` can mix int/float — minor, round() handles it.",
+    "SpendTrendChart (spend-charts.tsx): when trend.budget == 0 and last > 0, over flag is false and status shows 'No budget set' — correct, but legend omits Budget swatch (fine). Over=0 edge is handled.",
+    "CategoryBars: filters rows where b>0 || sp>0 — if all three categories empty returns null (no card). This means a brand-new user sees SpendTrendChart (empty state) but no CategoryBars at all, which is acceptable."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration17.py (new)"],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100%"},
+  "seed_data_creation": "Tests register short-lived TEST_ users (cleaned via DELETE /api/auth/account). Deterministic tests clear per-user line_items/receipts in Mongo and insert controlled fixtures with explicit created_at/date fields.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Pattern notice: /api/auth/register returns u.active_project_id as None in the response payload because create_user() calls seed_user_data() which updates the users.active_project_id AFTER user_out(u) is captured — relying on u['user']['active_project_id'] from register response is a trap. Always fetch active pid via GET /api/project after register (see active_pid helper in test_iteration17.py).",
+  "rca_of_issue": "N/A — feature works end-to-end. Spend trend math verified: actuals on line_item.created_at date + receipts.date for receipts with line_item_id, unlinked receipts ignored, sorted and cumulative; equals GET /api/line-items spent sum."
+}
