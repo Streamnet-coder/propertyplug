@@ -8,6 +8,7 @@ import { api, gbp, MapPin, Project, setCurrency } from "@/src/api";
 import { Button, Chip, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { mapHtml } from "@/src/components/map-html";
 import { PortfolioMapView } from "@/src/components/portfolio-map-view";
+import { FilterTotals } from "@/src/components/filter-totals";
 import { queryClient } from "@/src/query-client";
 import { usePortfolioMap } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -80,6 +81,7 @@ export default function PortfolioMap() {
             </ScrollView>
           </View>
           <View style={{ flex: 1 }}><PortfolioMapView html={html} /></View>
+          <FilterTotals pins={pins} filtered={filtered} />
           <ScrollView style={s.list} contentContainerStyle={{ padding: space.lg, gap: space.sm, paddingBottom: insets.bottom + space.lg }}>
             <View style={s.legend}>
               <Dot color={colors.brandPrimary} label="Active" />

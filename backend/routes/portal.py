@@ -73,13 +73,19 @@ class MemberUpdate(BaseModel):
     company: Optional[str] = Field(None, max_length=80)
     doc_ids: Optional[List[str]] = Field(None, max_length=200)
     digest: Optional[bool] = None
+    is_lead: Optional[bool] = None
+
+
+class TeammateIn(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    email: EmailStr
 
 
 async def member_out(m: dict) -> dict:
     h = await db.portal_handles.find_one({"email": m["email"]}, {"handle": 1})
     acc = await db.portal_accounts.find_one({"email": m["email"]}, {"password_hash": 1})
     return {"id": str(m["_id"]), "name": m["name"], "email": m["email"], "role": m["role"], "company": m.get("company", ""), "doc_ids": m["doc_ids"], "digest": m["digest"],
-            "password_set": bool(acc and acc.get("password_hash")),
+            "password_set": bool(acc and acc.get("password_hash")), "is_lead": m.get("is_lead", False), "invited_by": m.get("invited_by"),
             "handle": handle_addr(h["handle"]) if h else None, "last_login": m.get("last_login"), "invited_at": m.get("invited_at"),
             "portal_url": f"{m['origin'].rstrip('/')}/api/portal" if m.get("origin") else None}
 
@@ -161,6 +167,8 @@ async def update_member(mid: str, body: MemberUpdate, user: User = Depends(curre
     if not m:
         raise HTTPException(404, "Not found")
     upd = body.model_dump(exclude_unset=True)
+    if upd.get("is_lead") and not (upd.get("company", m.get("company")) or "").strip():
+        raise HTTPException(400, "Add their company first so we know which team they lead")
     if "doc_ids" in upd:
         own = {str(d["_id"]) for d in await db.documents.find({"_id": {"$in": [oid(i) for i in upd["doc_ids"]]}, "user_id": user.id, "project_id": m["project_id"]}, {"_id": 1}).to_list(200)}
         upd["doc_ids"] = [i for i in upd["doc_ids"] if i in own]
@@ -190,16 +198,16 @@ async def remove_member(mid: str, user: User = Depends(current_user)):
     return {"ok": True}
 
 
-async def log_activity(m: dict, kind: str, doc: dict | None = None):
+async def log_activity(m: dict, kind: str, doc: dict | None = None, detail: str | None = None):
     await db.portal_activity.insert_one({"owner_id": m["owner_id"], "project_id": m["project_id"], "email": m["email"], "name": m["name"],
                                          "kind": kind, "doc_id": str(doc["_id"]) if doc else None, "doc_title": doc["title"] if doc else None,
-                                         "doc_type": doc["doc_type"] if doc else None, "at": now_iso()})
+                                         "doc_type": doc["doc_type"] if doc else None, "detail": detail, "at": now_iso()})
 
 
 @router.get("/portal-activity")
 async def portal_activity(user: User = Depends(current_user)):
     docs = await db.portal_activity.find({"owner_id": user.id, "project_id": await active_pid(user)}).sort("at", -1).to_list(300)
-    return [{"id": str(a["_id"]), **{k: a.get(k) for k in ("email", "name", "kind", "doc_id", "doc_title", "doc_type", "at")}} for a in docs]
+    return [{"id": str(a["_id"]), **{k: a.get(k) for k in ("email", "name", "kind", "doc_id", "doc_title", "doc_type", "detail", "at")}} for a in docs]
 
 
 # ---------------- Questions & comments ----------------
@@ -456,6 +464,7 @@ async def portal_project(pid: str, week: int = Query(0, ge=0, le=52), email: str
     return {"name": s["name"], "address": s["address"], "stage": s["current_stage"], "milestones_done": s["milestones_done"],
             "milestones_total": s["milestones_total"], "total_budget": s["total_budget"], "total_spent": s["total_spent"],
             "purchase_price": s["purchase_price"], "estimated_valuation": s["estimated_valuation"], "role": m["role"], "symbol": sym(s["currency"]),
+            "company": m.get("company", ""), "is_lead": bool(m.get("is_lead") and m.get("company")),
             "documents": [{k: v for k, v in doc_out(d).items() if k != "share_url"} for d in docs],
             "digest": await build_digest(pid, week) if m["digest"] else None}
 
@@ -501,6 +510,67 @@ async def ask_question(pid: str, body: QuestionIn, email: str = Depends(portal_e
         except (EmailError, ValueError) as e:
             logger.warning(f"Portal question email failed: {e}")
     return q_out(q)
+
+
+# ---------------- Team leads manage their own company's teammates ----------------
+async def _lead(email: str, pid: str) -> dict:
+    m = await _membership(email, pid)
+    if not (m.get("is_lead") and m.get("company")):
+        raise HTTPException(403, "Only your team lead can manage teammates")
+    return m
+
+
+def _team_q(lead: dict) -> dict:
+    return {"owner_id": lead["owner_id"], "project_id": lead["project_id"], "company": lead["company"]}
+
+
+@router.get("/portal/projects/{pid}/team")
+async def team_list(pid: str, email: str = Depends(portal_email)):
+    lead = await _lead(email, pid)
+    out = []
+    for m in await db.portal_members.find(_team_q(lead)).sort("created_at", 1).to_list(100):
+        o = await member_out(m)
+        out.append({k: o[k] for k in ("id", "name", "email", "role", "is_lead", "password_set", "last_login", "invited_by")} | {"is_you": m["email"] == email})
+    return out
+
+
+@router.post("/portal/projects/{pid}/team")
+async def team_invite(pid: str, body: TeammateIn, email: str = Depends(portal_email)):
+    lead = await _lead(email, pid)
+    new = body.email.lower()
+    if await db.portal_members.find_one({"project_id": pid, "email": new}):
+        raise HTTPException(400, "This person already has access to this project")
+    if await db.portal_members.count_documents({"owner_id": lead["owner_id"], "project_id": pid}) >= 25:
+        raise HTTPException(400, "This project has reached its stakeholder limit. Ask the owner")
+    await ensure_handle(new, body.name)
+    code = await issue_access_code(new)
+    m = {"owner_id": lead["owner_id"], "project_id": pid, "name": body.name.strip(), "email": new, "role": lead["role"], "company": lead["company"],
+         "doc_ids": list(lead["doc_ids"]), "digest": lead["digest"], "origin": lead["origin"], "invited_by": email, "created_at": now_iso(), "invited_at": now_iso()}
+    m["_id"] = (await db.portal_members.insert_one(m)).inserted_id
+    owner = User.from_mongo(await db.users.find_one({"_id": ObjectId(lead["owner_id"])}))
+    p = await db.projects.find_one({"_id": ObjectId(pid)}, {"name": 1}) or {}
+    await log_activity(lead, "team_invite", detail=f"{m['name']} ({new})")
+    await log_message(owner.id, pid, name=m["name"], email=new, channel="email", kind="portal_invite", summary=f"{lead['name']} ({lead['company']}) added them to the stakeholder portal for {p.get('name', '')}")
+    try:
+        await _invite_email(m, owner, p.get("name", "the project"), code)
+        sent = True
+    except (EmailError, ValueError) as e:
+        logger.warning(f"Team invite email failed: {e}")
+        sent = False
+    return {"id": str(m["_id"]), "name": m["name"], "email": new, "email_sent": sent}
+
+
+@router.delete("/portal/projects/{pid}/team/{mid}")
+async def team_remove(pid: str, mid: str, email: str = Depends(portal_email)):
+    lead = await _lead(email, pid)
+    t = await db.portal_members.find_one({"_id": oid(mid), **_team_q(lead)})
+    if not t:
+        raise HTTPException(404, "Teammate not found")
+    if t["email"] == email or t.get("is_lead"):
+        raise HTTPException(400, "Team leads can only be removed by the project owner")
+    await db.portal_members.delete_one({"_id": t["_id"]})
+    await log_activity(lead, "team_remove", detail=f"{t['name']} ({t['email']})")
+    return {"ok": True}
 
 
 PORTAL_JS = """
@@ -553,6 +623,12 @@ const qs=await(await api(`/portal/projects/${pid}/questions`)).json();
 $('#app').insertAdjacentHTML('beforeend',`<div class='card' id='portal-questions'><h2>Questions & comments</h2><p class='cap'>Ask the project owner anything. You'll get an email when they reply.</p>
 <textarea id='q-text' rows='3' maxlength='2000' style='width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;font-size:15px' placeholder='e.g. When is the kitchen being fitted?'></textarea><button id='q-send' style='margin-top:8px'>Send question</button><p id='q-err' class='over'></p>
 ${qs.map(q=>`<div class='q' style='border-top:1px solid #e2e8f0;padding-top:10px;margin-top:10px'><div><b>You</b> <span class='cap'>${new Date(q.created_at).toLocaleString('en-GB')}</span></div><div>${esc(q.text)}</div>${q.reply?`<div style='margin-top:6px;padding:8px 10px;background:#f0fdfa;border-radius:8px' class='q-reply'><b>Reply</b> <span class='cap'>${new Date(q.replied_at).toLocaleString('en-GB')}</span><div>${esc(q.reply)}</div></div>`:"<div class='cap'>Awaiting reply</div>"}</div>`).join('')}</div>`);
+if(p.is_lead){const tm=await(await api(`/portal/projects/${pid}/team`)).json();
+$('#app').insertAdjacentHTML('beforeend',`<div class='card' id='portal-team'><h2>My team · ${esc(p.company)}</h2><p class='cap'>You're the team lead. Teammates get their own access code and password, and see the same documents and updates as you.</p>
+<table>${tm.map(t=>`<tr><td><b>${esc(t.name)}</b>${t.is_lead?" <span class='cap'>· Lead</span>":''}${t.is_you?" <span class='cap'>(you)</span>":''}<div class='cap'>${esc(t.email)} · ${t.password_set?'password set':'invite sent'}</div></td><td class='n'>${t.is_you||t.is_lead?'':`<a href='#' class='t-rm' data-id='${t.id}' data-n='${esc(t.name)}'>Remove</a>`}</td></tr>`).join('')}</table>
+<label>Name</label><input id='t-name' placeholder='e.g. Priya Shah'/><label>Email</label><input id='t-email' type='email' placeholder='priya@company.com'/><button id='t-add'>Invite teammate</button><p id='t-err' class='over'></p></div>`);
+$('#t-add').onclick=async()=>{const n=$('#t-name').value.trim(),em=$('#t-email').value.trim();if(!n||!em){$('#t-err').textContent='Enter a name and email';return}$('#t-add').disabled=true;try{const r=await(await api(`/portal/projects/${pid}/team`,{method:'POST',body:JSON.stringify({name:n,email:em})})).json();if(!r.email_sent)alert('Added, but the invite email could not be sent. Ask the owner to resend it.');project(pid,me)}catch(e){$('#t-err').textContent=e.message;$('#t-add').disabled=false}};
+document.querySelectorAll('.t-rm').forEach(a=>a.onclick=async e=>{e.preventDefault();if(!confirm('Remove '+a.dataset.n+' from this project?'))return;try{await api(`/portal/projects/${pid}/team/${a.dataset.id}`,{method:'DELETE'});project(pid,me)}catch(err){alert(err.message)}})}
 $('#q-send').onclick=async()=>{const v=$('#q-text').value.trim();if(v.length<2)return;$('#q-send').disabled=true;try{await api(`/portal/projects/${pid}/questions`,{method:'POST',body:JSON.stringify({text:v})});project(pid,me)}catch(e){$('#q-err').textContent=e.message;$('#q-send').disabled=false}};
 document.querySelectorAll('.dl').forEach(a=>a.onclick=e=>{e.preventDefault();dl(pid,p.documents[+a.dataset.i]).catch(err=>alert(err.message))});
 $('#logout').onclick=logout;$('#all')&&($('#all').onclick=e=>{e.preventDefault();week=0;home()});$('#prev')&&($('#prev').onclick=e=>{e.preventDefault();week++;project(pid,me)});$('#next')&&($('#next').onclick=e=>{e.preventDefault();week--;project(pid,me)})}

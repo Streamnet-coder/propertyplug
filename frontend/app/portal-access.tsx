@@ -95,7 +95,7 @@ export default function PortalAccess() {
           <Pressable onPress={() => { tap(); setOpen(open === m.id ? null : m.id); }} style={{ flexDirection: "row", alignItems: "center", gap: space.md }} testID={`portal-member-toggle-${m.id}`}>
             <View style={{ flex: 1 }}>
               {m.company ? <Text style={s.company} testID={`portal-member-company-${m.id}`}>{m.company}</Text> : null}
-              <Text style={s.name}>{m.name} · {m.role}</Text>
+              <Text style={s.name}>{m.name} · {m.role}{m.is_lead ? " · Team lead" : ""}</Text>
               <Text style={[s.muted, { color: colors.brand, fontFamily: fonts.semibold }]} testID={`portal-member-handle-${m.id}`}>{m.handle}</Text>
               <Text style={s.muted}>{m.email} · {m.doc_ids.length} document{m.doc_ids.length === 1 ? "" : "s"}{m.digest ? " · weekly updates" : ""} · {m.last_login ? `last seen ${new Date(m.last_login).toLocaleDateString("en-GB")}` : "not signed in yet"}</Text>
               <View style={[s.status, { backgroundColor: m.password_set ? colors.brandTertiary : colors.surfaceSecondary }]} testID={`portal-member-password-${m.id}`}>
@@ -111,6 +111,14 @@ export default function PortalAccess() {
                 <Text style={s.name}>Show weekly updates</Text>
                 <Switch value={m.digest} onValueChange={(v) => update.mutate({ id: m.id, body: { digest: v } })} trackColor={{ true: colors.brand, false: colors.borderStrong }} thumbColor={colors.surface} testID={`portal-digest-switch-${m.id}`} />
               </View>
+              <View style={s.toggle}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.name}>Team lead</Text>
+                  <Text style={s.muted}>{m.company ? `Can invite and remove ${m.company} teammates from the portal` : "Add a company to make them a lead"}</Text>
+                </View>
+                <Switch value={m.is_lead} disabled={!m.company} onValueChange={(v) => update.mutate({ id: m.id, body: { is_lead: v } })} trackColor={{ true: colors.brand, false: colors.borderStrong }} thumbColor={colors.surface} testID={`portal-lead-switch-${m.id}`} />
+              </View>
+              {m.invited_by && <Text style={s.muted} testID={`portal-member-invited-by-${m.id}`}>Added by their team lead ({m.invited_by})</Text>}
               <Text style={s.label}>Documents they can see</Text>
               {(docs.data ?? []).length === 0 && <Text style={s.muted}>Upload documents first.</Text>}
               {(docs.data ?? []).map((d) => {

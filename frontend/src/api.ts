@@ -105,7 +105,7 @@ export type PlanningApp = {
   notes: string;
   days_to_decision: number | null;
 };
-export type MapPin = Pick<Project, "id" | "name" | "address" | "lat" | "lon" | "pin_manual" | "property_type" | "currency" | "total_spent" | "total_budget" | "estimated_valuation"> & { active: boolean; country: string | null };
+export type MapPin = Pick<Project, "id" | "name" | "address" | "lat" | "lon" | "pin_manual" | "property_type" | "currency" | "total_spent" | "total_budget" | "estimated_valuation" | "purchase_price"> & { active: boolean; country: string | null };
 type PortfolioSums = { purchase_price: number; estimated_valuation: number; total_budget: number; total_spent: number };
 export type Portfolio = {
   home_currency: CurrencyCode;
@@ -189,8 +189,8 @@ export const DOC_TYPES = ["Title deeds", "Survey", "Planning", "Building control
 export type DocItem = { id: string; title: string; doc_type: string; filename: string; ext: string; size: number; content_type: string; notes: string; created_at: string; share_url: string | null; expires_on: string | null; expiry_status: "expired" | "soon" | "ok" | null; days_left: number | null };
 export const fileSize = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 export type DocFolder = { id: string; title: string; doc_count: number; created_at: string; url: string };
-export type PortalMember = { id: string; name: string; email: string; role: string; company: string; password_set: boolean; doc_ids: string[]; digest: boolean; handle: string | null; last_login: string | null; invited_at: string | null; portal_url: string | null };
+export type PortalMember = { id: string; name: string; email: string; role: string; company: string; password_set: boolean; is_lead: boolean; invited_by: string | null; doc_ids: string[]; digest: boolean; handle: string | null; last_login: string | null; invited_at: string | null; portal_url: string | null };
 export const expiryLabel = (d: { expiry_status: string | null; days_left: number | null }) =>
   d.expiry_status === "expired" ? `Expired ${Math.abs(d.days_left ?? 0)} day${Math.abs(d.days_left ?? 0) === 1 ? "" : "s"} ago` : d.expiry_status === "soon" ? (d.days_left === 0 ? "Expires today" : `Expires in ${d.days_left} day${d.days_left === 1 ? "" : "s"}`) : null;
-export type PortalActivity = { id: string; email: string; name: string; kind: "login" | "view" | "download"; doc_id: string | null; doc_title: string | null; doc_type: string | null; at: string };
+export type PortalActivity = { id: string; email: string; name: string; kind: "login" | "view" | "download" | "team_invite" | "team_remove"; doc_id: string | null; doc_title: string | null; doc_type: string | null; detail?: string | null; at: string };
 export type PortalQuestion = { id: string; name: string; email: string; text: string; created_at: string; reply: string | null; replied_at: string | null };

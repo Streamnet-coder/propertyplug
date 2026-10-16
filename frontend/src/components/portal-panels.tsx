@@ -13,6 +13,8 @@ const KIND: Record<string, { icon: IconName; label: (a: PortalActivity) => strin
   login: { icon: "log-in", label: () => "Signed in to the portal" },
   view: { icon: "eye", label: () => "Viewed the project" },
   download: { icon: "download", label: (a) => `Downloaded ${a.doc_title} (${a.doc_type})` },
+  team_invite: { icon: "user-plus", label: (a) => `Invited teammate ${a.detail ?? ""}` },
+  team_remove: { icon: "user-x", label: (a) => `Removed teammate ${a.detail ?? ""}` },
 };
 
 export const usePortalQuestions = () => useQuery({ queryKey: ["portal-questions"], queryFn: () => api<PortalQuestion[]>("/portal-questions") });

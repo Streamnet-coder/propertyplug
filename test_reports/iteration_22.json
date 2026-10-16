@@ -1,0 +1,46 @@
+{
+  "summary": "Iteration 22 — Country totals on portfolio map + Team Admin / Team-Lead role. Backend: 14/14 pytest tests in /app/backend/tests/test_iteration22.py pass (2 workers, 8.6s). Covered: (a) GET /api/portfolio/map pins now carry purchase_price plus estimated_valuation/total_budget/total_spent/currency/country; GET /api/portfolio exposes by_currency[].rate_to_home>0; (b) PUT /api/portal-members/{id} {is_lead:true} -> 400 when member has empty company (incl. attempt to set is_lead=true + company='   ' in same call); 200 and is_lead=true with a company; GET /api/portal-members includes is_lead and invited_by fields; (c) portal-token (minted directly via PORTAL_SECRET = JWT_SECRET+'|portal'): GET /api/portal/projects/{pid} returns {is_lead:true, company:'Northfield Lending'} for lead; GET /api/portal/projects/{pid}/team lists only same-company members with is_you flag; non-lead -> 403; POST /api/portal/projects/{pid}/team {name,email} creates teammate inheriting lead's role/company/doc_ids/digest and invited_by=lead-email, duplicate email -> 400, GET /api/portal-activity shows kind=team_invite with detail including the new email; DELETE /api/portal/projects/{pid}/team/{mid} removes a non-lead teammate in same company, logs team_remove with detail, self-removal -> 400, removing another lead in same company -> 400, member of another company -> 404. Web portal (390x844, lead JWT injected into sessionStorage.pt): #portal-project renders, #portal-team card is visible with #t-name/#t-email/#t-add and a `.t-rm` remove link; adding a teammate reloads the view and the teammate appears, confirm dialog fires on remove. Mobile portal-access (demo@mybuilder.app, /portal-access): existing promoted lead card shows ' · Team lead' on the name row; expanding the card reveals portal-lead-switch-{id} with switch enabled when company is set (role=input=on); teammate card shows portal-member-invited-by-{id} == 'Added by their team lead (test_ui_lead_517901@example.com)'; Activity tab shows both 'Invited teammate UI Mate (...)' and 'Removed teammate RM Me (...)' entries. Portfolio map (new user with GBP Nottingham + EUR Barcelona project, 390x844): map-filter-totals bar renders under the map with 'Portfolio totals · 2 properties' + 'in GBP at live rates' tag and converted values (£185,000/£265,000/£48,500/£20,496); applying map-filter-currency-EUR flips title to 'Filtered totals · 1 property' and tag to 'EUR' with native €0 values; applying map-filter-type-land (no land) correctly hides map-filter-totals and shows map-filter-empty with Clear filters. All four map-total-{purchase_price,estimated_valuation,total_budget,total_spent} testIDs + map-totals-currency are present. Teardown: deleted 17 test_*@example.com users and all related portal_members/accounts/handles/activity/questions rows; re-activated 'Nottingham Victorian Refurb' for demo@mybuilder.app.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "DELETE /api/portal/projects/{pid}/team/{mid}", "issue": "If a lead tries to remove themselves, the API returns 400 'Team leads can only be removed by the project owner' — accurate but could read 'You cannot remove yourself' for self-removal to distinguish from the other-lead case. Reference: /app/backend/routes/portal.py:569-570."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration22.py",
+    "/app/test_reports/pytest/pytest_iteration22.xml"
+  ],
+  "action_items": [
+    "(Nit) Split the single 400 message in team_remove into two: self-removal vs removing another lead — easier UX in the web portal where the SPA shows the raw detail via alert().",
+    "(Nit) FilterTotals converts cross-currency sums with rate_to_home from /api/portfolio; if the Portfolio screen hasn't been visited yet in the same session the query may still be loading when the user opens Portfolio map directly — component falls back to returning null (no crash). Observed: load delay <1s on cold cache. Consider prefetching portfolio on map-screen mount.",
+    "(Pre-existing, unrelated) POST /api/documents still 500s due to EMERGENT_LLM_KEY lacking objstore scope — carried from iter 19/21."
+  ],
+  "critical_code_review_comments": [
+    "routes/portal.py:_lead gates on `m.get('is_lead') and m.get('company')` — correct, blocks a stale is_lead=true row whose company was later cleared (defence in depth beyond the PUT validation).",
+    "routes/portal.py:team_invite inherits role/company/doc_ids/digest/origin from the lead and sets invited_by=lead's email — matches spec. Also increments the per-project 25-stakeholder cap against owner_id+project_id, so leads cannot bypass the owner's limit.",
+    "routes/portal.py:team_remove uses `t.get('is_lead')` to block removal of co-leads AND `t['email'] == email` for self — both covered. Different detail string would help UI differentiate.",
+    "routes/portal.py:portal_project returns is_lead ONLY when both is_lead=true AND company is non-empty (`bool(m.get('is_lead') and m.get('company'))`) — consistent with PUT guard. Good.",
+    "routes/portal.py:member_out now surfaces invited_by, is_lead, company — matches spec. Note: the password_set field reads portal_accounts for every row; for a project with 25 members this is 25 extra queries. Consider aggregating in list_members (minor perf; not a blocker).",
+    "routes/fx.py:portfolio_map now returns purchase_price per pin as spec. project_summaries source of truth looks correct.",
+    "components/filter-totals.tsx: converts via rate_to_home only when all currencies have a rate; otherwise returns null — safe but silently hides totals if portfolio query is loading. Could show a 'Calculating…' skeleton instead.",
+    "components/filter-totals.tsx: colour-codes the tag red when `budget > 0 && spent > budget` — only when `single` currency doesn't matter? Actually works for mixed too since we compare converted totals. Fine.",
+    "app/portal-access.tsx: switch is `disabled={!m.company}` which correctly prevents toggling is_lead for members without a company; the browser Switch does not expose this as aria-disabled, but is wired via React Native Switch's disabled prop (works on native and web).",
+    "PORTAL_JS: the lead team-management block uses `window.confirm` for remove — fine for MVP; accessibility and i18n deferred."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration22.py (new)",
+    "/app/test_reports/pytest/pytest_iteration22.xml (new)",
+    "/app/test_reports/iteration_22.json (new)"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% (web portal lead flow + mobile portal-access team-lead toggle + portfolio-map FilterTotals mixed/single/hidden states)"},
+  "seed_data_creation": "Backend tests: each test uses test_<uuid>@example.com; portal_accounts/handles/members/codes rows cleaned by fixture teardown. UI tests: registered test_map_<rand>@example.com (then added a Barcelona EUR project to assert mixed-currency totals) and under demo@mybuilder.app invited test_ui_lead_<rand>@example.com + promoted to lead to assert 'Team lead' chip, lead switch and team-card flow in web portal. Final cleanup: deleted 17 test_*@example.com users, 2 portal_members, 2 portal_accounts, 2 portal_handles, 59 portal_activity rows; re-activated 'Nottingham Victorian Refurb' for demo@mybuilder.app.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Country totals and team-admin backend are solid. The FilterTotals component depends on /api/portfolio.by_currency[].rate_to_home — if that endpoint ever omits a currency that has pins, the component intentionally renders nothing to avoid showing wrong numbers; keep that invariant in future portfolio changes. Portal-side: _lead() dependency is used by both team_list and team_invite/remove — any new team endpoint should reuse it so the 'is_lead && company' invariant holds. For UI-level tests, keep injecting lead portal tokens into sessionStorage.pt (web portal) rather than running OTP flow — same pattern as iter 21."
+}

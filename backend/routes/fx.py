@@ -91,6 +91,7 @@ async def portfolio_map(user: User = Depends(current_user)):
     return [{"id": s["id"], "name": s["name"], "address": s["address"], "lat": s["lat"], "lon": s["lon"], "pin_manual": s["pin_manual"],
              "country": countries[s["id"]] or None,
              "property_type": s["property_type"], "currency": s["currency"], "total_spent": s["total_spent"], "total_budget": s["total_budget"],
+             "purchase_price": s["purchase_price"],
              "estimated_valuation": s["estimated_valuation"], "active": s["id"] == active} for s in summaries.values()]
 
 

@@ -128,3 +128,7 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - portal_accounts {email, code_lookup HMAC, password_hash bcrypt, failed, locked_until, reset}. Invite emails BA-XXXX-XXXX-XXXX-XXXX code until password set.
 - /portal/activate, /portal/login-password (5 fails -> 15 min lock), /portal/password-reset/request|confirm. Email OTP login kept.
 - Team: member.company + 'Add a teammate' (copies role/docs/digest). password_set shown to owner.
+
+## Map filter totals + Team leads (Jun 2026)
+- Map: FilterTotals bar (purchase/value/budget/spent for filtered pins; native currency if single else home currency via portfolio rates).
+- Portal: member.is_lead (requires company), invited_by. Lead endpoints /portal/projects/{pid}/team GET/POST/DELETE (same owner+project+company; can't remove leads/self). Activity kinds team_invite/team_remove.
