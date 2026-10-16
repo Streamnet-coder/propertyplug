@@ -15,7 +15,8 @@ router = APIRouter()
 # collection -> columns exported (in order). Internal ids/paths kept so data can be re-imported.
 EXPORTS = {
     "projects": ["_id", "name", "address", "target_type", "finish_type", "purchase_price", "estimated_valuation", "monthly_rent",
-                 "refinance_ltv", "refinance_rate", "budget.hard", "budget.soft", "budget.contingency", "created_at"],
+                 "refinance_ltv", "refinance_rate", "budget.hard", "budget.soft", "budget.contingency", "currency", "property_type",
+                 "plot_size", "plot_unit", "planning_status", "intended_use", "created_at"],
     "line_items": ["_id", "project_id", "name", "category", "supplier", "status", "budgeted", "actual", "created_at"],
     "receipts": ["_id", "project_id", "date", "title", "category", "supplier", "amount", "line_item_id", "storage_path", "created_at"],
     "contacts": ["_id", "project_id", "kind", "name", "role", "phone", "email", "status", "schedule", "cost", "created_at"],

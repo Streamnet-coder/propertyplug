@@ -109,3 +109,8 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 ## Spend Trend Charts (Jun 2026)
 - GET /api/line-items/trend: cumulative daily spend (line item actuals by created_at + linked receipts by date) vs total budget, per active project.
 - Budget tab: 'Spend vs budget' line chart + 'By category' bars (src/components/spend-charts.tsx). Tested iteration 17.
+
+## Multi-currency & Land (Jun 2026)
+- Per-project currency (GBP, EUR, USD, CAD, AUD, NZD, ZAR, AED, NGN, INR); frontend gbp()/sym() follow active project; backend money() uses CURRENCY contextvar.
+- Land property type: plot_size/unit, planning_status, intended_use; hides rent/BRRR.
+- /api/portfolio converts totals to user home_currency via Frankfurter live rates (cached 6h in db.fx_rates). Portfolio card on My projects. Tested iteration 18.

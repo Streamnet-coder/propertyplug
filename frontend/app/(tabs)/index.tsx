@@ -51,13 +51,14 @@ export default function Home() {
 
   const msPct = p && p.milestones_total ? Math.round((p.milestones_done / p.milestones_total) * 100) : 0;
 
-  const actions: { icon: IconName; label: string; onPress: () => void; pro?: boolean; id: string }[] = [
+  const allActions: { icon: IconName; label: string; onPress: () => void; pro?: boolean; id: string }[] = [
     { id: "ai", icon: "sparkles", label: "AI cost", onPress: () => router.push("/ai-estimate") },
     { id: "brrr", icon: "calculator", label: "BRRR", onPress: () => router.push("/brrr"), pro: true },
     { id: "report", icon: "share-2", label: "Share", onPress: () => router.push("/share-report") },
     { id: "receipt", icon: "receipt", label: "Receipt", onPress: () => router.push("/receipt-form") },
     { id: "snags", icon: "list-checks", label: "Snags", onPress: () => router.push("/snags") },
   ];
+  const actions = allActions.filter((a) => !(a.id === "brrr" && p?.property_type === "land"));
 
   return (
     <View style={s.root} testID="home-screen">
@@ -266,12 +267,25 @@ export default function Home() {
                 <Text style={[s.statVal, { color: colors.success }]}>{gbp(p.estimated_valuation - p.purchase_price - p.total_budget)}</Text>
               </Card>
               <Card style={s.stat}>
-                <Text style={s.statLabel}>Finish</Text>
-                <Text style={s.statVal} numberOfLines={1}>{p.finish_type}</Text>
+                <Text style={s.statLabel}>{p.property_type === "land" ? "Planning" : "Finish"}</Text>
+                <Text style={s.statVal} numberOfLines={1}>{p.property_type === "land" ? { none: "None", applied: "Applied", granted: "Granted" }[p.planning_status] : p.finish_type}</Text>
               </Card>
             </View>
           </View>
 
+          {p.property_type === "land" ? (
+          <View>
+            <SectionTitle title="Land details" action="Edit" onAction={() => router.push("/project-edit")} testID="land-details-edit" />
+            <Card style={{ gap: space.md }} testID="land-details-card">
+              <View style={s.digestRow}>
+                <View style={s.digestCell}><Text style={s.rowVal} testID="land-plot-size">{p.plot_size ? `${p.plot_size} ${p.plot_unit}` : "-"}</Text><Text style={s.muted}>plot size</Text></View>
+                <View style={s.digestCell}><Text style={s.rowVal} testID="land-planning-status">{{ none: "None", applied: "Applied", granted: "Granted" }[p.planning_status]}</Text><Text style={s.muted}>planning</Text></View>
+              </View>
+              <Text style={s.muted} testID="land-intended-use">Intended use: {p.intended_use || "Not set"}</Text>
+              {p.plot_size > 0 && p.purchase_price > 0 && <Text style={s.muted}>{gbp(p.purchase_price / p.plot_size)} per {p.plot_unit === "acres" ? "acre" : "hectare"} paid</Text>}
+            </Card>
+          </View>
+          ) : (
           <View>
             <SectionTitle title="Rent & refinance" action="Edit" onAction={() => router.push("/project-edit")} testID="rent-yield-edit" />
             {p.monthly_rent > 0 ? (
@@ -301,6 +315,7 @@ export default function Home() {
               </Pressable>
             )}
           </View>
+          )}
 
           <View>
             <SectionTitle title="Recent receipts" action="See all" onAction={() => router.push({ pathname: "/(tabs)/media", params: { tab: "receipts" } })} testID="receipts-see-all" />

@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from datetime import datetime, timezone
 from bson import ObjectId
 import secrets
-from core import db, oid, money, E
+from core import CURRENCY, db, oid, money, E
 from models import User, Project
 from deps import current_user, get_project_doc
 from storage import get_object
@@ -50,6 +50,7 @@ async def public_report(token: str):
     if not doc:
         return page("Link expired", "<div class='card'><h2>This report link is no longer active</h2><p>Ask the project owner for a new link.</p></div>")
     p = Project.from_mongo(doc)
+    CURRENCY.set(p.currency)
     s = await project_summary(p)
     items = await db.line_items.find({"project_id": p.id}).sort("created_at", -1).to_list(500)
     receipts = await db.receipts.find({"project_id": p.id}).sort("date", -1).to_list(500)
@@ -72,7 +73,12 @@ async def public_report(token: str):
 <div class='card'><b>{pct}% of budget used</b> · {money(rem) + ' remaining' if rem >= 0 else "<span class='over'>" + money(-rem) + ' over budget</span>'}
 <div class='bar'><i style='width:{min(100, pct)}%'></i></div></div>"""
     ry = s["rent_yield"]
-    if p.monthly_rent > 0:
+    if p.property_type == "land":
+        body += (f"<div class='card' id='land-details'><h2>Land details</h2><div class='kpis'>"
+                 f"<div class='kpi'><span>Plot size</span><div>{p.plot_size:g} {p.plot_unit}</div></div>"
+                 f"<div class='kpi'><span>Planning</span><div>{ {'none': 'None', 'applied': 'Applied', 'granted': 'Granted'}[p.planning_status] }</div></div>"
+                 f"<div class='kpi'><span>Intended use</span><div>{E(p.intended_use or '-')}</div></div></div></div>")
+    elif p.monthly_rent > 0:
         left = ry["cash_left_in"]
         body += (f"<div class='card' id='rent-yield'><h2>Rent & refinance</h2><div class='kpis'>"
                  f"<div class='kpi'><span>Monthly rent</span><div>{money(p.monthly_rent)}</div></div>"

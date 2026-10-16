@@ -41,12 +41,19 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
 
 export const fileUrl = (path: string) => `${BACKEND_URL}/api/files/${path}?token=${encodeURIComponent(token ?? "")}`;
 
-export function gbp(n: number, decimals = 0) {
+export const CURRENCIES = { GBP: "£", EUR: "€", USD: "$", CAD: "C$", AUD: "A$", NZD: "NZ$", ZAR: "R", AED: "AED ", NGN: "₦", INR: "₹" } as const;
+export type CurrencyCode = keyof typeof CURRENCIES;
+let currency: CurrencyCode = "GBP";
+/** Active project's currency; set whenever the active project is loaded or switched. */
+export const setCurrency = (c?: string | null) => { currency = (c && c in CURRENCIES ? c : "GBP") as CurrencyCode; };
+export const sym = (c: CurrencyCode = currency) => CURRENCIES[c].trim();
+
+export function gbp(n: number, decimals = 0, cur: CurrencyCode = currency) {
   const neg = n < 0;
   const fixed = Math.abs(n).toFixed(decimals);
   const [int, dec] = fixed.split(".");
   const withCommas = int.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return `${neg ? "-" : ""}£${withCommas}${dec ? "." + dec : ""}`;
+  return `${neg ? "-" : ""}${CURRENCIES[cur]}${withCommas}${dec ? "." + dec : ""}`;
 }
 
 export type User = { id: string; name: string; email: string; plan: "basic" | "pro"; paid_pro: boolean; trial_ends: string; active_project_id?: string | null };
@@ -72,6 +79,22 @@ export type Project = {
   milestones_total: number;
   milestones_done: number;
   current_stage: string | null;
+  currency: CurrencyCode;
+  property_type: "residential" | "land";
+  plot_size: number;
+  plot_unit: "acres" | "hectares";
+  planning_status: "none" | "applied" | "granted";
+  intended_use: string;
+};
+type PortfolioSums = { purchase_price: number; estimated_valuation: number; total_budget: number; total_spent: number };
+export type Portfolio = {
+  home_currency: CurrencyCode;
+  rate_date: string;
+  stale: boolean;
+  projects: number;
+  land_count: number;
+  totals: PortfolioSums;
+  by_currency: (PortfolioSums & { currency: CurrencyCode; projects: number; rate_to_home: number })[];
 };
 export type Milestone = { id: string; name: string; status: "todo" | "in_progress" | "done"; target_date?: string | null; notes: string; order: number; completed_at?: string | null };
 export type QuoteEntry = {

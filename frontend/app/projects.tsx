@@ -4,8 +4,9 @@ import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { api, gbp } from "@/src/api";
+import { api, gbp, Project, setCurrency } from "@/src/api";
 import { Button, fonts, Icon, radius, space, tap } from "@/src/components/ui";
+import { PortfolioCard } from "@/src/components/portfolio-card";
 import { queryClient } from "@/src/query-client";
 import { useProjects } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -21,8 +22,9 @@ export default function Projects() {
   const q = useProjects();
 
   const activate = useMutation({
-    mutationFn: (id: string) => api(`/projects/${id}/activate`, { method: "POST" }),
-    onSuccess: async () => {
+    mutationFn: (id: string) => api<Project>(`/projects/${id}/activate`, { method: "POST" }),
+    onSuccess: async (p) => {
+      setCurrency(p.currency);
       await queryClient.invalidateQueries();
       toast("Switched project");
       router.back();
@@ -58,6 +60,7 @@ export default function Projects() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.md, paddingBottom: insets.bottom + 100 }}>
+          <PortfolioCard />
           {q.data!.map((p) => {
             const pct = p.total_budget > 0 ? Math.min(100, Math.round((p.total_spent / p.total_budget) * 100)) : 0;
             return (
@@ -69,12 +72,13 @@ export default function Projects() {
               >
                 <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
                   <View style={[s.icon, p.active && { backgroundColor: colors.brand }]}>
-                    <Icon name="house" size={20} color={p.active ? colors.onBrand : colors.brand} />
+                    <Icon name={p.property_type === "land" ? "land-plot" : "house"} size={20} color={p.active ? colors.onBrand : colors.brand} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={s.name} numberOfLines={1}>{p.name}</Text>
-                    <Text style={s.muted} numberOfLines={1}>{p.address || "No address"}</Text>
+                    <Text style={s.muted} numberOfLines={1}>{p.property_type === "land" ? `Land · ${p.plot_size ? `${p.plot_size} ${p.plot_unit} · ` : ""}` : ""}{p.address || "No address"}</Text>
                   </View>
+                  <View style={s.curPill} testID={`project-currency-badge-${p.id}`}><Text style={s.curText}>{p.currency}</Text></View>
                   {p.active ? (
                     <View style={s.activePill}><Text style={s.activeText}>ACTIVE</Text></View>
                   ) : activate.isPending && activate.variables === p.id ? (
@@ -84,7 +88,7 @@ export default function Projects() {
                   )}
                 </View>
                 <View style={s.statRow}>
-                  <Text style={s.muted}>Spent <Text style={s.bold}>{gbp(p.total_spent)}</Text> / {gbp(p.total_budget)}</Text>
+                  <Text style={s.muted}>Spent <Text style={s.bold}>{gbp(p.total_spent, 0, p.currency)}</Text> / {gbp(p.total_budget, 0, p.currency)}</Text>
                   <Text style={s.muted}>{p.line_item_count} items</Text>
                 </View>
                 <View style={s.track}><View style={[s.fill, { width: `${pct}%` }]} /></View>
@@ -138,4 +142,6 @@ const useStyles = makeStyles((c) => ({
   track: { height: 6, borderRadius: 3, backgroundColor: c.surfaceTertiary, overflow: "hidden" },
   fill: { height: 6, borderRadius: 3, backgroundColor: c.brandPrimary },
   cta: { position: "absolute", left: space.lg, right: space.lg },
+  curPill: { borderWidth: 1, borderColor: c.border, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.pill },
+  curText: { fontFamily: fonts.bold, fontSize: 10, color: c.muted, letterSpacing: 0.4 },
 }));

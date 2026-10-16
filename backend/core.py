@@ -7,7 +7,7 @@ from typing import Annotated, Optional
 from datetime import datetime, timezone
 from bson import ObjectId
 from pathlib import Path
-import os, logging, html
+import os, logging, html, contextvars
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -62,5 +62,13 @@ def oid(s: str) -> ObjectId:
         raise HTTPException(404, "Not found")
 
 
+CURRENCIES = {"GBP": "£", "EUR": "€", "USD": "$", "CAD": "C$", "AUD": "A$", "NZD": "NZ$", "ZAR": "R", "AED": "AED ", "NGN": "₦", "INR": "₹"}
+CURRENCY = contextvars.ContextVar("currency", default="GBP")  # set per request/task to the project's currency
+
+
+def sym(cur: str | None = None) -> str:
+    return CURRENCIES.get(cur or CURRENCY.get(), "£")
+
+
 def money(n, d=0):
-    return f"£{n:,.{d}f}"
+    return f"{'-' if n < 0 else ''}{sym()}{abs(n):,.{d}f}"

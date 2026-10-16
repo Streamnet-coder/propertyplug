@@ -7,13 +7,13 @@ from storage import init_storage
 import asyncio
 
 from routes import (ai, auth, branding, budget, contacts, digest, documents, portal, email_settings, export, media, messages, ratings, milestones, payments, projects, quotes,
-                    referrals, share, shopping, snags, stage_payments, trades)
+                    referrals, share, shopping, snags, stage_payments, trades, fx)
 
 app = FastAPI()
 api = APIRouter(prefix="/api")
 
 for m in (auth, projects, budget, contacts, media, ai, payments, trades, milestones, branding, referrals, share, quotes,
-          stage_payments, snags, shopping, digest, export, messages, email_settings, ratings, documents, portal):
+          stage_payments, snags, shopping, digest, export, messages, email_settings, ratings, documents, portal, fx):
     api.include_router(m.router)
 
 

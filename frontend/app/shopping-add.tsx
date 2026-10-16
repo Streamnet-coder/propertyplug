@@ -3,7 +3,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
-import { api, gbp } from "@/src/api";
+import { api, gbp, sym } from "@/src/api";
 import { Button, Chip, Field, fonts, FormScreen, Icon, radius, space, tap } from "@/src/components/ui";
 import { invalidate, useLineItems, useShopping } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -86,7 +86,7 @@ export default function ShoppingAdd() {
           <Field label="Merchant" value={f.supplier} onChangeText={set("supplier")} placeholder="e.g. Screwfix" testID="shopping-supplier-input" />
           <View style={{ flexDirection: "row", gap: space.md }}>
             <View style={{ flex: 1 }}><Field label="Quantity" value={f.qty} onChangeText={set("qty")} placeholder="e.g. 4 bags" testID="shopping-qty-input" /></View>
-            <View style={{ flex: 1 }}><Field label="Est. cost (£)" value={f.est_cost} onChangeText={set("est_cost")} keyboardType="decimal-pad" testID="shopping-cost-input" /></View>
+            <View style={{ flex: 1 }}><Field label={`Est. cost (${sym()})`} value={f.est_cost} onChangeText={set("est_cost")} keyboardType="decimal-pad" testID="shopping-cost-input" /></View>
           </View>
         </>
       )}

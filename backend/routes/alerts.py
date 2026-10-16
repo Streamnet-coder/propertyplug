@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from bson import ObjectId
 
-from core import E, db, logger, money, now_iso
+from core import CURRENCY, E, db, logger, money, now_iso
 from email_service import EMAIL_FROM_NAME, EmailError, send_email
 from routes.email_settings import owner_reply_to
 
@@ -44,7 +44,8 @@ async def check_over_budget(line_item_id: str | None):
     if li.get("over_notified"):
         return
     await db.line_items.update_one({"_id": li["_id"]}, {"$set": {"over_notified": True, "over_notified_at": now_iso()}})
-    proj = await db.projects.find_one({"_id": ObjectId(li["project_id"])}, {"name": 1}) or {}
+    proj = await db.projects.find_one({"_id": ObjectId(li["project_id"])}, {"name": 1, "currency": 1}) or {}
+    CURRENCY.set(proj.get("currency") or "GBP")
     pct = round(spent / li["budgeted"] * 100)
     body = (f'<p><b>{E(li["name"])}</b> on <b>{E(proj.get("name", "your project"))}</b> has gone over budget.</p>'
             f'<table role="presentation" cellpadding="6"><tr><td>Budget</td><td><b>{money(li["budgeted"])}</b></td></tr>'

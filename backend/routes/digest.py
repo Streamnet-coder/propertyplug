@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, EmailStr, Field
 
-from core import E, db, logger, money
+from core import CURRENCY, E, db, logger, money
 from deps import active_pid, current_user, get_project_doc
 from email_service import EMAIL_FROM_NAME, EmailError, send_email
 from routes.alerts import run_expiry_reminders
@@ -103,6 +103,7 @@ async def public_digest(token: str, week: int = Query(0, ge=0, le=52)):
     if not doc:
         return page("Link expired", "<div class='card'><h2>This weekly update link is no longer active</h2><p>Ask the project owner for a new link.</p></div>")
     p = Project.from_mongo(doc)
+    CURRENCY.set(p.currency)
     d = await build_digest(p.id, week)
     sp = d["spend"]
     diff = sp["total"] - d["prev_spend"]
@@ -196,6 +197,7 @@ def digest_email_html(p: Project, owner: str, d: dict, url: str, company: str = 
 
 async def send_digest_emails(p: Project, week: int = 1) -> dict:
     """Email the weekly update link to the project's saved recipients. Returns {sent, failed}."""
+    CURRENCY.set(p.currency)
     url = digest_url(p)
     owner = await db.users.find_one({"_id": ObjectId(p.user_id)}, {"name": 1, "email": 1})
     d = await build_digest(p.id, week)

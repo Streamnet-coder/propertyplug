@@ -3,7 +3,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 
-import { api } from "@/src/api";
+import { api, sym } from "@/src/api";
 import { PhotoPicker, PickedAsset } from "@/src/components/photo-picker";
 import { Button, Chip, Field, fonts, FormScreen, space } from "@/src/components/ui";
 import { invalidate } from "@/src/queries";
@@ -52,7 +52,7 @@ export default function ReceiptForm() {
       <Field label="Title" value={title} onChangeText={setTitle} placeholder="e.g. Toolstation cable & sockets" testID="receipt-title-input" />
       <View style={{ flexDirection: "row", gap: space.md }}>
         <View style={{ flex: 1 }}>
-          <Field label="Amount (£)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" testID="receipt-amount-input" />
+          <Field label={`Amount (${sym()})`} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" testID="receipt-amount-input" />
         </View>
         <View style={{ flex: 1 }}>
           <Field label="Date" value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" testID="receipt-date-input" />

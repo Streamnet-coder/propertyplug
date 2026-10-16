@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, Literal
-from core import db, now_iso, oid, money
+from core import CURRENCY, db, now_iso, oid, money
 from models import User, StagePayment
 from deps import current_user, active_pid
 
@@ -46,8 +46,9 @@ async def add_stage_payment(body: StagePaymentIn, user: User = Depends(current_u
     acc = next((e for e in (q or {}).get("quotes", []) if e["status"] == "accepted"), None)
     if not acc:
         raise HTTPException(404, "Accepted quote not found")
+    CURRENCY.set((await db.projects.find_one({"_id": oid(q["project_id"])}, {"currency": 1}) or {}).get("currency") or "GBP")
     if body.amount <= 0 or not body.label.strip():
-        raise HTTPException(400, "Enter a label and an amount above £0")
+        raise HTTPException(400, "Enter a label and an amount above zero")
     sched = sum(p["amount"] for p in await db.stage_payments.find({"quote_id": body.quote_id}).to_list(500))
     if sched + body.amount > acc["amount"] + 0.009:
         raise HTTPException(400, f"This would exceed the agreed quote by {money(sched + body.amount - acc['amount'], 2)}. "

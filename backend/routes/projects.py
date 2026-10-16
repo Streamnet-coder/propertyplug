@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Optional
+from typing import Literal, Optional
 from bson import ObjectId
 from core import db, oid
-from models import User, Budget, Project
+from models import User, Budget, Currency, Project
 from deps import current_user, pro_user, active_pid, get_project_doc
 from seed import seed_milestones
 
@@ -72,11 +72,19 @@ class ProjectUpdate(BaseModel):
     refinance_ltv: Optional[float] = None
     refinance_rate: Optional[float] = None
     budget: Optional[Budget] = None
+    currency: Optional[Currency] = None
+    property_type: Optional[Literal["residential", "land"]] = None
+    plot_size: Optional[float] = None
+    plot_unit: Optional[Literal["acres", "hectares"]] = None
+    planning_status: Optional[Literal["none", "applied", "granted"]] = None
+    intended_use: Optional[str] = None
 
 
 @router.put("/project")
 async def update_project(body: ProjectUpdate, user: User = Depends(current_user)):
     upd = body.model_dump(exclude_none=True)
+    if "property_type" in upd:
+        upd["target_type"] = "Land Investment" if upd["property_type"] == "land" else "BRRR Refurbishment"
     pid = await active_pid(user)
     if upd:
         await db.projects.update_one({"_id": ObjectId(pid)}, {"$set": upd})
@@ -100,6 +108,12 @@ class ProjectCreate(BaseModel):
     refinance_ltv: float = 75
     refinance_rate: float = 5.5
     budget: Budget = Budget()
+    currency: Currency = "GBP"
+    property_type: Literal["residential", "land"] = "residential"
+    plot_size: float = 0
+    plot_unit: Literal["acres", "hectares"] = "acres"
+    planning_status: Literal["none", "applied", "granted"] = "none"
+    intended_use: str = ""
 
 
 @router.get("/projects")
@@ -116,6 +130,8 @@ async def list_projects(user: User = Depends(current_user)):
 async def create_project(body: ProjectCreate, user: User = Depends(current_user)):
     if not body.name.strip():
         raise HTTPException(400, "Project name is required")
+    if body.property_type == "land":
+        body.target_type = "Land Investment"
     p = Project(user_id=user.id, **body.model_dump())
     p.id = str((await db.projects.insert_one(p.to_mongo())).inserted_id)
     await seed_milestones(user.id, p.id)

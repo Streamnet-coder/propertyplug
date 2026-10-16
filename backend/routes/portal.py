@@ -16,7 +16,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, Field
 
-from core import E, JWT_SECRET, bearer, db, logger, now_iso, oid
+from core import E, JWT_SECRET, bearer, db, logger, now_iso, oid, sym
 from deps import active_pid, current_user, get_project_doc
 from email_service import EMAIL_FROM_NAME, EmailError, send_email
 from html_utils import PAGE_CSS
@@ -309,7 +309,7 @@ async def portal_project(pid: str, week: int = Query(0, ge=0, le=52), email: str
     docs = await db.documents.find({"_id": {"$in": [oid(i) for i in m["doc_ids"]]}, "project_id": pid}).sort("doc_type", 1).to_list(200)
     return {"name": s["name"], "address": s["address"], "stage": s["current_stage"], "milestones_done": s["milestones_done"],
             "milestones_total": s["milestones_total"], "total_budget": s["total_budget"], "total_spent": s["total_spent"],
-            "purchase_price": s["purchase_price"], "estimated_valuation": s["estimated_valuation"], "role": m["role"],
+            "purchase_price": s["purchase_price"], "estimated_valuation": s["estimated_valuation"], "role": m["role"], "symbol": sym(s["currency"]),
             "documents": [{k: v for k, v in doc_out(d).items() if k != "share_url"} for d in docs],
             "digest": await build_digest(pid, week) if m["digest"] else None}
 
@@ -360,7 +360,7 @@ async def ask_question(pid: str, body: QuestionIn, email: str = Depends(portal_e
 PORTAL_JS = """
 const $=s=>document.querySelector(s),api=async(p,o={})=>{const t=sessionStorage.getItem('pt');const r=await fetch('/api'+p,{...o,headers:{'Content-Type':'application/json',...(t?{Authorization:'Bearer '+t}:{})}});if(r.status===401&&t){sessionStorage.removeItem('pt');login();throw new Error('Signed out');}if(!r.ok){let m='Something went wrong';try{m=(await r.json()).detail||m}catch(e){}throw new Error(m)}return r};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const gbp=n=>'£'+Math.round(n).toLocaleString('en-GB');let ident='',week=0,cur=null;
+let sy='£';const gbp=n=>sy+Math.round(n).toLocaleString('en-GB');let ident='',week=0,cur=null;
 function login(){$('#app').innerHTML=`<div class='card'><h2>Stakeholder sign in</h2><p class='cap'>Use your email or your ID ending @buildassist. We'll email you a one-time code.</p>
 <label>Email or ID</label><input id='ident' placeholder='dave@buildassist' autocomplete='username'/><button id='send-code'>Email me a code</button><p id='err' class='over'></p></div>`;
 $('#send-code').onclick=async()=>{ident=$('#ident').value.trim();if(!ident)return;$('#send-code').disabled=true;try{await api('/portal/request-code',{method:'POST',body:JSON.stringify({identifier:ident})});codeStep()}catch(e){$('#err').textContent=e.message;$('#send-code').disabled=false}}}
@@ -372,7 +372,7 @@ $('#app').innerHTML=`<div class='card' id='portal-home'><h2>Your shared projects
 document.querySelectorAll('.proj').forEach(a=>a.onclick=e=>{e.preventDefault();project(a.dataset.id,me)});$('#logout').onclick=logout}
 function logout(e){e&&e.preventDefault();sessionStorage.removeItem('pt');login()}
 async function dl(pid,d){const r=await api(`/portal/projects/${pid}/documents/${d.id}`);const u=URL.createObjectURL(await r.blob());const a=document.createElement('a');a.href=u;a.download=d.filename;a.click();URL.revokeObjectURL(u)}
-async function project(pid,me){cur=pid;const p=await(await api(`/portal/projects/${pid}?week=${week}`)).json();const g=p.digest;
+async function project(pid,me){cur=pid;const p=await(await api(`/portal/projects/${pid}?week=${week}`)).json();sy=p.symbol||'£';const g=p.digest;
 $('#app').innerHTML=`<div class='hdr' id='portal-project'><div class='brand'>BUILDER <b>ASSIST</b> · STAKEHOLDER PORTAL</div><h1>${esc(p.name)}</h1><div>${esc(p.address)}</div><div style='font-size:12px;margin-top:6px'>${esc(me.handle||me.email)} · ${esc(p.role)} · ${me.projects.length>1?"<a href='#' id='all' style='color:#fff'>All projects</a> · ":""}<a href='#' id='logout' style='color:#fff'>Sign out</a></div></div>
 <div class='kpis' style='margin-top:14px'><div class='kpi'><span>Stage</span><div>${esc(p.stage||'-')}</div></div><div class='kpi'><span>Milestones</span><div>${p.milestones_done}/${p.milestones_total}</div></div><div class='kpi'><span>Budget</span><div>${gbp(p.total_budget)}</div></div><div class='kpi'><span>Spent</span><div>${gbp(p.total_spent)}</div></div></div>
 ${g?`<div class='card' id='portal-digest'><h2>Weekly update · ${week===0?'This week':week===1?'Last week':week+' weeks ago'}</h2><div class='kpis'><div class='kpi'><span>Spent</span><div>${gbp(g.spend.total)}</div></div><div class='kpi'><span>Snags fixed</span><div>${g.snags_fixed.length}</div></div><div class='kpi'><span>Stages done</span><div>${g.milestones_done.length}</div></div><div class='kpi'><span>Open snags</span><div>${g.snags_open_now}</div></div></div>

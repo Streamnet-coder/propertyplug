@@ -4,7 +4,7 @@ import { Modal, Pressable, Text, View } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { api, gbp, ShoppingItem } from "@/src/api";
+import { api, gbp, ShoppingItem, sym } from "@/src/api";
 import { Button, Field, fonts, radius, space } from "@/src/components/ui";
 import { invalidate } from "@/src/queries";
 import { makeStyles } from "@/src/theme";
@@ -42,7 +42,7 @@ export function PurchaseSheet({ item, onClose }: { item: ShoppingItem | null; on
         <View style={[s.sheet, { paddingBottom: insets.bottom + space.lg }]} testID="purchase-sheet">
           <Text style={s.title}>Bought {item?.name}?</Text>
           <Text style={s.muted}>Log what you actually paid{item?.supplier ? ` at ${item.supplier}` : ""}. It&apos;s saved as a receipt and counted in your budget spend.</Text>
-          <Field label="Price paid (£)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" autoFocus testID="purchase-amount-input" />
+          <Field label={`Price paid (${sym()})`} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" autoFocus testID="purchase-amount-input" />
           {item?.est_cost ? <Text style={s.muted}>Estimated {gbp(item.est_cost, 2)}</Text> : null}
           <Button title={valid ? `Log ${gbp(Number(amount), 2)} & tick off` : "Log price & tick off"} icon="receipt" disabled={!valid} loading={log.isPending} onPress={() => log.mutate()} testID="purchase-log-button" />
           <Button variant="outline" title="Just tick it off" loading={justTick.isPending} onPress={() => justTick.mutate()} testID="purchase-skip-button" />

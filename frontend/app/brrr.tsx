@@ -4,7 +4,7 @@ import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-nativ
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { gbp } from "@/src/api";
+import { gbp, sym } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { PdfButton } from "@/src/components/pdf-button";
 import { Card, fonts, Icon, LockedPro, radius, SectionTitle, space } from "@/src/components/ui";
@@ -43,7 +43,7 @@ export default function Brrr() {
     <View style={s.inWrap}>
       <Text style={s.inLabel}>{label}</Text>
       <View style={s.inBox}>
-        {!suffix && <Text style={s.affix}>£</Text>}
+        {!suffix && <Text style={s.affix}>{sym()}</Text>}
         <TextInput value={v[k]} onChangeText={set(k)} keyboardType="decimal-pad" style={s.in} testID={`brrr-${k}-input`} placeholderTextColor={colors.muted} />
         {suffix && <Text style={s.affix}>{suffix}</Text>}
       </View>

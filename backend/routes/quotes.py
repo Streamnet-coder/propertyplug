@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Optional, List, Literal
 from bson import ObjectId
-from core import db, now_iso, oid, money, E
+from core import CURRENCY, db, now_iso, oid, money, sym, E
 from models import User, LineItem, QuoteEntry, QuoteRequest
 from deps import current_user, active_pid
 from html_utils import page, owner_branding, brand_block, serve_logo
@@ -130,6 +130,7 @@ async def public_quote_form(token: str):
     if not q:
         return page("Not found", "<div class='card'><h2>This quote link is no longer active</h2></div>")
     p = await db.projects.find_one({"_id": ObjectId(q.project_id)}) or {}
+    CURRENCY.set(p.get("currency") or "GBP")
     closed = e.status in ("accepted", "declined")
     body = brand_block(await owner_branding(q.user_id), f"/api/q/{E(token)}/logo") + f"""<div class='hdr'><div class='brand'>BUILDER <b>ASSIST</b> · QUOTE REQUEST</div><h1>{E(q.title)}</h1>
 <div>For {E(e.name)} · {E(p.get('address', ''))}</div></div>
@@ -138,7 +139,7 @@ async def public_quote_form(token: str):
         body += f"<div class='card'><h2>This job has been {'awarded to you 🎉' if e.status == 'accepted' else 'awarded to another trade'}</h2><p>Thanks for quoting.</p></div>"
     else:
         body += f"""<form class='card' method='post'><h2>{'Update your quote' if e.amount is not None else 'Submit your quote'}</h2>
-<label>Total price (£, inc. materials)</label><input name='amount' type='number' step='0.01' min='1' required value='{e.amount if e.amount is not None else ''}'/>
+<label>Total price ({E(sym().strip())}, inc. materials)</label><input name='amount' type='number' step='0.01' min='1' required value='{e.amount if e.amount is not None else ''}'/>
 <label>Time to complete (working days)</label><input name='days' type='number' min='0' value='{e.days if e.days is not None else ''}'/>
 <label>Notes (what's included, availability)</label><textarea name='notes' rows='4'>{E(e.notes)}</textarea>
 <button type='submit'>Send quote</button></form>"""
@@ -162,6 +163,7 @@ async def public_quote_submit(token: str, amount: float = Form(...), days: Optio
         return page("Closed", "<div class='card'><h2>This job is already closed</h2></div>")
     if amount <= 0:
         return page("Invalid", "<div class='card'><h2>Please enter a valid price</h2></div>")
+    CURRENCY.set((await db.projects.find_one({"_id": ObjectId(q.project_id)}, {"currency": 1}) or {}).get("currency") or "GBP")
     e.amount, e.notes, e.status, e.responded_at = float(amount), notes.strip()[:2000], "received", now_iso()
     e.days = int(days) if days and days.strip().isdigit() else None
     await db.quote_requests.update_one({"_id": ObjectId(q.id)}, {"$set": {"quotes": [x.model_dump() for x in q.quotes]}})

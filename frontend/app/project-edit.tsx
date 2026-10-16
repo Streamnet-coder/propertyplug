@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 
-import { api } from "@/src/api";
+import { api, CURRENCIES, CurrencyCode, Project, setCurrency, sym } from "@/src/api";
 import { Button, Chip, Field, fonts, FormScreen, space } from "@/src/components/ui";
 import { invalidate, useProject } from "@/src/queries";
 import { queryClient } from "@/src/query-client";
@@ -11,6 +11,9 @@ import { useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
 const FINISHES = ["Basic Finish", "Medium Finish", "High Finish"];
+const TYPES = [{ v: "residential", l: "Residential" }, { v: "land", l: "Land" }] as const;
+const PLANNING = [{ v: "none", l: "No planning" }, { v: "applied", l: "Applied" }, { v: "granted", l: "Granted" }] as const;
+const CODES = Object.keys(CURRENCIES) as CurrencyCode[];
 
 export default function ProjectEdit() {
   const { mode } = useLocalSearchParams<{ mode?: string }>();
@@ -19,8 +22,13 @@ export default function ProjectEdit() {
   const toast = useToast();
   const { colors } = useTheme();
   const { data: p } = useProject();
-  const [f, setF] = useState({ name: "", address: "", purchase_price: "", estimated_valuation: "", monthly_rent: "", refinance_ltv: "75", refinance_rate: "5.5", hard: "", soft: "", contingency: "", finish_type: "Medium Finish" });
+  const [f, setF] = useState({
+    name: "", address: "", purchase_price: "", estimated_valuation: "", monthly_rent: "", refinance_ltv: "75", refinance_rate: "5.5", hard: "", soft: "", contingency: "", finish_type: "Medium Finish",
+    currency: "GBP" as CurrencyCode, property_type: "residential" as Project["property_type"], plot_size: "", plot_unit: "acres" as Project["plot_unit"], planning_status: "none" as Project["planning_status"], intended_use: "",
+  });
   const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }));
+  const isLand = f.property_type === "land";
+  const c = sym(f.currency);
 
   useEffect(() => {
     if (p && !isNew)
@@ -36,12 +44,18 @@ export default function ProjectEdit() {
         soft: String(p.budget.soft),
         contingency: String(p.budget.contingency),
         finish_type: p.finish_type,
+        currency: p.currency,
+        property_type: p.property_type,
+        plot_size: p.plot_size ? String(p.plot_size) : "",
+        plot_unit: p.plot_unit,
+        planning_status: p.planning_status,
+        intended_use: p.intended_use,
       });
   }, [p, isNew]);
 
   const save = useMutation({
     mutationFn: () =>
-      api(isNew ? "/projects" : "/project", {
+      api<Project>(isNew ? "/projects" : "/project", {
         method: isNew ? "POST" : "PUT",
         body: {
           name: f.name,
@@ -49,13 +63,20 @@ export default function ProjectEdit() {
           finish_type: f.finish_type,
           purchase_price: Number(f.purchase_price) || 0,
           estimated_valuation: Number(f.estimated_valuation) || 0,
-          monthly_rent: Number(f.monthly_rent) || 0,
+          monthly_rent: isLand ? 0 : Number(f.monthly_rent) || 0,
           refinance_ltv: Number(f.refinance_ltv) || 0,
           refinance_rate: Number(f.refinance_rate) || 0,
           budget: { hard: Number(f.hard) || 0, soft: Number(f.soft) || 0, contingency: Number(f.contingency) || 0 },
+          currency: f.currency,
+          property_type: f.property_type,
+          plot_size: Number(f.plot_size) || 0,
+          plot_unit: f.plot_unit,
+          planning_status: f.planning_status,
+          intended_use: f.intended_use,
         },
       }),
-    onSuccess: async () => {
+    onSuccess: async (res) => {
+      setCurrency(res.currency);
       if (isNew) {
         await queryClient.invalidateQueries();
         toast("Project created and set as active");
@@ -70,34 +91,72 @@ export default function ProjectEdit() {
   });
 
   const num = { keyboardType: "decimal-pad" as const };
+  const label = { fontFamily: fonts.bold, fontSize: 16, color: colors.onSurface, marginTop: space.sm };
   return (
     <FormScreen
       title={isNew ? "New project" : "Edit project"}
       testID="project-edit-screen"
       footer={<Button title={isNew ? "Create project" : "Save project"} loading={save.isPending} onPress={() => (f.name.trim() ? save.mutate() : toast("Please enter a project name", "error"))} testID="project-save-button" />}
     >
-      <Field label="Project name" value={f.name} onChangeText={set("name")} placeholder="e.g. Derby terrace flip" testID="project-name-input" />
+      <Field label="Project name" value={f.name} onChangeText={set("name")} placeholder={isLand ? "e.g. Ashby paddock plot" : "e.g. Derby terrace flip"} testID="project-name-input" />
       <Field label="Address" value={f.address} onChangeText={set("address")} placeholder="Street, town, postcode" testID="project-address-input" />
-      <View style={{ flexDirection: "row", gap: space.md }}>
-        <View style={{ flex: 1 }}><Field label="Purchase (£)" value={f.purchase_price} onChangeText={set("purchase_price")} {...num} testID="project-purchase-input" /></View>
-        <View style={{ flex: 1 }}><Field label="Valuation (£)" value={f.estimated_valuation} onChangeText={set("estimated_valuation")} {...num} testID="project-valuation-input" /></View>
+      <Text style={label}>Property type</Text>
+      <View style={{ flexDirection: "row", gap: space.sm }}>
+        {TYPES.map((t) => (
+          <Chip key={t.v} label={t.l} selected={f.property_type === t.v} onPress={() => set("property_type")(t.v)} testID={`project-type-${t.v}`} />
+        ))}
       </View>
-      <Field label="Expected monthly rent (£)" value={f.monthly_rent} onChangeText={set("monthly_rent")} {...num} testID="project-rent-input" />
-      <View style={{ flexDirection: "row", gap: space.md }}>
-        <View style={{ flex: 1 }}><Field label="Refinance LTV (%)" value={f.refinance_ltv} onChangeText={set("refinance_ltv")} {...num} testID="project-ltv-input" /></View>
-        <View style={{ flex: 1 }}><Field label="Mortgage rate (%)" value={f.refinance_rate} onChangeText={set("refinance_rate")} {...num} testID="project-rate-input" /></View>
-      </View>
-      <Text style={{ fontFamily: fonts.bold, fontSize: 16, color: colors.onSurface, marginTop: space.sm }}>Budget</Text>
-      <View style={{ flexDirection: "row", gap: space.md }}>
-        <View style={{ flex: 1 }}><Field label="Hard (£)" value={f.hard} onChangeText={set("hard")} {...num} testID="project-hard-input" /></View>
-        <View style={{ flex: 1 }}><Field label="Soft (£)" value={f.soft} onChangeText={set("soft")} {...num} testID="project-soft-input" /></View>
-        <View style={{ flex: 1 }}><Field label="Contingency" value={f.contingency} onChangeText={set("contingency")} {...num} testID="project-contingency-input" /></View>
-      </View>
+      <Text style={label}>Currency</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
-        {FINISHES.map((x) => (
-          <Chip key={x} label={x} selected={f.finish_type === x} onPress={() => set("finish_type")(x)} testID={`project-finish-${x.split(" ")[0].toLowerCase()}`} />
+        {CODES.map((x) => (
+          <Chip key={x} label={`${sym(x)} ${x}`} selected={f.currency === x} onPress={() => set("currency")(x)} testID={`project-currency-${x}`} />
         ))}
       </ScrollView>
+      <View style={{ flexDirection: "row", gap: space.md }}>
+        <View style={{ flex: 1 }}><Field label={`Purchase (${c})`} value={f.purchase_price} onChangeText={set("purchase_price")} {...num} testID="project-purchase-input" /></View>
+        <View style={{ flex: 1 }}><Field label={`Valuation (${c})`} value={f.estimated_valuation} onChangeText={set("estimated_valuation")} {...num} testID="project-valuation-input" /></View>
+      </View>
+      {isLand ? (
+        <>
+          <Text style={label}>Land details</Text>
+          <View style={{ flexDirection: "row", gap: space.md, alignItems: "flex-end" }}>
+            <View style={{ flex: 1 }}><Field label="Plot size" value={f.plot_size} onChangeText={set("plot_size")} {...num} placeholder="0" testID="project-plot-size-input" /></View>
+            <View style={{ flexDirection: "row", gap: space.sm, paddingBottom: 6 }}>
+              {(["acres", "hectares"] as const).map((u) => (
+                <Chip key={u} label={u} selected={f.plot_unit === u} onPress={() => set("plot_unit")(u)} testID={`project-unit-${u}`} />
+              ))}
+            </View>
+          </View>
+          <Text style={[label, { fontSize: 13, marginTop: 0 }]}>Planning status</Text>
+          <View style={{ flexDirection: "row", gap: space.sm }}>
+            {PLANNING.map((x) => (
+              <Chip key={x.v} label={x.l} selected={f.planning_status === x.v} onPress={() => set("planning_status")(x.v)} testID={`project-planning-${x.v}`} />
+            ))}
+          </View>
+          <Field label="Intended use" value={f.intended_use} onChangeText={set("intended_use")} placeholder="e.g. 4 self-build plots, grazing, hold for uplift" testID="project-intended-use-input" />
+        </>
+      ) : (
+        <>
+          <Field label={`Expected monthly rent (${c})`} value={f.monthly_rent} onChangeText={set("monthly_rent")} {...num} testID="project-rent-input" />
+          <View style={{ flexDirection: "row", gap: space.md }}>
+            <View style={{ flex: 1 }}><Field label="Refinance LTV (%)" value={f.refinance_ltv} onChangeText={set("refinance_ltv")} {...num} testID="project-ltv-input" /></View>
+            <View style={{ flex: 1 }}><Field label="Mortgage rate (%)" value={f.refinance_rate} onChangeText={set("refinance_rate")} {...num} testID="project-rate-input" /></View>
+          </View>
+        </>
+      )}
+      <Text style={label}>Budget</Text>
+      <View style={{ flexDirection: "row", gap: space.md }}>
+        <View style={{ flex: 1 }}><Field label={`Hard (${c})`} value={f.hard} onChangeText={set("hard")} {...num} testID="project-hard-input" /></View>
+        <View style={{ flex: 1 }}><Field label={`Soft (${c})`} value={f.soft} onChangeText={set("soft")} {...num} testID="project-soft-input" /></View>
+        <View style={{ flex: 1 }}><Field label="Contingency" value={f.contingency} onChangeText={set("contingency")} {...num} testID="project-contingency-input" /></View>
+      </View>
+      {!isLand && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
+          {FINISHES.map((x) => (
+            <Chip key={x} label={x} selected={f.finish_type === x} onPress={() => set("finish_type")(x)} testID={`project-finish-${x.split(" ")[0].toLowerCase()}`} />
+          ))}
+        </ScrollView>
+      )}
     </FormScreen>
   );
 }

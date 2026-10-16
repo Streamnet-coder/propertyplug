@@ -29,6 +29,9 @@ class User(BaseDocument):
     created_at: str = Field(default_factory=now_iso)
 
 
+Currency = Literal["GBP", "EUR", "USD", "CAD", "AUD", "NZD", "ZAR", "AED", "NGN", "INR"]
+
+
 class Budget(BaseModel):
     hard: float = 0
     soft: float = 0
@@ -55,6 +58,12 @@ class Project(BaseDocument):
     refinance_ltv: float = 75
     refinance_rate: float = 5.5
     budget: Budget = Budget()
+    currency: Currency = "GBP"
+    property_type: Literal["residential", "land"] = "residential"
+    plot_size: float = 0
+    plot_unit: Literal["acres", "hectares"] = "acres"
+    planning_status: Literal["none", "applied", "granted"] = "none"
+    intended_use: str = ""
     comparables: List[Comparable] = []
     share_token: Optional[str] = None
     share_origin: Optional[str] = None

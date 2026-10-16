@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 18 — Per-project currency (10 ISO codes) + Land property type. Backend: 13/13 pytest tests pass covering (1) POST/PUT /api/projects currency validation (invalid=422), property_type land|residential with auto target_type flip (Land Investment↔BRRR Refurbishment), plot_size/unit/planning_status/intended_use round-trip; (2) GET /api/fx/rates auth-gated, GBP-based, all 10 codes present; (3) GET /api/portfolio returns home_currency, projects, land_count, totals, by_currency with rate_to_home; PUT /api/portfolio/home-currency converts totals; invalid currency=422; (4) Public /api/share/{token} land report shows id='land-details' + Granted + € symbol and no rent-yield; residential USD share uses $ and shows rent-yield. Frontend: full flow verified on mobile viewport — EUR Land active project shows € everywhere, BRRR quick-action hidden, land-details-card with plot/planning/intended-use, rent-yield-card hidden, Deal snapshot 'Planning' label. Project-edit new screen chips project-type-land/project-currency-EUR work, money labels become 'Purchase (€) / Hard (€)', rent/LTV/finish hidden when Land. Projects screen portfolio-card totals convert on home-currency toggle (GBP↔EUR), by_currency breakdown shows when mixed, project-currency-badge-{id} + 'Land · ' prefix render. Switching back to Nottingham (GBP residential) restores £, rent-yield-card and BRRR quick-action.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration18.py",
+    "/app/test_reports/pytest/pytest_iteration18.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/projects.py ProjectUpdate: does not reset BRRR fields (monthly_rent/refinance_ltv/refinance_rate) when flipping property_type='land'. If a user converts a residential project to land, stale rent_yield math still runs server-side (invisible on UI since the Land view hides it). Minor — consider zeroing on flip.",
+    "routes/projects.py rent_yield() runs for land projects too (returns 0% yields when monthly_rent==0) — wasted work but harmless.",
+    "routes/fx.py get_rates fallback path returns the cached doc with stale=True but still raises when there's no cache; the HTTPException(503) message is user-friendly. If Frankfurter is down on first-ever boot there's no bootstrap — low risk.",
+    "routes/fx.py portfolio() uses rates[home]/rates[cur] without validating that both keys exist — safe only because Currency Literal guarantees membership; good.",
+    "project-edit.tsx: on new project (p is undefined) the land fields use empty defaults; good. But switching an existing residential project to Land in-place does not clear purchase_price-dependent BRRR state — again just UI-hidden, backend keeps the values.",
+    "share.py public_report sets CURRENCY contextvar from p.currency but never resets it — contextvars are scoped to the task so this is fine for concurrency, but worth noting."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration18.py (new)"],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100%"},
+  "seed_data_creation": "Tests register fresh TEST_ users (DELETE /api/auth/account cleanup). UI test cleaned up both the stray TEST_Land Plot from iter17 and the newly-created TEST_ EUR Paddock; Nottingham Victorian Refurb re-activated as the demo's active project.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Demo account state restored to active=Nottingham Victorian Refurb (GBP residential). FX cache in db.fx_rates (6h TTL) is warm. New fields on Project: currency, property_type, plot_size, plot_unit, planning_status, intended_use. Projects endpoints: POST /api/projects (auto target_type on land), PUT /api/project, GET /api/projects. FX: GET /api/fx/rates (auth), GET /api/portfolio, PUT /api/portfolio/home-currency.",
+  "rca_of_issue": "N/A — feature implemented correctly end-to-end."
+}

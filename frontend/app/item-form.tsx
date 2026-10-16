@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 
-import { api, Category, LineItem } from "@/src/api";
+import { api, Category, LineItem, sym } from "@/src/api";
 import { Button, Chip, Field, fonts, FormScreen, space } from "@/src/components/ui";
 import { invalidate, useLineItems } from "@/src/queries";
 import { useTheme } from "@/src/theme";
@@ -94,10 +94,10 @@ export default function ItemForm() {
       </View>
       <View style={{ flexDirection: "row", gap: space.md }}>
         <View style={{ flex: 1 }}>
-          <Field label="Budgeted (£)" value={budgeted} onChangeText={setBudgeted} keyboardType="decimal-pad" placeholder="0" testID="item-budgeted-input" />
+          <Field label={`Budgeted (${sym()})`} value={budgeted} onChangeText={setBudgeted} keyboardType="decimal-pad" placeholder="0" testID="item-budgeted-input" />
         </View>
         <View style={{ flex: 1 }}>
-          <Field label="Actual (£)" value={actual} onChangeText={setActual} keyboardType="decimal-pad" placeholder="0" testID="item-actual-input" />
+          <Field label={`Actual (${sym()})`} value={actual} onChangeText={setActual} keyboardType="decimal-pad" placeholder="0" testID="item-actual-input" />
         </View>
       </View>
       <Field label="Supplier" value={supplier} onChangeText={setSupplier} placeholder="B&Q, Wickes, Toolstation…" testID="item-supplier-input" />

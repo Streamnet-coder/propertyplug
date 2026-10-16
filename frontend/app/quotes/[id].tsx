@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { api, logMessage, gbp, QuoteEntry, QuoteRequest } from "@/src/api";
+import { api, logMessage, gbp, QuoteEntry, QuoteRequest, sym } from "@/src/api";
 import { Button, Field, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { queryClient } from "@/src/query-client";
 import { invalidate, useProject, useQuote } from "@/src/queries";
@@ -201,7 +201,7 @@ export default function QuoteDetail() {
           <Pressable style={{ ...StyleFill }} onPress={() => setEditing(null)} />
           <View style={[s.sheet, { paddingBottom: insets.bottom + space.lg }]} testID="quote-price-modal">
             <Text style={s.jobTitle}>Price from {editing?.name}</Text>
-            <Field label="Total price (£)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0" testID="quote-amount-input" />
+            <Field label={`Total price (${sym()})`} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0" testID="quote-amount-input" />
             <Field label="Working days" value={days} onChangeText={setDays} keyboardType="number-pad" placeholder="e.g. 5" testID="quote-days-input" />
             <Field label="Notes" value={notes} onChangeText={setNotes} placeholder="What's included" testID="quote-notes-input" />
             <View style={{ flexDirection: "row", gap: space.sm }}>

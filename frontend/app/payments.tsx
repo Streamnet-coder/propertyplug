@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { api, Contract, gbp, StagePayment } from "@/src/api";
+import { api, Contract, gbp, StagePayment, sym } from "@/src/api";
 import { Button, EmptyState, Field, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { invalidate, useContracts } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -133,7 +133,7 @@ export default function Payments() {
             <Text style={s.muted}>Up to {gbp(adding?.unscheduled ?? 0, 2)} left to schedule on this quote.</Text>
             <Field label="Label" value={label} onChangeText={setLabel} placeholder="Deposit, first fix complete…" testID="payment-label-input" />
             <View style={{ flexDirection: "row", gap: space.md }}>
-              <View style={{ flex: 1 }}><Field label="Amount (£)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" testID="payment-amount-input" /></View>
+              <View style={{ flex: 1 }}><Field label={`Amount (${sym()})`} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" testID="payment-amount-input" /></View>
               <View style={{ flex: 1 }}><Field label="Due date" value={due} onChangeText={setDue} placeholder="YYYY-MM-DD" testID="payment-due-input" /></View>
             </View>
             {err ? <Text style={{ color: colors.error, fontFamily: fonts.medium }} testID="payment-add-error">{err}</Text> : null}
