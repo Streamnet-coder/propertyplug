@@ -57,7 +57,8 @@ export function gbp(n: number, decimals = 0, cur: CurrencyCode = currency) {
 }
 
 export type User = { id: string; name: string; email: string; plan: "basic" | "pro"; own_plan: "basic" | "pro"; paid_pro: boolean; trial_ends: string; active_project_id?: string | null;
-  pro_tier: "monthly" | "yearly" | "lifetime" | null; pro_until: string | null; acting_as: { owner_id: string; owner_name: string } | null };
+  pro_tier: "monthly" | "yearly" | "lifetime" | null; pro_until: string | null; acting_as: { owner_id: string; owner_name: string } | null;
+  auto_renew: boolean; has_subscription: boolean; sub_status: string | null };
 export type Category = "Hard Cost" | "Soft Cost" | "Contingency";
 export type Project = {
   id: string;
@@ -193,5 +194,5 @@ export type DocFolder = { id: string; title: string; doc_count: number; created_
 export type PortalMember = { id: string; name: string; email: string; role: string; company: string; password_set: boolean; is_lead: boolean; invited_by: string | null; expires_on: string | null; expired: boolean; doc_ids: string[]; digest: boolean; handle: string | null; last_login: string | null; invited_at: string | null; portal_url: string | null };
 export const expiryLabel = (d: { expiry_status: string | null; days_left: number | null }) =>
   d.expiry_status === "expired" ? `Expired ${Math.abs(d.days_left ?? 0)} day${Math.abs(d.days_left ?? 0) === 1 ? "" : "s"} ago` : d.expiry_status === "soon" ? (d.days_left === 0 ? "Expires today" : `Expires in ${d.days_left} day${d.days_left === 1 ? "" : "s"}`) : null;
-export type PortalActivity = { id: string; email: string; name: string; kind: "login" | "view" | "download" | "team_invite" | "team_remove"; doc_id: string | null; doc_title: string | null; doc_type: string | null; detail?: string | null; at: string };
+export type PortalActivity = { id: string; email: string; name: string; kind: "login" | "view" | "download" | "team_invite" | "team_remove" | "doc_request"; doc_id: string | null; doc_title: string | null; doc_type: string | null; detail?: string | null; at: string };
 export type PortalQuestion = { id: string; name: string; email: string; text: string; created_at: string; reply: string | null; replied_at: string | null };

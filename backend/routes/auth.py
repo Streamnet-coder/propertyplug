@@ -65,7 +65,7 @@ async def delete_account(body: DeleteAccountIn, user: User = Depends(real_user))
         await db[name].delete_many({"user_id": user.id})
     await db.files.delete_many({"owner_id": user.id})
     await db.referrals.delete_many({"$or": [{"referrer_id": user.id}, {"new_user_id": user.id}]})
-    for coll in (db.portal_members, db.portal_activity, db.portal_questions):
+    for coll in (db.portal_members, db.portal_activity, db.portal_questions, db.project_activity, db.portal_doc_requests):
         await coll.delete_many({"owner_id": user.id})
     await db.co_owners.delete_many({"$or": [{"owner_id": user.id}, {"email": user.email}]})
     # User doc last so a failed run can be retried with the same token

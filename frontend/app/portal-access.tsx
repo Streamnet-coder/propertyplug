@@ -8,6 +8,7 @@ import { Button, Card, Chip, Field, fonts, FormScreen, Icon, radius, space, tap 
 import { ActivityPanel, QuestionsPanel, usePortalQuestions } from "@/src/components/portal-panels";
 import { AccessEndPicker, fmtEnd } from "@/src/components/access-end-picker";
 import { ExpiringAccessCard } from "@/src/components/expiring-access-card";
+import { DocRequestsPanel } from "@/src/components/doc-requests-panel";
 import { queryClient } from "@/src/query-client";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
@@ -55,6 +56,7 @@ export default function PortalAccess() {
   return (
     <FormScreen title="Stakeholder portal" testID="portal-access-screen">
       <ExpiringAccessCard />
+      <DocRequestsPanel docs={docs.data ?? []} />
       <Card style={{ gap: space.sm }}>
         <Text style={s.title}>Give read-only access</Text>
         <Text style={s.muted}>

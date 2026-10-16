@@ -15,6 +15,7 @@ const KIND: Record<string, { icon: IconName; label: (a: PortalActivity) => strin
   download: { icon: "download", label: (a) => `Downloaded ${a.doc_title} (${a.doc_type})` },
   team_invite: { icon: "user-plus", label: (a) => `Invited teammate ${a.detail ?? ""}` },
   team_remove: { icon: "user-x", label: (a) => `Removed teammate ${a.detail ?? ""}` },
+  doc_request: { icon: "file-question", label: (a) => `Requested document: ${a.detail ?? ""}` },
 };
 
 export const usePortalQuestions = () => useQuery({ queryKey: ["portal-questions"], queryFn: () => api<PortalQuestion[]>("/portal-questions") });

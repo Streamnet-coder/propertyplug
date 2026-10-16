@@ -642,6 +642,73 @@ async def team_remove(pid: str, mid: str, email: str = Depends(portal_email)):
     return {"ok": True}
 
 
+# ---------------- Team leads request extra documents from the owner ----------------
+class DocRequestIn(BaseModel):
+    title: str = Field(min_length=2, max_length=120)
+    note: str = Field("", max_length=1000)
+
+
+class DocRequestAnswer(BaseModel):
+    status: str = Field(pattern="^(fulfilled|declined)$")
+    reply: str = Field("", max_length=1000)
+    doc_ids: List[str] = Field(default_factory=list, max_length=50)
+
+
+def _req_out(r: dict) -> dict:
+    return {k: r.get(k) for k in ("title", "note", "status", "reply", "name", "email", "company", "created_at", "answered_at", "doc_titles")} | {"id": str(r["_id"])}
+
+
+@router.get("/portal/projects/{pid}/doc-requests")
+async def lead_doc_requests(pid: str, email: str = Depends(portal_email)):
+    lead = await _lead(email, pid)
+    return [_req_out(r) for r in await db.portal_doc_requests.find(_team_q(lead)).sort("created_at", -1).to_list(50)]
+
+
+@router.post("/portal/projects/{pid}/doc-requests")
+async def create_doc_request(pid: str, body: DocRequestIn, email: str = Depends(portal_email)):
+    lead = await _lead(email, pid)
+    if await db.portal_doc_requests.count_documents({**_team_q(lead), "status": "open"}) >= 20:
+        raise HTTPException(400, "You have 20 open requests. Wait for the owner to answer some first")
+    r = {**_team_q(lead), "member_id": str(lead["_id"]), "email": email, "name": lead["name"], "title": body.title.strip(), "note": body.note.strip(),
+         "status": "open", "reply": "", "created_at": now_iso()}
+    r["_id"] = (await db.portal_doc_requests.insert_one(r)).inserted_id
+    await log_activity(lead, "doc_request", detail=r["title"])
+    owner = await db.users.find_one({"_id": ObjectId(lead["owner_id"])}, {"email": 1, "name": 1})
+    p = await db.projects.find_one({"_id": ObjectId(pid)}, {"name": 1}) or {}
+    if owner:
+        note_html = f"<p>{E(r['note'])}</p>" if r["note"] else ""
+        html = (f'<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0f172a">'
+                f'<p>{E(lead["name"])} ({E(lead["company"])}) has asked for a document on <b>{E(p.get("name", "your project"))}</b>:</p>'
+                f'<p style="font-size:17px;font-weight:bold">{E(r["title"])}</p>{note_html}'
+                f'<p>Open Builder Assist → Documents → Stakeholder portal to share it or reply.</p></td></tr></table>')
+        try:
+            await send_email(to=owner["email"], subject=f"Document request from {lead['name']}: {r['title']}", html=html, reply_to=email)
+        except EmailError as e:
+            logger.warning(f"Doc request email failed: {e}")
+    return _req_out(r)
+
+
+@router.get("/portal-doc-requests")
+async def owner_doc_requests(user: User = Depends(current_user)):
+    docs = await db.portal_doc_requests.find({"owner_id": user.id, "project_id": await active_pid(user)}).sort([("status", -1), ("created_at", -1)]).to_list(100)
+    return [_req_out(r) for r in docs]
+
+
+@router.put("/portal-doc-requests/{rid}")
+async def answer_doc_request(rid: str, body: DocRequestAnswer, user: User = Depends(current_user)):
+    r = await db.portal_doc_requests.find_one({"_id": oid(rid), "owner_id": user.id})
+    if not r:
+        raise HTTPException(404, "Request not found")
+    titles = []
+    if body.status == "fulfilled" and body.doc_ids:
+        own = await db.documents.find({"_id": {"$in": [oid(i) for i in body.doc_ids]}, "user_id": user.id, "project_id": r["project_id"]}, {"title": 1}).to_list(50)
+        ids, titles = [str(d["_id"]) for d in own], [d["title"] for d in own]
+        # Share with the requester's whole team on this project.
+        await db.portal_members.update_many({"owner_id": user.id, "project_id": r["project_id"], "company": r["company"]}, {"$addToSet": {"doc_ids": {"$each": ids}}})
+    await db.portal_doc_requests.update_one({"_id": r["_id"]}, {"$set": {"status": body.status, "reply": body.reply.strip(), "doc_titles": titles, "answered_at": now_iso()}})
+    return _req_out(await db.portal_doc_requests.find_one({"_id": r["_id"]}))
+
+
 PORTAL_JS = """
 const $=s=>document.querySelector(s),api=async(p,o={})=>{const t=sessionStorage.getItem('pt');const r=await fetch('/api'+p,{...o,headers:{'Content-Type':'application/json',...(t?{Authorization:'Bearer '+t}:{})}});if(r.status===401&&t){sessionStorage.removeItem('pt');login();throw new Error('Signed out');}if(!r.ok){let m='Something went wrong';try{m=(await r.json()).detail||m}catch(e){}throw new Error(m)}return r};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -697,6 +764,11 @@ $('#app').insertAdjacentHTML('beforeend',`<div class='card' id='portal-team'><h2
 <table>${tm.map(t=>`<tr><td><b>${esc(t.name)}</b>${t.is_lead?" <span class='cap'>· Lead</span>":''}${t.is_you?" <span class='cap'>(you)</span>":''}<div class='cap'>${esc(t.email)} · ${t.password_set?'password set':'invite sent'}</div></td><td class='n'>${t.is_you||t.is_lead?'':`<a href='#' class='t-rm' data-id='${t.id}' data-n='${esc(t.name)}'>Remove</a>`}</td></tr>`).join('')}</table>
 <label>Name</label><input id='t-name' placeholder='e.g. Priya Shah'/><label>Email</label><input id='t-email' type='email' placeholder='priya@company.com'/><button id='t-add'>Invite teammate</button><p id='t-err' class='over'></p></div>`);
 $('#t-add').onclick=async()=>{const n=$('#t-name').value.trim(),em=$('#t-email').value.trim();if(!n||!em){$('#t-err').textContent='Enter a name and email';return}$('#t-add').disabled=true;try{const r=await(await api(`/portal/projects/${pid}/team`,{method:'POST',body:JSON.stringify({name:n,email:em})})).json();if(!r.email_sent)alert('Added, but the invite email could not be sent. Ask the owner to resend it.');project(pid,me)}catch(e){$('#t-err').textContent=e.message;$('#t-add').disabled=false}};
+const rq=await(await api(`/portal/projects/${pid}/doc-requests`)).json();
+$('#app').insertAdjacentHTML('beforeend',`<div class='card' id='portal-doc-requests'><h2>Request a document</h2><p class='cap'>Ask the owner for anything you need, e.g. a building control certificate or an updated valuation.</p>
+<table>${rq.map(r=>`<tr><td><b>${esc(r.title)}</b><div class='cap'>${esc(r.name)} · ${esc(r.created_at.slice(0,10))}${r.reply?' · Owner: '+esc(r.reply):''}${r.doc_titles&&r.doc_titles.length?' · Shared: '+r.doc_titles.map(esc).join(', '):''}</div></td><td class='n' data-st='${r.status}'>${r.status==='open'?'Waiting':r.status==='fulfilled'?'Done':'Declined'}</td></tr>`).join('')}</table>
+<label>Document needed</label><input id='rq-title' placeholder='e.g. Electrical certificate'/><label>Note (optional)</label><textarea id='rq-note' rows='2'></textarea><button id='rq-send'>Send request</button><p id='rq-err' class='over'></p></div>`);
+$('#rq-send').onclick=async()=>{const t=$('#rq-title').value.trim();if(t.length<2){$('#rq-err').textContent='Say which document you need';return}$('#rq-send').disabled=true;try{await api(`/portal/projects/${pid}/doc-requests`,{method:'POST',body:JSON.stringify({title:t,note:$('#rq-note').value.trim()})});project(pid,me)}catch(e){$('#rq-err').textContent=e.message;$('#rq-send').disabled=false}};
 document.querySelectorAll('.t-rm').forEach(a=>a.onclick=async e=>{e.preventDefault();if(!confirm('Remove '+a.dataset.n+' from this project?'))return;try{await api(`/portal/projects/${pid}/team/${a.dataset.id}`,{method:'DELETE'});project(pid,me)}catch(err){alert(err.message)}})}
 $('#q-send').onclick=async()=>{const v=$('#q-text').value.trim();if(v.length<2)return;$('#q-send').disabled=true;try{await api(`/portal/projects/${pid}/questions`,{method:'POST',body:JSON.stringify({text:v})});project(pid,me)}catch(e){$('#q-err').textContent=e.message;$('#q-send').disabled=false}};
 document.querySelectorAll('.dl').forEach(a=>a.onclick=e=>{e.preventDefault();dl(pid,p.documents[+a.dataset.i]).catch(err=>alert(err.message))});

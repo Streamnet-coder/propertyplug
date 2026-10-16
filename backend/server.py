@@ -7,13 +7,13 @@ from storage import init_storage
 import asyncio
 
 from routes import (ai, auth, branding, budget, contacts, digest, documents, portal, email_settings, export, media, messages, ratings, milestones, payments, projects, quotes,
-                    referrals, share, shopping, snags, stage_payments, trades, fx, planning, co_owners)
+                    referrals, share, shopping, snags, stage_payments, trades, fx, planning, co_owners, activity, subscriptions)
 
 app = FastAPI()
 api = APIRouter(prefix="/api")
 
 for m in (auth, projects, budget, contacts, media, ai, payments, trades, milestones, branding, referrals, share, quotes,
-          stage_payments, snags, shopping, digest, export, messages, email_settings, ratings, documents, portal, fx, planning, co_owners):
+          stage_payments, snags, shopping, digest, export, messages, email_settings, ratings, documents, portal, fx, planning, co_owners, activity, subscriptions):
     api.include_router(m.router)
 
 
@@ -29,6 +29,17 @@ async def health():
 
 
 app.include_router(api)
+
+
+@app.middleware("http")
+async def activity_middleware(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/api/") and request.method != "GET":
+        from routes.activity import log_write
+        await log_write(request, response.status_code)
+    return response
+
+
 app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
@@ -66,6 +77,7 @@ async def startup():
     await db.projects.create_index("digest_token", sparse=True)
     await db.co_owners.create_index([("owner_id", 1), ("email", 1)], unique=True)
     await db.co_owners.create_index("email")
+    await db.project_activity.create_index([("owner_id", 1), ("project_id", 1), ("at", -1)])
     asyncio.create_task(digest.digest_scheduler())
     try:
         init_storage()

@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
@@ -17,6 +18,7 @@ export default function CoOwners() {
   const { colors } = useTheme();
   const toast = useToast();
   const { refresh } = useAuth();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [confirm, setConfirm] = useState<string | null>(null);
   const mine = useQuery({ queryKey: ["co-owners"], queryFn: () => api<CoOwner[]>("/co-owners") });
@@ -50,6 +52,8 @@ export default function CoOwners() {
           Co-owners sign in with their own Builder Assist account and get full access to <Text style={s.bold}>all your current and future projects</Text>: budgets, snags, quotes, documents, the portal and more. They can edit everything, but they can&apos;t delete projects, manage your billing, or remove you. On your projects they get your plan&apos;s features.
         </Text>
       </Card>
+
+      <Button small variant="outline" icon="history" title="See who changed what" onPress={() => router.push("/project-activity")} testID="co-owners-activity-link" />
 
       <Text style={s.section}>Invite a co-owner</Text>
       <Field label="Their email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" placeholder="partner@example.com" testID="co-owner-email-input" />

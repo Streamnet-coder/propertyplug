@@ -34,6 +34,7 @@ export default function Profile() {
   const referrals = useReferrals();
   const [paying, setPaying] = useState(false);
   const [tier, setTier] = useState<(typeof TIERS)[number]["id"]>("yearly");
+  const [renewBusy, setRenewBusy] = useState(false);
   const [toggling, setToggling] = useState(false);
   const poll = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -44,6 +45,21 @@ export default function Profile() {
   const lifetime = user.pro_tier === "lifetime" && isPro;
   const paidActive = isPro && !!user.pro_tier;
   const trialDays = Math.max(0, Math.ceil((new Date(user.trial_ends).getTime() - Date.now()) / 86400000));
+
+  const tiers = user.has_subscription ? TIERS.filter((t) => t.id === "lifetime") : TIERS;
+  const chosen = user.has_subscription ? "lifetime" : tier; // subscribers can only add lifetime
+  const setAutoRenew = async (on: boolean) => {
+    setRenewBusy(true);
+    try {
+      await api(`/payments/subscription/${on ? "resume" : "cancel"}`, { method: "POST" });
+      await refresh();
+      toast(on ? "Auto-renew is back on" : "Auto-renew cancelled. Pro stays until the end of this period", "info");
+    } catch (e: any) {
+      toast(e.message, "error");
+    } finally {
+      setRenewBusy(false);
+    }
+  };
 
   const togglePlan = async (v: boolean) => {
     setToggling(true);
@@ -61,7 +77,7 @@ export default function Profile() {
   const upgrade = async () => {
     setPaying(true);
     try {
-      const { url, session_id } = await api<{ url: string; session_id: string }>("/payments/checkout", { body: { origin_url: BACKEND_URL, tier } });
+      const { url, session_id } = await api<{ url: string; session_id: string }>("/payments/checkout", { body: { origin_url: BACKEND_URL, tier: chosen } });
       let tries = 0;
       if (poll.current) clearInterval(poll.current);
       poll.current = setInterval(async () => {
@@ -122,8 +138,19 @@ export default function Profile() {
           <Card style={{ flexDirection: "row", gap: space.sm, alignItems: "center" }} testID="pro-active-card">
             <Icon name="badge-check" size={22} color={colors.success} />
             <Text style={[s.name, { flex: 1 }]}>
-              {lifetime ? "Lifetime Pro is active. Thanks for upgrading!" : `Pro ${user.pro_tier} is active until ${new Date(user.pro_until!).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`}
+              {lifetime
+                ? "Lifetime Pro is active. Thanks for upgrading!"
+                : `Pro ${user.pro_tier} · ${user.auto_renew ? "renews" : "ends"} ${new Date(user.pro_until!).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`}
             </Text>
+          </Card>
+        )}
+        {user.has_subscription && (
+          <Card style={{ gap: space.sm }} testID="subscription-card">
+            <Text style={s.rowTitle}>{user.auto_renew ? "Auto-renew is on" : "Auto-renew is off"}</Text>
+            <Text style={s.muted} testID="subscription-status">
+              {user.sub_status === "past_due" ? "Your last renewal payment failed. Stripe will retry; update your card from the Stripe receipt email." : user.auto_renew ? "Your card is charged automatically each period. Cancel any time and keep Pro until the period ends." : "Pro stays active until the date above, then switches to Basic."}
+            </Text>
+            <Button small variant={user.auto_renew ? "outline" : "primary"} title={user.auto_renew ? "Cancel auto-renew" : "Turn auto-renew back on"} loading={renewBusy} onPress={() => setAutoRenew(!user.auto_renew)} testID={user.auto_renew ? "cancel-auto-renew-button" : "resume-auto-renew-button"} />
           </Card>
         )}
         {!lifetime && (
@@ -142,8 +169,8 @@ export default function Profile() {
               ))}
             </View>
             <View style={{ flexDirection: "row", gap: space.sm, marginBottom: space.md }}>
-              {TIERS.map((t) => (
-                <Pressable key={t.id} onPress={() => { tap(); setTier(t.id); }} style={[s.tier, tier === t.id && s.tierOn]} testID={`tier-${t.id}`}>
+              {tiers.map((t) => (
+                <Pressable key={t.id} onPress={() => { tap(); setTier(t.id); }} style={[s.tier, chosen === t.id && s.tierOn]} testID={`tier-${t.id}`}>
                   {t.badge ? <Text style={s.tierBadge}>{t.badge}</Text> : null}
                   <Text style={s.tierLabel}>{t.label}</Text>
                   <Text style={s.tierPrice}>{t.price}</Text>
@@ -151,8 +178,8 @@ export default function Profile() {
                 </Pressable>
               ))}
             </View>
-            <Button title={paying ? "Waiting for payment…" : `Pay ${TIERS.find((t) => t.id === tier)!.price} · ${TIERS.find((t) => t.id === tier)!.label}`} icon="credit-card" loading={paying} onPress={upgrade} testID="upgrade-pro-button" />
-            {tier !== "lifetime" && <Text style={[s.proSub, { textAlign: "center" }]}>One payment per period, no auto-renew. Renewing early adds to your remaining time.</Text>}
+            <Button title={paying ? "Waiting for payment…" : `Pay ${TIERS.find((t) => t.id === chosen)!.price} · ${TIERS.find((t) => t.id === chosen)!.label}`} icon="credit-card" loading={paying} onPress={upgrade} testID="upgrade-pro-button" />
+            {chosen !== "lifetime" && <Text style={[s.proSub, { textAlign: "center" }]} testID="tier-renew-note">Renews automatically. Cancel any time and keep Pro until the period ends.</Text>}
             {paying && (
               <Pressable onPress={() => { if (poll.current) clearInterval(poll.current); setPaying(false); }} testID="cancel-payment-wait" style={{ alignItems: "center", paddingTop: space.sm }}>
                 <Text style={[s.muted, { color: colors.onSurfaceInverse }]}>Cancel</Text>
@@ -206,6 +233,7 @@ export default function Profile() {
           {[
             { icon: "folder-open" as IconName, label: "My projects", onPress: () => router.push("/projects"), id: "projects" },
             { icon: "users" as IconName, label: "Co-owners", onPress: () => router.push("/co-owners"), id: "co-owners" },
+            { icon: "history" as IconName, label: "Project activity", onPress: () => router.push("/project-activity"), id: "project-activity" },
             { icon: "milestone" as IconName, label: "Milestone timeline", onPress: () => router.push("/timeline"), id: "timeline" },
             { icon: "file-text" as IconName, label: "Quote requests", onPress: () => router.push("/quotes"), id: "quotes" },
             { icon: "share-2" as IconName, label: "Share report with lenders", onPress: () => router.push("/share-report"), id: "share" },

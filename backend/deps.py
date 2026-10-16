@@ -29,6 +29,9 @@ async def load_user(uid: str) -> User:
     u = User.from_mongo(doc)
     # Monthly/yearly Pro passes lapse back to Basic; lifetime never does.
     if u.plan == "pro" and u.pro_tier in ("monthly", "yearly") and u.pro_until and u.pro_until < datetime.now(timezone.utc).isoformat():
+        from routes.subscriptions import refresh_if_lapsed
+        if await refresh_if_lapsed(u):  # auto-renewed on Stripe: reload the new period
+            return User.from_mongo(await db.users.find_one({"_id": doc["_id"]}))
         await db.users.update_one({"_id": doc["_id"]}, {"$set": {"plan": "basic"}})
         u.plan = "basic"
     return u
@@ -79,6 +82,9 @@ def user_out(u: User, eff: User | None = None):
     eff = eff or u
     return {"id": u.id, "name": u.name, "email": u.email, "plan": eff.plan, "own_plan": u.plan, "paid_pro": u.paid_pro, "trial_ends": u.trial_ends,
             "pro_tier": u.pro_tier, "pro_until": u.pro_until, "active_project_id": u.active_project_id,
+            "auto_renew": bool(u.stripe_subscription_id and u.sub_status in ("active", "trialing", "past_due") and not u.cancel_at_period_end and u.pro_tier != "lifetime"),
+            "has_subscription": bool(u.stripe_subscription_id and u.sub_status in ("active", "trialing", "past_due") and u.pro_tier != "lifetime"),
+            "sub_status": u.sub_status,
             "acting_as": {"owner_id": eff.id, "owner_name": eff.name} if eff.id != u.id else None}
 
 

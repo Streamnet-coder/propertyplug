@@ -28,6 +28,10 @@ class User(BaseDocument):
     referral_count: int = 0
     pro_tier: Optional[Literal["monthly", "yearly", "lifetime"]] = None
     pro_until: Optional[str] = None
+    stripe_customer_id: Optional[str] = None
+    stripe_subscription_id: Optional[str] = None
+    sub_status: Optional[str] = None
+    cancel_at_period_end: bool = False
     acting_owner_id: Optional[str] = None  # set while a co-owner has one of this owner's projects open
     real_id: Optional[str] = Field(None, exclude=True)  # runtime only: the co-owner actually signed in
     real_name: Optional[str] = Field(None, exclude=True)

@@ -8,6 +8,7 @@ from bson import ObjectId
 from core import db, logger, now_iso, STRIPE_API_KEY, PRO_TIERS
 from models import User
 from deps import real_user
+from routes.subscriptions import cancel_subscription_now, create_subscription_checkout, subscription_session_status
 
 router = APIRouter()
 
@@ -32,8 +33,10 @@ async def create_checkout(body: CheckoutIn, request: Request, user: User = Depen
     if user.pro_tier == "lifetime" and user.plan == "pro":
         raise HTTPException(400, "You already have lifetime Pro")
     price = PRO_TIERS[body.tier]["price"]  # amount always from the server, never the client
-    sc = stripe_client(request)
     origin = body.origin_url.rstrip("/")
+    if body.tier in ("monthly", "yearly"):
+        return await create_subscription_checkout(user, body.tier, origin)
+    sc = stripe_client(request)
     req = CheckoutSessionRequest(amount=price, currency="gbp",
                                  success_url=f"{origin}/api/payments/done?session_id={{CHECKOUT_SESSION_ID}}",
                                  cancel_url=f"{origin}/api/payments/done?cancelled=1",
@@ -51,7 +54,7 @@ async def mark_paid(session_id: str):
         return
     await db.payment_transactions.update_one({"session_id": session_id}, {"$set": {"payment_status": "paid", "paid_at": now_iso()}})
     tier = (tx.get("metadata") or {}).get("tier", "lifetime")  # pre-tier purchases were one-off lifetime upgrades
-    u = await db.users.find_one({"_id": ObjectId(tx["user_id"])}, {"pro_until": 1, "pro_tier": 1})
+    u = await db.users.find_one({"_id": ObjectId(tx["user_id"])}, {"pro_until": 1, "pro_tier": 1, "stripe_subscription_id": 1, "sub_status": 1})
     upd = {"plan": "pro", "paid_pro": True, "pro_tier": tier}
     days = PRO_TIERS[tier]["days"]
     if days is None:
@@ -63,6 +66,9 @@ async def mark_paid(session_id: str):
         upd["pro_until"] = (base + timedelta(days=days)).isoformat()
     else:
         upd.pop("pro_tier")
+    if tier == "lifetime" and (u or {}).get("stripe_subscription_id") and u.get("sub_status") in ("active", "trialing", "past_due"):
+        await cancel_subscription_now(u["stripe_subscription_id"])  # no more renewals once lifetime is bought
+        upd.update(sub_status="canceled", cancel_at_period_end=False)
     await db.users.update_one({"_id": ObjectId(tx["user_id"])}, {"$set": upd})
 
 
@@ -71,6 +77,8 @@ async def payment_status(session_id: str, request: Request, user: User = Depends
     tx = await db.payment_transactions.find_one({"session_id": session_id, "user_id": user.id})
     if not tx:
         raise HTTPException(404, "Payment not found")
+    if tx.get("kind") == "subscription":
+        return await subscription_session_status(tx)
     st = await stripe_client(request).get_checkout_status(session_id)
     if st.payment_status == "paid":
         await mark_paid(session_id)

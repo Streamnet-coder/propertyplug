@@ -150,3 +150,8 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - /projects lists own + shared (shared, owner_name). Co-owners can't delete projects (403).
 - /co-owners GET/POST/DELETE, /co-owners/shared-with-me, DELETE /co-owners/shared/{owner_id}.
 - Pricing: PRO_TIERS monthly 19.99 GBP (31d), yearly 199 (365d), lifetime 499; Stripe one-off checkout with tier; pro_until lapses to basic in load_user. /payments/tiers.
+
+## Activity log + Lead doc requests (Jun 2026)
+- server.py middleware -> routes/activity.log_write: successful POST/PUT/DELETE on project areas logged to project_activity {owner_id, project_id, actor_id/name, is_owner, action}. GET /api/project-activity; screen project-activity.
+- portal_doc_requests: lead POST/GET /portal/projects/{pid}/doc-requests; owner GET /portal-doc-requests, PUT /portal-doc-requests/{id} {status fulfilled|declined, reply, doc_ids} shares docs with requester's company team. DocRequestsPanel in portal-access.
+- Auto-renew subscriptions (DONE): routes/subscriptions.py uses user's LIVE STRIPE_SECRET_KEY (backend .env) via stripe SDK, mode=subscription with inline price_data (1999/19900 pence GBP). Lifetime still via emergentintegrations one-time (STRIPE_API_KEY). Sync re-fetches subscription from Stripe (status polling, lapsed-period refresh in deps.load_user, webhook /api/webhook/stripe-subscriptions; STRIPE_WEBHOOK_SECRET empty -> events treated as hints only). Cancel/resume: /payments/subscription/cancel|resume (cancel_at_period_end). Buying lifetime cancels active subscription.
