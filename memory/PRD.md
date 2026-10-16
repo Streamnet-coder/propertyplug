@@ -159,3 +159,6 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 ## Billing history + request reminders (Jun 2026)
 - GET /api/payments/history (one-off paid txs + Stripe invoices with hosted receipt URL); GET /api/payments/receipt/{session_id}?t=token printable HTML. Screen /billing (profile link).
 - Doc requests: days_waiting/overdue(>=3d)/can_remind; lead POST /portal/projects/{pid}/doc-requests/{rid}/remind (3+ days, once/24h, emails owner); owner GET /portal-doc-requests/overdue -> dashboard OverdueRequestsCard.
+
+- Activity filters (Jun 2026): client-side person + area chips on project-activity screen (limit 300).
+- Stripe webhook endpoint created via API (we_1URGLVRfIVVOsnJmtQd4HGOC) for preview URL; STRIPE_WEBHOOK_SECRET set; signature verified. Must re-create for deployed URL.
