@@ -1,5 +1,7 @@
 """Stakeholder portal: owners grant investors/lenders/partners read-only access to chosen projects, documents and
-weekly updates. Stakeholders sign in with their email or their name@buildassist handle + a one-time email code."""
+weekly updates. Stakeholders sign in either with their personal access code + a password they set themselves, or with their
+email / name@buildassist handle + a one-time email code. Several people from one company can each have their own login."""
+import base64
 import hashlib
 import hmac
 import re
@@ -8,6 +10,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
+import bcrypt
 import jwt
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -32,6 +35,8 @@ router = APIRouter()
 HANDLE_DOMAIN = "buildassist"
 PORTAL_SECRET = JWT_SECRET + "|portal"  # different key: portal tokens can never authenticate owner APIs
 CODE_TTL = 600
+MAX_FAILS = 5
+LOCK_SECONDS = 900
 
 
 def handle_addr(h: str) -> str:
@@ -56,6 +61,7 @@ class MemberIn(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     email: EmailStr
     role: str = Field("Investor", max_length=40)
+    company: str = Field("", max_length=80)
     handle: Optional[str] = Field(None, max_length=24)
     doc_ids: List[str] = Field(default_factory=list, max_length=200)
     digest: bool = True
@@ -64,25 +70,54 @@ class MemberIn(BaseModel):
 
 class MemberUpdate(BaseModel):
     role: Optional[str] = Field(None, max_length=40)
+    company: Optional[str] = Field(None, max_length=80)
     doc_ids: Optional[List[str]] = Field(None, max_length=200)
     digest: Optional[bool] = None
 
 
 async def member_out(m: dict) -> dict:
     h = await db.portal_handles.find_one({"email": m["email"]}, {"handle": 1})
-    return {"id": str(m["_id"]), "name": m["name"], "email": m["email"], "role": m["role"], "doc_ids": m["doc_ids"], "digest": m["digest"],
+    acc = await db.portal_accounts.find_one({"email": m["email"]}, {"password_hash": 1})
+    return {"id": str(m["_id"]), "name": m["name"], "email": m["email"], "role": m["role"], "company": m.get("company", ""), "doc_ids": m["doc_ids"], "digest": m["digest"],
+            "password_set": bool(acc and acc.get("password_hash")),
             "handle": handle_addr(h["handle"]) if h else None, "last_login": m.get("last_login"), "invited_at": m.get("invited_at"),
             "portal_url": f"{m['origin'].rstrip('/')}/api/portal" if m.get("origin") else None}
 
 
-async def _invite_email(m: dict, owner: User, project_name: str):
+# ---------------- Access codes (permanent ID) + passwords ----------------
+def _norm_code(code: str) -> str:
+    return re.sub(r"[^A-Z0-9]", "", code.upper()).removeprefix("BA")
+
+
+def _code_lookup(code: str) -> str:
+    return hmac.new(PORTAL_SECRET.encode(), f"access:{_norm_code(code)}".encode(), hashlib.sha256).hexdigest()
+
+
+async def issue_access_code(email: str) -> Optional[str]:
+    """New access code for stakeholders who have not set a password yet (rotates any earlier unused code).
+    Returns None once they have a password: their existing code keeps working and is never re-sent in plain text."""
+    acc = await db.portal_accounts.find_one({"email": email})
+    if acc and acc.get("password_hash"):
+        return None
+    raw = base64.b32encode(secrets.token_bytes(10)).decode()  # 16 chars, 80 bits
+    code = "BA-" + "-".join(raw[i:i + 4] for i in range(0, 16, 4))
+    await db.portal_accounts.update_one({"email": email}, {"$set": {"code_lookup": _code_lookup(code), "code_issued_at": now_iso()},
+                                                           "$setOnInsert": {"created_at": now_iso(), "failed": 0}}, upsert=True)
+    return code
+
+
+async def _invite_email(m: dict, owner: User, project_name: str, access_code: Optional[str] = None):
     url = f"{m['origin'].rstrip('/')}/api/portal"
     h = await db.portal_handles.find_one({"email": m["email"]}, {"handle": 1})
     html = (f'<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0f172a">'
             f'<p style="font-size:12px;letter-spacing:1px;color:#0f766e;font-weight:bold;margin:0">{E(EMAIL_FROM_NAME.upper())} · STAKEHOLDER PORTAL</p>'
             f'<h1 style="font-size:20px;margin:8px 0">You have access to {E(project_name)}</h1>'
             f'<p>Hi {E(m["name"])}, {E(owner.name)} has shared project updates and documents with you.</p>'
-            f'<p>Your sign-in ID: <b>{E(handle_addr(h["handle"]))}</b> (or use this email address). Each time you sign in we email you a one-time code.</p>'
+            + (f'<div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:14px;margin:12px 0"><p style="margin:0 0 4px">Your personal access code:</p>'
+               f'<p style="font-size:20px;font-weight:bold;letter-spacing:2px;margin:0;font-family:monospace">{E(access_code)}</p>'
+               f'<p style="margin:8px 0 0;font-size:13px">First time? Open the portal, choose <b>Set up password</b>, enter this code and create your password. After that, sign in with the code + your password.</p></div>'
+               if access_code else '<p>Sign in with your access code and password as usual.</p>')
+            + f'<p>Prefer not to use a password? Sign in with <b>{E(handle_addr(h["handle"]))}</b> or this email and we will email you a one-time code.</p>'
             f'<p><a href="{E(url)}" style="display:inline-block;background:#0f766e;color:#ffffff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:bold">Open the portal</a></p>'
             f'<p style="font-size:12px;color:#888">Sent by {E(EMAIL_FROM_NAME)} on behalf of {E(owner.name)}. We never ask for your password by email.</p></td></tr></table>')
     await send_email(to=m["email"], subject=f"{owner.name} shared {project_name} with you", html=html, reply_to=await owner_reply_to(owner.id))
@@ -106,11 +141,12 @@ async def add_member(body: MemberIn, user: User = Depends(current_user)):
         raise HTTPException(400, "Up to 25 stakeholders per project")
     own = {str(d["_id"]) for d in await db.documents.find({"_id": {"$in": [oid(i) for i in body.doc_ids]}, "user_id": user.id, "project_id": p.id}, {"_id": 1}).to_list(200)}
     await ensure_handle(email, body.name, body.handle)
-    m = {"owner_id": user.id, "project_id": p.id, "name": body.name.strip(), "email": email, "role": body.role.strip() or "Investor",
+    code = await issue_access_code(email)
+    m = {"owner_id": user.id, "project_id": p.id, "name": body.name.strip(), "email": email, "role": body.role.strip() or "Investor", "company": body.company.strip(),
          "doc_ids": [i for i in body.doc_ids if i in own], "digest": body.digest, "origin": body.origin_url, "created_at": now_iso(), "invited_at": now_iso()}
     m["_id"] = (await db.portal_members.insert_one(m)).inserted_id
     try:
-        await _invite_email(m, user, p.name)
+        await _invite_email(m, user, p.name, code)
         await log_message(user.id, p.id, name=m["name"], email=email, channel="email", kind="portal_invite", summary=f"Invited to the stakeholder portal for {p.name}")
         sent = True
     except (EmailError, ValueError) as e:
@@ -141,7 +177,7 @@ async def resend_invite(mid: str, user: User = Depends(current_user)):
         raise HTTPException(429, "Invite just sent. Try again in a couple of minutes")
     p = await db.projects.find_one({"_id": ObjectId(m["project_id"])}, {"name": 1}) or {}
     try:
-        await _invite_email(m, user, p.get("name", "your project"))
+        await _invite_email(m, user, p.get("name", "your project"), await issue_access_code(m["email"]))
     except EmailError as e:
         raise HTTPException(503, str(e))
     await db.portal_members.update_one({"_id": m["_id"]}, {"$set": {"invited_at": now_iso()}})
@@ -260,11 +296,121 @@ async def verify_code(body: CodeVerify):
         await db.portal_codes.update_one({"_id": rec["_id"]}, {"$inc": {"attempts": 1}})
         raise HTTPException(401, "Incorrect code")
     await db.portal_codes.delete_one({"_id": rec["_id"]})
+    return await _session(email)
+
+
+async def _session(email: str) -> dict:
     await db.portal_members.update_many({"email": email}, {"$set": {"last_login": now_iso()}})
     async for m in db.portal_members.find({"email": email}):
         await log_activity(m, "login")
     n = datetime.now(timezone.utc)
     return {"token": jwt.encode({"sub": email, "typ": "portal", "iat": n, "exp": n + timedelta(days=7)}, PORTAL_SECRET, algorithm="HS256")}
+
+
+class PasswordLogin(BaseModel):
+    access_code: str = Field(min_length=8, max_length=40)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class ResetRequest(BaseModel):
+    identifier: str = Field(min_length=3, max_length=200)  # access code, email or name@buildassist
+
+
+class ResetConfirm(ResetRequest):
+    reset_code: str = Field(min_length=6, max_length=6)
+    new_password: str = Field(max_length=128)
+
+
+_DUMMY_HASH = bcrypt.hashpw(b"not-a-real-password", bcrypt.gensalt()).decode()
+
+
+def _check_password_rules(pw: str):
+    if len(pw) < 8 or not re.search(r"[A-Za-z]", pw) or not re.search(r"\d", pw):
+        raise HTTPException(400, "Password needs at least 8 characters, including a letter and a number")
+
+
+async def _account_by_code(code: str) -> Optional[dict]:
+    acc = await db.portal_accounts.find_one({"code_lookup": _code_lookup(code)})
+    # Access only while they are still a member of at least one project.
+    return acc if acc and await db.portal_members.find_one({"email": acc["email"]}, {"_id": 1}) else None
+
+
+@router.post("/portal/activate")
+async def activate(body: PasswordLogin):
+    """First sign-in: stakeholder proves the emailed access code and chooses their password."""
+    _check_password_rules(body.password)
+    acc = await _account_by_code(body.access_code)
+    if not acc:
+        raise HTTPException(400, "That access code isn't valid. Check your invite email")
+    if acc.get("password_hash"):
+        raise HTTPException(409, "Password already set. Sign in with your access code and password")
+    hashed = await run_in_threadpool(lambda: bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode())
+    await db.portal_accounts.update_one({"_id": acc["_id"]}, {"$set": {"password_hash": hashed, "activated_at": now_iso(), "failed": 0, "locked_until": 0}})
+    return await _session(acc["email"])
+
+
+@router.post("/portal/login-password")
+async def login_password(body: PasswordLogin):
+    acc = await _account_by_code(body.access_code)
+    if acc and acc.get("locked_until", 0) > time.time():
+        raise HTTPException(429, "Too many attempts. Try again in 15 minutes or reset your password")
+    stored = (acc or {}).get("password_hash") or _DUMMY_HASH  # constant work for unknown codes
+    ok = await run_in_threadpool(bcrypt.checkpw, body.password.encode(), stored.encode())
+    if not acc or not acc.get("password_hash") or not ok:
+        if acc:
+            fails = acc.get("failed", 0) + 1
+            await db.portal_accounts.update_one({"_id": acc["_id"]}, {"$set": {"failed": 0 if fails >= MAX_FAILS else fails,
+                                                                               **({"locked_until": time.time() + LOCK_SECONDS} if fails >= MAX_FAILS else {})}})
+            if not acc.get("password_hash"):
+                raise HTTPException(401, "No password set yet. Choose Set up password first")
+        raise HTTPException(401, "Access code or password is incorrect")
+    await db.portal_accounts.update_one({"_id": acc["_id"]}, {"$set": {"failed": 0, "locked_until": 0}})
+    return await _session(acc["email"])
+
+
+async def _account_by_identifier(identifier: str) -> Optional[dict]:
+    email = await _resolve(identifier)
+    if email:  # members invited before passwords existed get an account on first reset
+        await db.portal_accounts.update_one({"email": email}, {"$setOnInsert": {"created_at": now_iso(), "failed": 0}}, upsert=True)
+        return await db.portal_accounts.find_one({"email": email})
+    return await _account_by_code(identifier)
+
+
+@router.post("/portal/password-reset/request")
+async def reset_request(body: ResetRequest):
+    acc = await _account_by_identifier(body.identifier)
+    if acc:  # generic response either way: no account enumeration
+        sends = [t for t in (acc.get("reset") or {}).get("sends", []) if time.time() - t < 900]
+        if len(sends) < 3:
+            code = f"{secrets.randbelow(1_000_000):06d}"
+            await db.portal_accounts.update_one({"_id": acc["_id"]}, {"$set": {"reset": {"hash": _code_hash(acc["email"], "reset:" + code), "expires": time.time() + CODE_TTL,
+                                                                                          "attempts": 0, "sends": sends + [time.time()]}}})
+            html = (f'<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0f172a">'
+                    f'<p>Your {E(EMAIL_FROM_NAME)} portal password reset code is:</p><p style="font-size:30px;font-weight:bold;letter-spacing:6px">{code}</p>'
+                    f'<p>It expires in 10 minutes. If you did not ask to reset your password, ignore this email. Your password has not changed.</p></td></tr></table>')
+            try:
+                await send_email(to=acc["email"], subject=f"{code} is your {EMAIL_FROM_NAME} password reset code", html=html)
+            except EmailError as e:
+                logger.warning(f"Portal reset email failed: {e}")
+    return {"ok": True, "message": "If that matches a portal account, we've emailed a 6-digit reset code."}
+
+
+@router.post("/portal/password-reset/confirm")
+async def reset_confirm(body: ResetConfirm):
+    _check_password_rules(body.new_password)
+    acc = await _account_by_identifier(body.identifier)
+    rec = (acc or {}).get("reset")
+    if not rec or rec.get("expires", 0) < time.time() or rec.get("attempts", 0) >= 5:
+        raise HTTPException(401, "Reset code expired. Request a new one")
+    if not hmac.compare_digest(rec["hash"], _code_hash(acc["email"], "reset:" + body.reset_code.strip())):
+        await db.portal_accounts.update_one({"_id": acc["_id"]}, {"$inc": {"reset.attempts": 1}})
+        raise HTTPException(401, "Incorrect reset code")
+    # No access code yet (older invite): issue one now and show it once to this verified user.
+    code = None if acc.get("code_lookup") else await issue_access_code(acc["email"])
+    hashed = await run_in_threadpool(lambda: bcrypt.hashpw(body.new_password.encode(), bcrypt.gensalt()).decode())
+    await db.portal_accounts.update_one({"_id": acc["_id"]}, {"$set": {"password_hash": hashed, "failed": 0, "locked_until": 0, "activated_at": acc.get("activated_at") or now_iso()},
+                                                              "$unset": {"reset": ""}})
+    return {**await _session(acc["email"]), "access_code": code}
 
 
 async def portal_email(cred: HTTPAuthorizationCredentials = Depends(bearer)) -> str:
@@ -361,12 +507,37 @@ PORTAL_JS = """
 const $=s=>document.querySelector(s),api=async(p,o={})=>{const t=sessionStorage.getItem('pt');const r=await fetch('/api'+p,{...o,headers:{'Content-Type':'application/json',...(t?{Authorization:'Bearer '+t}:{})}});if(r.status===401&&t){sessionStorage.removeItem('pt');login();throw new Error('Signed out');}if(!r.ok){let m='Something went wrong';try{m=(await r.json()).detail||m}catch(e){}throw new Error(m)}return r};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let sy='£';const gbp=n=>sy+Math.round(n).toLocaleString('en-GB');let ident='',week=0,cur=null;
-function login(){$('#app').innerHTML=`<div class='card'><h2>Stakeholder sign in</h2><p class='cap'>Use your email or your ID ending @buildassist. We'll email you a one-time code.</p>
-<label>Email or ID</label><input id='ident' placeholder='dave@buildassist' autocomplete='username'/><button id='send-code'>Email me a code</button><p id='err' class='over'></p></div>`;
+function done(r){sessionStorage.setItem('pt',r.token);if(r.access_code){$('#app').innerHTML=`<div class='card' id='new-code'><h2>Password saved</h2><p>Your personal access code is:</p><p style='font-size:20px;font-weight:bold;font-family:monospace;letter-spacing:2px' id='new-code-value'>${esc(r.access_code)}</p><p class='cap'>Write it down. You'll sign in with this code and your password.</p><button id='go'>Continue</button></div>`;$('#go').onclick=()=>home();return}home()}
+async function run(btn,fn){$('#err').textContent='';btn.disabled=true;try{await fn()}catch(e){$('#err').textContent=e.message;btn.disabled=false}}
+const post=async(p,b)=>(await api(p,{method:'POST',body:JSON.stringify(b)})).json();
+function login(){$('#app').innerHTML=`<div class='card' id='pw-login'><h2>Stakeholder sign in</h2><p class='cap'>Use the access code from your invite email and your password.</p>
+<label>Access code</label><input id='acode' placeholder='BA-XXXX-XXXX-XXXX-XXXX' autocomplete='username' autocapitalize='characters'/><label>Password</label><input id='pw' type='password' autocomplete='current-password'/>
+<button id='pw-signin'>Sign in</button><p id='err' class='over'></p>
+<p class='cap'><a href='#' id='to-setup'>First time? Set up password</a> · <a href='#' id='to-forgot'>Forgot password?</a></p>
+<p class='cap'><a href='#' id='to-otp'>Sign in with an email code instead</a></p></div>`;
+$('#pw-signin').onclick=()=>run($('#pw-signin'),async()=>done(await post('/portal/login-password',{access_code:$('#acode').value.trim(),password:$('#pw').value})));
+$('#to-setup').onclick=e=>{e.preventDefault();setup()};$('#to-forgot').onclick=e=>{e.preventDefault();forgot()};$('#to-otp').onclick=e=>{e.preventDefault();otpLogin()}}
+function setup(){$('#app').innerHTML=`<div class='card' id='pw-setup'><h2>Set up your password</h2><p class='cap'>Enter the access code from your invite email and choose a password (8+ characters, with a letter and a number).</p>
+<label>Access code</label><input id='acode' placeholder='BA-XXXX-XXXX-XXXX-XXXX' autocapitalize='characters'/><label>New password</label><input id='pw' type='password' autocomplete='new-password'/><label>Confirm password</label><input id='pw2' type='password' autocomplete='new-password'/>
+<button id='pw-activate'>Save password & sign in</button><p id='err' class='over'></p><a href='#' id='back'>Back to sign in</a></div>`;
+$('#back').onclick=e=>{e.preventDefault();login()};
+$('#pw-activate').onclick=()=>{if($('#pw').value!==$('#pw2').value){$('#err').textContent='Passwords do not match';return}run($('#pw-activate'),async()=>done(await post('/portal/activate',{access_code:$('#acode').value.trim(),password:$('#pw').value})))}}
+function forgot(){$('#app').innerHTML=`<div class='card' id='pw-forgot'><h2>Reset your password</h2><p class='cap'>Enter your access code, email or ID ending @buildassist. We'll email you a 6-digit reset code.</p>
+<label>Access code, email or ID</label><input id='rid' autocomplete='username'/><button id='reset-send'>Email me a reset code</button><p id='err' class='over'></p><a href='#' id='back'>Back to sign in</a></div>`;
+$('#back').onclick=e=>{e.preventDefault();login()};
+$('#reset-send').onclick=()=>{ident=$('#rid').value.trim();if(!ident)return;run($('#reset-send'),async()=>{await post('/portal/password-reset/request',{identifier:ident});resetStep()})}}
+function resetStep(){$('#app').innerHTML=`<div class='card' id='pw-reset'><h2>Check your email</h2><p class='cap'>If <b>${esc(ident)}</b> matches a portal account, a 6-digit reset code is on its way.</p>
+<label>Reset code</label><input id='rcode' inputmode='numeric' maxlength='6' autocomplete='one-time-code'/><label>New password</label><input id='pw' type='password' autocomplete='new-password'/><label>Confirm password</label><input id='pw2' type='password' autocomplete='new-password'/>
+<button id='reset-confirm'>Save new password</button><p id='err' class='over'></p><a href='#' id='back'>Back to sign in</a></div>`;
+$('#back').onclick=e=>{e.preventDefault();login()};
+$('#reset-confirm').onclick=()=>{if($('#pw').value!==$('#pw2').value){$('#err').textContent='Passwords do not match';return}run($('#reset-confirm'),async()=>done(await post('/portal/password-reset/confirm',{identifier:ident,reset_code:$('#rcode').value.trim(),new_password:$('#pw').value})))}}
+function otpLogin(){$('#app').innerHTML=`<div class='card' id='otp-login'><h2>Sign in with an email code</h2><p class='cap'>Use your email or your ID ending @buildassist. We'll email you a one-time code.</p>
+<label>Email or ID</label><input id='ident' placeholder='dave@buildassist' autocomplete='username'/><button id='send-code'>Email me a code</button><p id='err' class='over'></p><a href='#' id='back'>Use access code & password</a></div>`;
+$('#back').onclick=e=>{e.preventDefault();login()};
 $('#send-code').onclick=async()=>{ident=$('#ident').value.trim();if(!ident)return;$('#send-code').disabled=true;try{await api('/portal/request-code',{method:'POST',body:JSON.stringify({identifier:ident})});codeStep()}catch(e){$('#err').textContent=e.message;$('#send-code').disabled=false}}}
 function codeStep(){$('#app').innerHTML=`<div class='card'><h2>Check your email</h2><p class='cap'>If <b>${esc(ident)}</b> has portal access, a 6-digit code is on its way.</p>
 <label>Code</label><input id='code' inputmode='numeric' maxlength='6' autocomplete='one-time-code'/><button id='verify'>Sign in</button><p id='err' class='over'></p><a href='#' id='back'>Use a different ID</a></div>`;
-$('#back').onclick=e=>{e.preventDefault();login()};$('#verify').onclick=async()=>{try{const r=await(await api('/portal/verify',{method:'POST',body:JSON.stringify({identifier:ident,code:$('#code').value.trim()})})).json();sessionStorage.setItem('pt',r.token);home()}catch(e){$('#err').textContent=e.message}}}
+$('#back').onclick=e=>{e.preventDefault();otpLogin()};$('#verify').onclick=async()=>{try{const r=await(await api('/portal/verify',{method:'POST',body:JSON.stringify({identifier:ident,code:$('#code').value.trim()})})).json();sessionStorage.setItem('pt',r.token);home()}catch(e){$('#err').textContent=e.message}}}
 async function home(){const me=await(await api('/portal/me')).json();if(me.projects.length===1)return project(me.projects[0].project_id,me);
 $('#app').innerHTML=`<div class='card' id='portal-home'><h2>Your shared projects</h2><p class='cap'>Signed in as ${esc(me.handle||me.email)} · <a href='#' id='logout'>Sign out</a></p>${me.projects.map(p=>`<a class='proj' href='#' data-id='${p.project_id}'><b>${esc(p.name)}</b><div class='cap'>${esc(p.address)} · shared by ${esc(p.owner)} · ${esc(p.role)}</div></a>`).join('')||"<p>No projects shared yet.</p>"}</div>`;
 document.querySelectorAll('.proj').forEach(a=>a.onclick=e=>{e.preventDefault();project(a.dataset.id,me)});$('#logout').onclick=logout}

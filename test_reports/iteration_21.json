@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 21 — Stakeholder portal access codes + passwords. Backend: 20/20 pytest tests pass (test_iteration21.py) covering (a) POST /api/portal-members accepts `company`, response includes `company` and `password_set=false`, access code is only stored as HMAC in portal_accounts.code_lookup (never returned/leaked in response); duplicate invite 400; (b) POST /api/portal/activate: invalid code 400, weak password 400 (short/no digit/no letter), success returns token usable on /api/portal/me, access code is case/dash-insensitive, second activate 409, GET /api/portal-members shows password_set=true after; (c) POST /api/portal/login-password: correct→token, wrong→401, not-activated→401 with 'No password set yet' detail, 5 wrong attempts→429 lock (even with correct password), removed member→401; (d) POST /api/portal/password-reset/request always generic 200 (no account enumeration); confirm: wrong code 401, expired 401, success returns token+(access_code None for already-coded members), new password works for login-password; legacy member (portal_accounts doc deleted) → confirm returns a brand-new access_code once and that code works for login-password; (e) resend rotates code_lookup before password is set and does NOT rotate once password is set; (f) existing OTP flow (/portal/request-code + /portal/verify) still works; (g) /api/portal HTML+JS source contains all required IDs (pw-login, acode, pw, pw-signin, to-setup, to-forgot, to-otp, pw-setup, pw2, pw-activate, pw-forgot, rid, reset-send, pw-reset, rcode, reset-confirm, otp-login). Web portal UI (375x667): default screen is #pw-login with #acode/#pw/#pw-signin; wrong code+pw → 'Access code or password is incorrect'; #to-setup → #pw-setup (#acode/#pw/#pw2/#pw-activate), mismatch → 'Passwords do not match'; #to-forgot → #pw-forgot (#rid/#reset-send) → #pw-reset (#rcode/#pw/#pw2/#reset-confirm); #to-otp → #otp-login (legacy email code flow). Mobile UI (390x844, demo@mybuilder.app/demo1234, /portal-access): new portal-company-input renders; after inviting a stakeholder with company 'QA Co', the member card shows portal-member-company-{id}='QA CO' and portal-member-password-{id}='Access code sent · password not set yet'; expanded card has portal-add-teammate-{id}; tapping it shows portal-teammate-banner, prefills portal-company-input with 'QA Co' and keeps role; portal-teammate-cancel hides the banner and clears the company field. No critical issues; one minor env-related note (email service may 429 under parallel load — resend tests tolerate 503 since code rotation happens before the email send).",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "POST /api/portal-members/{mid}/resend", "issue": "Returns 503 when Resend email provider is rate-limited. Rotation of code_lookup happens before send, so the new code is already live even on 503 — consider swallowing EmailError and returning {ok:true, email_sent:false} (as POST /portal-members already does) for a consistent UX. Reference: /app/backend/routes/portal.py:179."}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration21.py",
+    "/app/test_reports/pytest/pytest_iteration21.xml"
+  ],
+  "action_items": [
+    "(Minor) Make resend_invite tolerate transient Resend 429/EmailError the way add_member does (return 200 with email_sent=false) so UI shows the same success toast and no retry loop. The access code has already been rotated by then.",
+    "(Pre-existing, unrelated) POST /api/documents still fails with 500 due to EMERGENT_LLM_KEY lacking objstore scope — carried over from iter 19."
+  ],
+  "critical_code_review_comments": [
+    "routes/portal.py:_norm_code strips non-alphanumerics then removeprefix('BA') — correctly makes activate/login case- and dash-insensitive.",
+    "routes/portal.py:issue_access_code is idempotent re. password: returns None once password_hash is set, so resend never leaks a working code to a post-activation member. Verified by test_resend_does_not_rotate_after_password_set.",
+    "routes/portal.py:login_password uses _DUMMY_HASH when the account is unknown — constant-time behaviour prevents access-code enumeration. ✓",
+    "routes/portal.py:login_password lockout: on 5th failure, failed is reset to 0 and locked_until set 15 min out. Minor nit: `if fails >= MAX_FAILS` resets `failed` to 0 — fine, but a subsequent correct password during the window is still rejected because `locked_until > time.time()` short-circuits. Verified.",
+    "routes/portal.py:_account_by_code gates on current portal_members membership so removed members cannot login even with the correct code+password. ✓ (test_removed_member_cannot_login)",
+    "routes/portal.py:reset_confirm returns a new access_code ONLY when `code_lookup` was missing on the account (legacy member path). Confirmed via test_reset_for_legacy_member_returns_access_code.",
+    "routes/portal.py:_account_by_identifier upserts a portal_accounts doc for members that don't yet have one before reset — ensures legacy OTP-only members can get an access code via the reset flow (as spec requires).",
+    "portal-access.tsx: portal-company-input, portal-member-company-{id}, portal-member-password-{id}, portal-add-teammate-{id}, portal-teammate-banner, portal-teammate-cancel all present and functional; teammate flow prefills company and role (m.company || m.name) and keeps doc_ids/digest from the inviter — matches spec.",
+    "PORTAL_JS single-file ~55-line JS controller is dense but works. Consider adding a hidden <noscript> fallback or server-rendered forms for accessibility (currently relies on JS).",
+    "login-password handler: `failed = 0 if fails >= MAX_FAILS else fails` — slightly surprising naming but behaviour matches 'lock then reset counter'."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration21.py (new)",
+    "/app/test_reports/pytest/pytest_iteration21.xml (new)",
+    "/app/test_reports/iteration_21.json (new)"
+  ],
+  "success_rate": {"backend": "100% (20/20)", "frontend": "100% (web portal + mobile portal-access teammate flow)"},
+  "seed_data_creation": "Backend tests: each test uses a unique test_<uuid>@example.com; portal_accounts/portal_handles/portal_members/portal_codes rows for that email are deleted in the fresh_email fixture teardown. UI test: invited 'test_<rand>@example.com' under demo@mybuilder.app, removed via Mongo cleanup after the test. Access codes are injected into db.portal_accounts via routes.portal._code_lookup to simulate what Resend would otherwise email; reset codes injected via _code_hash + 'reset:'+code (as documented in /app/memory/test_credentials.md — updated hint is: use _code_lookup for access codes and _code_hash for OTP+reset).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Password+access-code portal is in place alongside the legacy OTP flow. Known operational quirk: POST /api/portal-members/{id}/resend returns 503 when Resend 429s; code rotation still happens before send, so the account's HMAC is already updated — frontend treats this as an error toast. If main agent soft-fails resend (like add_member), update tests to assert 200+email_sent flag. test_credentials.md note worth adding: for automated activation/login-password tests, overwrite db.portal_accounts.code_lookup via routes.portal._code_lookup(raw) rather than relying on the emailed code."
+}

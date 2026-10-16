@@ -123,3 +123,8 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 
 ## Map Filters (Jun 2026)
 - /api/portfolio/map returns country (Nominatim addressdetails, accept-language=en, cached). Map screen filters: type, currency, country + clear. Tested iteration 20.
+
+## Stakeholder access code + password (Jun 2026)
+- portal_accounts {email, code_lookup HMAC, password_hash bcrypt, failed, locked_until, reset}. Invite emails BA-XXXX-XXXX-XXXX-XXXX code until password set.
+- /portal/activate, /portal/login-password (5 fails -> 15 min lock), /portal/password-reset/request|confirm. Email OTP login kept.
+- Team: member.company + 'Add a teammate' (copies role/docs/digest). password_set shown to owner.

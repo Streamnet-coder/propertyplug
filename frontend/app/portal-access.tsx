@@ -19,7 +19,8 @@ export default function PortalAccess() {
   const toast = useToast();
   const members = useQuery({ queryKey: ["portal-members"], queryFn: () => api<PortalMember[]>("/portal-members") });
   const docs = useQuery({ queryKey: ["documents"], queryFn: () => api<DocItem[]>("/documents") });
-  const [f, setF] = useState({ name: "", email: "", role: "Investor", handle: "" });
+  const [f, setF] = useState({ name: "", email: "", role: "Investor", handle: "", company: "" });
+  const [team, setTeam] = useState<PortalMember | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [tab, setTab] = useState<"people" | "activity" | "questions">("people");
   const questions = usePortalQuestions();
@@ -27,10 +28,11 @@ export default function PortalAccess() {
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["portal-members"] });
 
   const add = useMutation({
-    mutationFn: () => api<PortalMember & { email_sent: boolean }>("/portal-members", { body: { ...f, handle: f.handle.trim() || undefined, doc_ids: [], digest: true, origin_url: BACKEND_URL } }),
+    mutationFn: () => api<PortalMember & { email_sent: boolean }>("/portal-members", { body: { ...f, handle: f.handle.trim() || undefined, doc_ids: team?.doc_ids ?? [], digest: team?.digest ?? true, origin_url: BACKEND_URL } }),
     onSuccess: (m) => {
       refresh();
-      setF({ name: "", email: "", role: "Investor", handle: "" });
+      setF({ name: "", email: "", role: "Investor", handle: "", company: "" });
+      setTeam(null);
       setOpen(m.id);
       if (m.email_sent) toast(`Invite sent · ID ${m.handle}`);
       else toast(`Access added (ID ${m.handle}) but the invite email failed. Tap Resend invite`, "error");
@@ -51,7 +53,7 @@ export default function PortalAccess() {
       <Card style={{ gap: space.sm }}>
         <Text style={s.title}>Give read-only access</Text>
         <Text style={s.muted}>
-          Investors, lenders and partners get a personal <Text style={s.bold}>name@buildassist</Text> sign-in ID. They sign in at the portal with that ID or their email, using a one-time code we email them, and see only this project, the documents you tick and the weekly updates.
+          Each person gets a personal <Text style={s.bold}>access code</Text> by email and creates their own password the first time they sign in. They can also sign in with their <Text style={s.bold}>name@buildassist</Text> ID or email and a one-time code. They see only this project, the documents you tick and the weekly updates.
         </Text>
         <Pressable onPress={async () => { await Clipboard.setStringAsync(portalUrl); toast("Portal link copied"); }} style={s.urlRow} testID="portal-copy-url">
           <Icon name="globe" size={16} color={colors.brand} />
@@ -69,9 +71,16 @@ export default function PortalAccess() {
       {tab === "questions" && <QuestionsPanel />}
       {tab === "people" && (
       <>
-      <Text style={s.section}>Invite a stakeholder</Text>
+      <Text style={s.section}>{team ? `Add a teammate to ${team.company || team.name}` : "Invite a stakeholder"}</Text>
+      {team && (
+        <View style={s.teamNote} testID="portal-teammate-banner">
+          <Text style={[s.muted, { flex: 1 }]}>{`They'll get their own access code and password, with the same role, documents and weekly updates as ${team.name}.`}</Text>
+          <Pressable onPress={() => { setTeam(null); setF({ name: "", email: "", role: "Investor", handle: "", company: "" }); }} hitSlop={8} testID="portal-teammate-cancel"><Icon name="x" size={16} color={colors.muted} /></Pressable>
+        </View>
+      )}
       <Field label="Name" value={f.name} onChangeText={(v) => setF({ ...f, name: v })} placeholder="e.g. Dave Patel" testID="portal-name-input" />
-      <Field label="Email (codes are sent here)" value={f.email} onChangeText={(v) => setF({ ...f, email: v })} keyboardType="email-address" autoCapitalize="none" testID="portal-email-input" />
+      <Field label="Email (access code is sent here)" value={f.email} onChangeText={(v) => setF({ ...f, email: v })} keyboardType="email-address" autoCapitalize="none" testID="portal-email-input" />
+      <Field label="Company / team (optional)" value={f.company} onChangeText={(v) => setF({ ...f, company: v })} placeholder="e.g. Northfield Lending" testID="portal-company-input" />
       <Field label="Sign-in ID (optional)" value={f.handle} onChangeText={(v) => setF({ ...f, handle: v.replace(/[^a-zA-Z0-9.]/g, "").toLowerCase() })} placeholder={(f.name.split(" ")[0] || "dave").toLowerCase()} autoCapitalize="none" testID="portal-handle-input" />
       <Text style={s.muted}>Their ID will be <Text style={s.bold}>{(f.handle || f.name.split(" ")[0] || "name").toLowerCase()}@buildassist</Text> (a number is added if taken).</Text>
       <View style={s.chips}>
@@ -81,13 +90,18 @@ export default function PortalAccess() {
 
       <Text style={s.section}>People with access ({members.data?.length ?? 0})</Text>
       {members.isLoading ? <ActivityIndicator color={colors.brand} /> : (members.data ?? []).length === 0 ? <Text style={s.muted} testID="portal-empty">Nobody yet.</Text> : null}
-      {(members.data ?? []).map((m) => (
+      {[...(members.data ?? [])].sort((a, b) => (a.company || "~").localeCompare(b.company || "~")).map((m) => (
         <Card key={m.id} style={{ gap: space.sm }} testID={`portal-member-${m.id}`}>
           <Pressable onPress={() => { tap(); setOpen(open === m.id ? null : m.id); }} style={{ flexDirection: "row", alignItems: "center", gap: space.md }} testID={`portal-member-toggle-${m.id}`}>
             <View style={{ flex: 1 }}>
+              {m.company ? <Text style={s.company} testID={`portal-member-company-${m.id}`}>{m.company}</Text> : null}
               <Text style={s.name}>{m.name} · {m.role}</Text>
               <Text style={[s.muted, { color: colors.brand, fontFamily: fonts.semibold }]} testID={`portal-member-handle-${m.id}`}>{m.handle}</Text>
               <Text style={s.muted}>{m.email} · {m.doc_ids.length} document{m.doc_ids.length === 1 ? "" : "s"}{m.digest ? " · weekly updates" : ""} · {m.last_login ? `last seen ${new Date(m.last_login).toLocaleDateString("en-GB")}` : "not signed in yet"}</Text>
+              <View style={[s.status, { backgroundColor: m.password_set ? colors.brandTertiary : colors.surfaceSecondary }]} testID={`portal-member-password-${m.id}`}>
+                <Icon name={m.password_set ? "lock" : "key-round"} size={12} color={m.password_set ? colors.brand : colors.muted} />
+                <Text style={[s.statusText, { color: m.password_set ? colors.brand : colors.muted }]}>{m.password_set ? "Password set" : "Access code sent · password not set yet"}</Text>
+              </View>
             </View>
             <Icon name={open === m.id ? "chevron-up" : "chevron-down"} size={18} color={colors.muted} />
           </Pressable>
@@ -111,8 +125,9 @@ export default function PortalAccess() {
                   </Pressable>
                 );
               })}
+              <Button small variant="outline" icon="user-plus" title="Add a teammate" onPress={() => { tap(); setTeam(m); setF({ name: "", email: "", role: m.role, handle: "", company: m.company || m.name }); }} testID={`portal-add-teammate-${m.id}`} />
               <View style={{ flexDirection: "row", gap: space.sm }}>
-                <Button small variant="outline" icon="send" title="Resend invite" loading={resend.isPending} onPress={() => resend.mutate(m.id)} style={{ flex: 1 }} testID={`portal-resend-${m.id}`} />
+                <Button small variant="outline" icon="send" title={m.password_set ? "Resend invite" : "Resend access code"} loading={resend.isPending} onPress={() => resend.mutate(m.id)} style={{ flex: 1 }} testID={`portal-resend-${m.id}`} />
                 <Button small variant="danger" icon="user-x" title="Remove" loading={remove.isPending} onPress={() => remove.mutate(m.id)} style={{ flex: 1 }} testID={`portal-remove-${m.id}`} />
               </View>
             </View>
@@ -138,4 +153,8 @@ const useStyles = makeStyles((c) => ({
   toggle: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44 },
   docRow: { flexDirection: "row", alignItems: "center", gap: space.md, padding: space.sm, borderRadius: radius.md, borderWidth: 1, borderColor: c.border },
   box: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: c.borderStrong, alignItems: "center", justifyContent: "center" },
+  company: { fontFamily: fonts.bold, fontSize: 11, color: c.muted, letterSpacing: 0.6, textTransform: "uppercase" },
+  status: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, marginTop: 4 },
+  statusText: { fontFamily: fonts.semibold, fontSize: 11 },
+  teamNote: { flexDirection: "row", alignItems: "flex-start", gap: space.sm, padding: space.md, borderRadius: radius.md, backgroundColor: c.brandTertiary },
 }));
