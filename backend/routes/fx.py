@@ -67,7 +67,7 @@ async def portfolio_map(user: User = Depends(real_user)):
     docs = await db.projects.find(await access_filter(user), {"comparables": 0}).sort("_id", 1).to_list(1000)
     todo = [d for d in docs if d.get("address", "").strip() and (d.get("geocoded_for") != d["address"] or "country" not in d)]
     if todo:
-        async with httpx.AsyncClient(timeout=8, headers={"User-Agent": "builder-assist/1.0 (support@mybuilder.app)"}) as c:
+        async with httpx.AsyncClient(timeout=8, headers={"User-Agent": "propertyplug/1.0 (support@mybuilder.app)"}) as c:
             for i, d in enumerate(todo[:10]):  # Nominatim policy: max 1 req/sec; cap per call
                 if i:
                     await asyncio.sleep(1.1)

@@ -18,7 +18,7 @@ TRADE_TERMS = {
     "painter": ["painter", "decorator"],
     "roofer": ["roofer", "roofing"],
 }
-OSM_UA = {"User-Agent": "builder-assist/1.0 (support@mybuilder.app)"}
+OSM_UA = {"User-Agent": "propertyplug/1.0 (support@mybuilder.app)"}
 POSTCODE_RE = re.compile(r"^[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}$")
 
 

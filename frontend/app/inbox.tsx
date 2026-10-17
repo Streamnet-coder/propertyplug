@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Button, Chip, EmptyState, fonts, Icon, IconName, radius, space, tap } from "@/src/components/ui";
+import { FixTarget, QuickFixSheet } from "@/src/components/quick-fix-sheet";
 import { useProject } from "@/src/queries";
 import { queryClient } from "@/src/query-client";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -32,6 +33,7 @@ export default function InboxScreen() {
   const project = useProject();
   const [filter, setFilter] = useState<Kind | "all">("all");
   const [opening, setOpening] = useState<string | null>(null);
+  const [fixing, setFixing] = useState<FixTarget | null>(null);
   const q = useQuery({ queryKey: ["inbox"], queryFn: () => api<Inbox>("/inbox") });
   const items = (q.data?.items ?? []).filter((i) => filter === "all" || i.kind === filter);
 
@@ -95,12 +97,19 @@ export default function InboxScreen() {
                     {i.kind === "stage" ? (i.overdue ? `Overdue · due ${i.date}` : `Due ${i.date}`) : `${i.priority === "high" ? "Urgent" : i.priority === "medium" ? "Soon" : "Not urgent"} · reported ${i.date}`}
                   </Text>
                 </View>
+                {i.kind !== "stage" && (
+                  <Pressable onPress={() => { tap(); setFixing({ id: i.id, title: i.title, kind: i.kind as FixTarget["kind"], project_name: i.project_name }); }}
+                    style={s.fixBtn} hitSlop={6} testID={`inbox-fix-${i.id}`} accessibilityLabel="Mark fixed">
+                    <Icon name="check" size={18} color={colors.onSuccess} />
+                  </Pressable>
+                )}
                 {opening === i.id ? <ActivityIndicator color={colors.brand} /> : <Icon name="chevron-right" size={18} color={colors.muted} />}
               </Pressable>
             );
           }}
         />
       )}
+      <QuickFixSheet target={fixing} onClose={() => setFixing(null)} />
     </View>
   );
 }
@@ -116,5 +125,6 @@ const useStyles = makeStyles((c) => ({
   kindIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: c.brandTertiary, alignItems: "center", justifyContent: "center" },
   title: { fontFamily: fonts.semibold, fontSize: 14, color: c.onSurface },
   muted: { fontFamily: fonts.regular, fontSize: 12, color: c.muted },
+  fixBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.success, alignItems: "center", justifyContent: "center" },
   meta: { fontFamily: fonts.semibold, fontSize: 12 },
 }));

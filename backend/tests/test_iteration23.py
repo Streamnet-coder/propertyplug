@@ -317,7 +317,7 @@ class TestExpiryEnforcement:
         invited_emails.append(em)
         _invite(owner_ctx, em).json()
         # Plant a known code + password; then expire the membership.
-        code = "BA-ZZZZ-ZZZZ-ZZZZ-ZZZZ"
+        code = "PP-ZZZZ-ZZZZ-ZZZZ-ZZZZ"
         _plant_access_code(em, code)
         _set_password(em, "Password12")
         _set_expiry_direct(em, owner_ctx["pid"], PAST_FAR)
@@ -330,7 +330,7 @@ class TestExpiryEnforcement:
         em = f"test_enf_act_{uuid.uuid4().hex[:8]}@example.com"
         invited_emails.append(em)
         _invite(owner_ctx, em).json()
-        code = "BA-YYYY-YYYY-YYYY-YYYY"
+        code = "PP-YYYY-YYYY-YYYY-YYYY"
         _plant_access_code(em, code)
         _set_expiry_direct(em, owner_ctx["pid"], PAST_FAR)
         r = requests.post(f"{API}/portal/activate",

@@ -206,3 +206,5 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 
 ## Task inbox (Jun 2026)
 - GET /api/inbox (routes/inbox.py): open snags, tenant repairs (snags with tenancy_id) and not-done stages due within 30 days/overdue across all accessible projects (own + co-owned + manager-scoped), overdue first. /inbox "My tasks" screen with filters; Home quick action "My tasks"; tapping activates the item's project and opens /snags or /timeline.
+- Quick mark fixed: POST /api/inbox/snags/{sid}/fix (multipart note + optional file, real_user + access_filter; sets fixed_by, fix_photo_path, notifies tenant for repairs, logs message + project_activity). QuickFixSheet on My tasks items (inbox-fix-{id}).
+- Portal IDs rebranded: stakeholder handles now name@propertyplug (legacy @buildassist still accepted at sign-in), new access codes PP-XXXX-XXXX-XXXX-XXXX (old BA- codes still work). OSM user agent propertyplug/1.0.

@@ -196,7 +196,7 @@ class TestPortalMembersOwner:
             r = requests.post(f"{API}/portal-members", headers=auth(tok), json=body, timeout=30)
             assert r.status_code == 200, r.text
             m = r.json()
-            assert m["handle"].endswith("@buildassist")
+            assert m["handle"].endswith("@propertyplug")
             assert set(m["doc_ids"]) == {d1, d2}
             assert m["digest"] is True
 
@@ -322,7 +322,7 @@ class TestPortalAuthData:
             assert me.status_code == 200
             data = me.json()
             assert data["email"] == email.lower()
-            assert data["handle"] and data["handle"].endswith("@buildassist")
+            assert data["handle"] and data["handle"].endswith("@propertyplug")
             assert any(p["project_id"] == pid for p in data["projects"])
 
             # GET /portal/projects/{pid}

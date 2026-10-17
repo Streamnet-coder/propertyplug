@@ -1,6 +1,6 @@
 """Stakeholder portal: owners grant investors/lenders/partners read-only access to chosen projects, documents and
 weekly updates. Stakeholders sign in either with their personal access code + a password they set themselves, or with their
-email / name@buildassist handle + a one-time email code. Several people from one company can each have their own login."""
+email / name@propertyplug handle + a one-time email code. Several people from one company can each have their own login."""
 import base64
 import hashlib
 import hmac
@@ -32,7 +32,8 @@ from routes.projects import project_summary
 from storage import get_object
 
 router = APIRouter()
-HANDLE_DOMAIN = "buildassist"
+HANDLE_DOMAIN = "propertyplug"
+LEGACY_DOMAINS = ("buildassist",)
 PORTAL_SECRET = JWT_SECRET + "|portal"  # different key: portal tokens can never authenticate owner APIs
 CODE_TTL = 600
 MAX_FAILS = 5
@@ -63,7 +64,7 @@ def handle_addr(h: str) -> str:
 
 
 async def ensure_handle(email: str, name: str, wanted: Optional[str] = None) -> str:
-    """One global handle per stakeholder email (e.g. dave@buildassist)."""
+    """One global handle per stakeholder email (e.g. dave@propertyplug)."""
     existing = await db.portal_handles.find_one({"email": email})
     if existing:
         return existing["handle"]
@@ -124,7 +125,8 @@ async def member_out(m: dict) -> dict:
 
 # ---------------- Access codes (permanent ID) + passwords ----------------
 def _norm_code(code: str) -> str:
-    return re.sub(r"[^A-Z0-9]", "", code.upper()).removeprefix("BA")
+    c = re.sub(r"[^A-Z0-9]", "", code.upper())
+    return c[2:] if len(c) == 18 and c[:2] in ("PP", "BA") else c  # PP- prefix (legacy BA- codes still work)
 
 
 def _code_lookup(code: str) -> str:
@@ -138,7 +140,7 @@ async def issue_access_code(email: str) -> Optional[str]:
     if acc and acc.get("password_hash"):
         return None
     raw = base64.b32encode(secrets.token_bytes(10)).decode()  # 16 chars, 80 bits
-    code = "BA-" + "-".join(raw[i:i + 4] for i in range(0, 16, 4))
+    code = "PP-" + "-".join(raw[i:i + 4] for i in range(0, 16, 4))
     await db.portal_accounts.update_one({"email": email}, {"$set": {"code_lookup": _code_lookup(code), "code_issued_at": now_iso()},
                                                            "$setOnInsert": {"created_at": now_iso(), "failed": 0}}, upsert=True)
     return code
@@ -334,7 +336,7 @@ def _code_hash(email: str, code: str) -> str:
 
 async def _resolve(identifier: str) -> Optional[str]:
     ident = identifier.strip().lower()
-    if ident.endswith(f"@{HANDLE_DOMAIN}") or "@" not in ident:
+    if any(ident.endswith(f"@{d}") for d in (HANDLE_DOMAIN, *LEGACY_DOMAINS)) or "@" not in ident:
         h = await db.portal_handles.find_one({"handle": ident.split("@")[0]})
         ident = h["email"] if h else ""
     return ident if ident and await db.portal_members.find_one({"email": ident, **active_q()}, {"_id": 1}) else None
@@ -388,7 +390,7 @@ class PasswordLogin(BaseModel):
 
 
 class ResetRequest(BaseModel):
-    identifier: str = Field(min_length=3, max_length=200)  # access code, email or name@buildassist
+    identifier: str = Field(min_length=3, max_length=200)  # access code, email or name@propertyplug
 
 
 class ResetConfirm(ResetRequest):
@@ -756,18 +758,18 @@ function done(r){sessionStorage.setItem('pt',r.token);if(r.access_code){$('#app'
 async function run(btn,fn){$('#err').textContent='';btn.disabled=true;try{await fn()}catch(e){$('#err').textContent=e.message;btn.disabled=false}}
 const post=async(p,b)=>(await api(p,{method:'POST',body:JSON.stringify(b)})).json();
 function login(){$('#app').innerHTML=`<div class='card' id='pw-login'><h2>Stakeholder sign in</h2><p class='cap'>Use the access code from your invite email and your password.</p>
-<label>Access code</label><input id='acode' placeholder='BA-XXXX-XXXX-XXXX-XXXX' autocomplete='username' autocapitalize='characters'/><label>Password</label><input id='pw' type='password' autocomplete='current-password'/>
+<label>Access code</label><input id='acode' placeholder='PP-XXXX-XXXX-XXXX-XXXX' autocomplete='username' autocapitalize='characters'/><label>Password</label><input id='pw' type='password' autocomplete='current-password'/>
 <button id='pw-signin'>Sign in</button><p id='err' class='over'></p>
 <p class='cap'><a href='#' id='to-setup'>First time? Set up password</a> · <a href='#' id='to-forgot'>Forgot password?</a></p>
 <p class='cap'><a href='#' id='to-otp'>Sign in with an email code instead</a></p></div>`;
 $('#pw-signin').onclick=()=>run($('#pw-signin'),async()=>done(await post('/portal/login-password',{access_code:$('#acode').value.trim(),password:$('#pw').value})));
 $('#to-setup').onclick=e=>{e.preventDefault();setup()};$('#to-forgot').onclick=e=>{e.preventDefault();forgot()};$('#to-otp').onclick=e=>{e.preventDefault();otpLogin()}}
 function setup(){$('#app').innerHTML=`<div class='card' id='pw-setup'><h2>Set up your password</h2><p class='cap'>Enter the access code from your invite email and choose a password (8+ characters, with a letter and a number).</p>
-<label>Access code</label><input id='acode' placeholder='BA-XXXX-XXXX-XXXX-XXXX' autocapitalize='characters'/><label>New password</label><input id='pw' type='password' autocomplete='new-password'/><label>Confirm password</label><input id='pw2' type='password' autocomplete='new-password'/>
+<label>Access code</label><input id='acode' placeholder='PP-XXXX-XXXX-XXXX-XXXX' autocapitalize='characters'/><label>New password</label><input id='pw' type='password' autocomplete='new-password'/><label>Confirm password</label><input id='pw2' type='password' autocomplete='new-password'/>
 <button id='pw-activate'>Save password & sign in</button><p id='err' class='over'></p><a href='#' id='back'>Back to sign in</a></div>`;
 $('#back').onclick=e=>{e.preventDefault();login()};
 $('#pw-activate').onclick=()=>{if($('#pw').value!==$('#pw2').value){$('#err').textContent='Passwords do not match';return}run($('#pw-activate'),async()=>done(await post('/portal/activate',{access_code:$('#acode').value.trim(),password:$('#pw').value})))}}
-function forgot(){$('#app').innerHTML=`<div class='card' id='pw-forgot'><h2>Reset your password</h2><p class='cap'>Enter your access code, email or ID ending @buildassist. We'll email you a 6-digit reset code.</p>
+function forgot(){$('#app').innerHTML=`<div class='card' id='pw-forgot'><h2>Reset your password</h2><p class='cap'>Enter your access code, email or ID ending @propertyplug. We'll email you a 6-digit reset code.</p>
 <label>Access code, email or ID</label><input id='rid' autocomplete='username'/><button id='reset-send'>Email me a reset code</button><p id='err' class='over'></p><a href='#' id='back'>Back to sign in</a></div>`;
 $('#back').onclick=e=>{e.preventDefault();login()};
 $('#reset-send').onclick=()=>{ident=$('#rid').value.trim();if(!ident)return;run($('#reset-send'),async()=>{await post('/portal/password-reset/request',{identifier:ident});resetStep()})}}
@@ -776,8 +778,8 @@ function resetStep(){$('#app').innerHTML=`<div class='card' id='pw-reset'><h2>Ch
 <button id='reset-confirm'>Save new password</button><p id='err' class='over'></p><a href='#' id='back'>Back to sign in</a></div>`;
 $('#back').onclick=e=>{e.preventDefault();login()};
 $('#reset-confirm').onclick=()=>{if($('#pw').value!==$('#pw2').value){$('#err').textContent='Passwords do not match';return}run($('#reset-confirm'),async()=>done(await post('/portal/password-reset/confirm',{identifier:ident,reset_code:$('#rcode').value.trim(),new_password:$('#pw').value})))}}
-function otpLogin(){$('#app').innerHTML=`<div class='card' id='otp-login'><h2>Sign in with an email code</h2><p class='cap'>Use your email or your ID ending @buildassist. We'll email you a one-time code.</p>
-<label>Email or ID</label><input id='ident' placeholder='dave@buildassist' autocomplete='username'/><button id='send-code'>Email me a code</button><p id='err' class='over'></p><a href='#' id='back'>Use access code & password</a></div>`;
+function otpLogin(){$('#app').innerHTML=`<div class='card' id='otp-login'><h2>Sign in with an email code</h2><p class='cap'>Use your email or your ID ending @propertyplug. We'll email you a one-time code.</p>
+<label>Email or ID</label><input id='ident' placeholder='dave@propertyplug' autocomplete='username'/><button id='send-code'>Email me a code</button><p id='err' class='over'></p><a href='#' id='back'>Use access code & password</a></div>`;
 $('#back').onclick=e=>{e.preventDefault();login()};
 $('#send-code').onclick=async()=>{ident=$('#ident').value.trim();if(!ident)return;$('#send-code').disabled=true;try{await api('/portal/request-code',{method:'POST',body:JSON.stringify({identifier:ident})});codeStep()}catch(e){$('#err').textContent=e.message;$('#send-code').disabled=false}}}
 function codeStep(){$('#app').innerHTML=`<div class='card'><h2>Check your email</h2><p class='cap'>If <b>${esc(ident)}</b> has portal access, a 6-digit code is on its way.</p>

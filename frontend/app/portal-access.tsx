@@ -60,7 +60,7 @@ export default function PortalAccess() {
       <Card style={{ gap: space.sm }}>
         <Text style={s.title}>Give read-only access</Text>
         <Text style={s.muted}>
-          Each person gets a personal <Text style={s.bold}>access code</Text> by email and creates their own password the first time they sign in. They can also sign in with their <Text style={s.bold}>name@buildassist</Text> ID or email and a one-time code. They see only this project, the documents you tick and the weekly updates.
+          Each person gets a personal <Text style={s.bold}>access code</Text> by email and creates their own password the first time they sign in. They can also sign in with their <Text style={s.bold}>name@propertyplug</Text> ID or email and a one-time code. They see only this project, the documents you tick and the weekly updates.
         </Text>
         <Pressable onPress={async () => { await Clipboard.setStringAsync(portalUrl); toast("Portal link copied"); }} style={s.urlRow} testID="portal-copy-url">
           <Icon name="globe" size={16} color={colors.brand} />
@@ -89,7 +89,7 @@ export default function PortalAccess() {
       <Field label="Email (access code is sent here)" value={f.email} onChangeText={(v) => setF({ ...f, email: v })} keyboardType="email-address" autoCapitalize="none" testID="portal-email-input" />
       <Field label="Company / team (optional)" value={f.company} onChangeText={(v) => setF({ ...f, company: v })} placeholder="e.g. Northfield Lending" testID="portal-company-input" />
       <Field label="Sign-in ID (optional)" value={f.handle} onChangeText={(v) => setF({ ...f, handle: v.replace(/[^a-zA-Z0-9.]/g, "").toLowerCase() })} placeholder={(f.name.split(" ")[0] || "dave").toLowerCase()} autoCapitalize="none" testID="portal-handle-input" />
-      <Text style={s.muted}>Their ID will be <Text style={s.bold}>{(f.handle || f.name.split(" ")[0] || "name").toLowerCase()}@buildassist</Text> (a number is added if taken).</Text>
+      <Text style={s.muted}>Their ID will be <Text style={s.bold}>{(f.handle || f.name.split(" ")[0] || "name").toLowerCase()}@propertyplug</Text> (a number is added if taken).</Text>
       <View style={s.chips}>
         {ROLES.map((r) => <Chip key={r} label={r} selected={f.role === r} onPress={() => setF({ ...f, role: r })} testID={`portal-role-${r.replace(/\s+/g, "-").toLowerCase()}`} />)}
       </View>

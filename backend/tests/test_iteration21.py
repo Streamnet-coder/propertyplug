@@ -102,7 +102,7 @@ class TestInviteAndCode:
         body = r.json()
         assert body["company"] == "Northfield Lending"
         assert body["password_set"] is False
-        assert body["handle"] and body["handle"].endswith("@buildassist")
+        assert body["handle"] and body["handle"].endswith("@propertyplug")
         # access code is NOT returned in response (only emailed). HMAC is stored.
         assert "access_code" not in body
         acc = _sync(_get_account(fresh_email))
@@ -124,14 +124,14 @@ class TestActivate:
             "name": "A", "email": fresh_email, "role": "Investor", "company": "",
             "doc_ids": [], "digest": True, "origin_url": BASE_URL}, timeout=30)
         r = requests.post(f"{API}/portal/activate", json={
-            "access_code": "BA-ZZZZ-ZZZZ-ZZZZ-ZZZZ", "password": "goodpass1"}, timeout=20)
+            "access_code": "PP-ZZZZ-ZZZZ-ZZZZ-ZZZZ", "password": "goodpass1"}, timeout=20)
         assert r.status_code == 400
 
     def test_weak_password_rejected(self, owner, fresh_email):
         requests.post(f"{API}/portal-members", headers=owner["headers"], json={
             "name": "A", "email": fresh_email, "role": "Investor", "company": "",
             "doc_ids": [], "digest": True, "origin_url": BASE_URL}, timeout=30)
-        raw = "BA-TEST-AAAA-BBBB-CCCC"
+        raw = "PP-TEST-AAAA-BBBB-CCCC"
         _sync(_inject_code(fresh_email, raw))
         # too short
         r1 = requests.post(f"{API}/portal/activate", json={"access_code": raw, "password": "ab12"}, timeout=20)
@@ -147,7 +147,7 @@ class TestActivate:
         requests.post(f"{API}/portal-members", headers=owner["headers"], json={
             "name": "A", "email": fresh_email, "role": "Investor", "company": "Acme",
             "doc_ids": [], "digest": True, "origin_url": BASE_URL}, timeout=30)
-        raw = "BA-ACT1-AAAA-BBBB-CCCC"
+        raw = "PP-ACT1-AAAA-BBBB-CCCC"
         _sync(_inject_code(fresh_email, raw))
         # case/dash insensitive: use lowercase without dashes
         r = requests.post(f"{API}/portal/activate", json={
@@ -166,7 +166,7 @@ class TestActivate:
             "name": "A", "email": fresh_email, "role": "Investor", "company": "Acme",
             "doc_ids": [], "digest": True, "origin_url": BASE_URL}, timeout=30).json()
         mid = inv["id"]
-        raw = "BA-PSET-AAAA-BBBB-CCCC"
+        raw = "PP-PSET-AAAA-BBBB-CCCC"
         _sync(_inject_code(fresh_email, raw))
         requests.post(f"{API}/portal/activate", json={"access_code": raw, "password": "goodpass1"}, timeout=20)
         lst = requests.get(f"{API}/portal-members", headers=owner["headers"], timeout=20).json()
@@ -179,7 +179,7 @@ class TestLoginPassword:
         requests.post(f"{API}/portal-members", headers=owner["headers"], json={
             "name": "A", "email": fresh_email, "role": "Investor", "company": "",
             "doc_ids": [], "digest": True, "origin_url": BASE_URL}, timeout=30)
-        raw = "BA-LOG1-AAAA-BBBB-CCCC"
+        raw = "PP-LOG1-AAAA-BBBB-CCCC"
         _sync(_inject_code(fresh_email, raw))
         requests.post(f"{API}/portal/activate", json={"access_code": raw, "password": "goodpass1"}, timeout=20)
         r = requests.post(f"{API}/portal/login-password", json={"access_code": raw, "password": "goodpass1"}, timeout=20)
@@ -190,7 +190,7 @@ class TestLoginPassword:
         requests.post(f"{API}/portal-members", headers=owner["headers"], json={
             "name": "A", "email": fresh_email, "role": "Investor", "company": "",
             "doc_ids": [], "digest": True, "origin_url": BASE_URL}, timeout=30)
-        raw = "BA-LOG2-AAAA-BBBB-CCCC"
+        raw = "PP-LOG2-AAAA-BBBB-CCCC"
         _sync(_inject_code(fresh_email, raw))
         requests.post(f"{API}/portal/activate", json={"access_code": raw, "password": "goodpass1"}, timeout=20)
         r = requests.post(f"{API}/portal/login-password", json={"access_code": raw, "password": "wrongpass1"}, timeout=20)
@@ -200,7 +200,7 @@ class TestLoginPassword:
         requests.post(f"{API}/portal-members", headers=owner["headers"], json={
             "name": "A", "email": fresh_email, "role": "Investor", "company": "",
             "doc_ids": [], "digest": True, "origin_url": BASE_URL}, timeout=30)
-        raw = "BA-LOG3-AAAA-BBBB-CCCC"
+        raw = "PP-LOG3-AAAA-BBBB-CCCC"
         _sync(_inject_code(fresh_email, raw))
         r = requests.post(f"{API}/portal/login-password", json={"access_code": raw, "password": "anything1"}, timeout=20)
         assert r.status_code == 401
@@ -210,7 +210,7 @@ class TestLoginPassword:
         requests.post(f"{API}/portal-members", headers=owner["headers"], json={
             "name": "A", "email": fresh_email, "role": "Investor", "company": "",
             "doc_ids": [], "digest": True, "origin_url": BASE_URL}, timeout=30)
-        raw = "BA-LOCK-AAAA-BBBB-CCCC"
+        raw = "PP-LOCK-AAAA-BBBB-CCCC"
         _sync(_inject_code(fresh_email, raw))
         requests.post(f"{API}/portal/activate", json={"access_code": raw, "password": "goodpass1"}, timeout=20)
         for _ in range(5):
@@ -223,7 +223,7 @@ class TestLoginPassword:
         inv = requests.post(f"{API}/portal-members", headers=owner["headers"], json={
             "name": "A", "email": fresh_email, "role": "Investor", "company": "",
             "doc_ids": [], "digest": True, "origin_url": BASE_URL}, timeout=30).json()
-        raw = "BA-RMVE-AAAA-BBBB-CCCC"
+        raw = "PP-RMVE-AAAA-BBBB-CCCC"
         _sync(_inject_code(fresh_email, raw))
         requests.post(f"{API}/portal/activate", json={"access_code": raw, "password": "goodpass1"}, timeout=20)
         # remove member
@@ -243,7 +243,7 @@ class TestPasswordReset:
         requests.post(f"{API}/portal-members", headers=owner["headers"], json={
             "name": "A", "email": fresh_email, "role": "Investor", "company": "",
             "doc_ids": [], "digest": True, "origin_url": BASE_URL}, timeout=30)
-        raw = "BA-RST1-AAAA-BBBB-CCCC"
+        raw = "PP-RST1-AAAA-BBBB-CCCC"
         _sync(_inject_code(fresh_email, raw))
         requests.post(f"{API}/portal/activate", json={"access_code": raw, "password": "goodpass1"}, timeout=20)
         # request + inject reset code
@@ -269,7 +269,7 @@ class TestPasswordReset:
         requests.post(f"{API}/portal-members", headers=owner["headers"], json={
             "name": "A", "email": fresh_email, "role": "Investor", "company": "",
             "doc_ids": [], "digest": True, "origin_url": BASE_URL}, timeout=30)
-        raw = "BA-RST2-AAAA-BBBB-CCCC"
+        raw = "PP-RST2-AAAA-BBBB-CCCC"
         _sync(_inject_code(fresh_email, raw))
         requests.post(f"{API}/portal/activate", json={"access_code": raw, "password": "goodpass1"}, timeout=20)
         _sync(_inject_reset(fresh_email, "111111", ttl=-10))  # already expired
@@ -296,7 +296,7 @@ class TestPasswordReset:
         assert r.status_code == 200, r.text
         body = r.json()
         assert body.get("access_code"), f"access_code should be returned for legacy member: {body}"
-        assert body["access_code"].startswith("BA-")
+        assert body["access_code"].startswith("PP-")
         # New access code should now work for login-password
         login = requests.post(f"{API}/portal/login-password", json={
             "access_code": body["access_code"], "password": "newpass123"}, timeout=20)
@@ -327,7 +327,7 @@ class TestResendRotation:
         inv = requests.post(f"{API}/portal-members", headers=owner["headers"], json={
             "name": "A", "email": fresh_email, "role": "Investor", "company": "",
             "doc_ids": [], "digest": True, "origin_url": BASE_URL}, timeout=30).json()
-        raw = "BA-NOR0-AAAA-BBBB-CCCC"
+        raw = "PP-NOR0-AAAA-BBBB-CCCC"
         _sync(_inject_code(fresh_email, raw))
         requests.post(f"{API}/portal/activate", json={"access_code": raw, "password": "goodpass1"}, timeout=20)
         acc1 = _sync(_get_account(fresh_email))

@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 39 — Quick Mark Fixed from My tasks (POST /api/inbox/snags/{sid}/fix + QuickFixSheet on /inbox). BACKEND 9/9 passed. Verified: (a) 200 {ok:true,photo:false} without a file, sets status=fixed, fix_note trimmed, fixed_by=real user name, fixed_at ISO, no fix_photo_path; (b) 200 {ok:true,photo:true} with image/png, fix_photo_path persisted (storage path) and db.files row inserted; (c) item disappears from GET /api/inbox after fix; (d) 400 'Already marked fixed' when calling twice; (e) 400 when attaching a non-image (text/plain) — snag stays open; (f) 404 for a user who can't access the snag's project (unrelated TEST user), snag stays open; (g) 401/403 without auth; (h) tasks-only manager (POST /api/co-owners {project_ids:[pid], money_access:false}) scoped to owner's project can fix a snag in that project WITHOUT activating it, and fixed_by stores the manager's real name (not owner's); (i) tenant repair (created via POST /api/t/{token}/repair) gets tenant_notified_at set after fix. FRONTEND /inbox verified on 390x844: inbox-fix-{id} button appears on snag items (1 TEST snag), zero fix buttons on the 7 stage items; tapping inbox-fix-* opens quick-fix-sheet with photo-camera-button, photo-gallery-button, quick-fix-note-input and quick-fix-confirm; confirming without a photo closes the sheet, header counts drop ('8 open'→'7 open', 'Snags (1)'→'Snags (0)'), and the item disappears. Row-body tap on a snag item (separate seeded snag) navigates to /snags where the previously fixed snag shows strikethrough 'Fixed by Demo Builder' (confirms fixed_by set to real user name end-to-end).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration39.py",
+    "/app/test_reports/pytest/pytest_iteration39.xml",
+    "/app/test_reports/iteration_39.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "/app/backend/routes/inbox.py quick_fix (30 lines): correct access control — looks up snag by _id then verifies its project passes access_filter(user), so owners, full co-owners and tasks-only managers scoped to that project_id all succeed; others get 404 (does not leak existence vs permission difference). Idempotency guard (snag.status=='fixed' → 400) is correct. File validation: size <=10MB (413), content-type must start with image/ else 400; filename extension defaulted to 'jpg' and content_type defaulted to 'image/jpeg' when missing. Photo stored under {APP_NAME}/uploads/{snag.user_id}/{uuid}.{ext} (keyed by SNAG OWNER, not actor — intentional so files roll up to the owner). db.files bookkeeping row created with owner_id=snag.user_id. Writes fix fields atomically via $set. notify_tenant_repair_fixed is awaited after the $set so tenant_notified_at persistence happens before response — good. Logs app message + project_activity attributing is_owner=user.id==snag.user_id correctly.",
+    "/app/frontend/src/components/quick-fix-sheet.tsx: Correctly branches request shape — if photo picked uses uploadForm (multipart including the file), else sends FormData with just 'note' via api(path,{method:'POST',form}). Invalidates both 'inbox' and 'snags' react-query keys on success — matches the dual-visibility needed since the item also appears on /snags. Resets photo/note/error on target change (good for reopening with a different snag). Toast message differs for repair vs snag — nice touch. KeyboardAvoidingView from react-native-keyboard-controller is used (OK for Expo).",
+    "/app/frontend/app/inbox.tsx: fix button is rendered only when i.kind !== 'stage' (correct) and uses testID=`inbox-fix-${i.id}` (matches spec). It is a nested Pressable inside the row Pressable — verified in Playwright that tapping the fix button opens the sheet WITHOUT also navigating to /snags (React Native Web Pressable's onPress stops at the inner target as expected). Row body tap still navigates to /snags, confirmed."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration39.py (new, 9 passing)",
+    "/app/test_reports/pytest/pytest_iteration39.xml (new JUnit)",
+    "/app/test_reports/iteration_39.json (new)"
+  ],
+  "success_rate": {
+    "backend": "100% — 9/9 passed",
+    "frontend": "100% — fix button scoping (snag yes, stage no), sheet controls, confirm w/o photo, item disappears, row-body nav to /snags, fixed_by displayed in /snags all verified"
+  },
+  "seed_data_creation": "Backend fixtures: TEST manager user (TEST_iter39mgr_*@example.com) invited as tasks-only co-owner on demo project; TEST tenancy (TEST_Tenant_*) with portal + tenant repair snag; multiple TEST_ owner snags across tests (deleted per test). Frontend: 2 TEST_ owner snags via REST (TEST_FEKitchen 'TEST_FE quick fix leaking tap', TEST_FEHall 'TEST_FE row body nav'). All TEST data cleaned up post-run — verified: zero remaining TEST_ snags/tenancies/co-owners/milestones; demo project still active. No Stripe calls made.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run backend tests with: EXPO_PUBLIC_BACKEND_URL=<from frontend/.env> pytest backend/tests/test_iteration39.py -v -o addopts='' (pytest.ini forces xdist loadscope which splits module fixtures across workers; use -o addopts='' to run sequentially so the shared tenancy_and_repair fixture isn't duplicated). The POST /api/inbox/snags/{sid}/fix endpoint is multipart (Form fields + optional UploadFile), so clients MUST NOT send Content-Type: application/json (that produces 422). The Frontend uses uploadForm when a photo is picked, else a plain FormData POST via api()+{form}. On /inbox, nested Pressables work on web: tapping inbox-fix-{id} opens the sheet without bubbling to the row-level open() handler.",
+  "rca_of_issue": "N/A — feature works end-to-end on both backend and frontend."
+}
