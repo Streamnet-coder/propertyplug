@@ -3,7 +3,8 @@ import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
 import { api, gbp } from "@/src/api";
-import { Card, fonts, FormScreen, Icon, space, tap } from "@/src/components/ui";
+import { Button, Card, fonts, FormScreen, Icon, space, tap } from "@/src/components/ui";
+import { shareCoownerStatement } from "@/src/report";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
@@ -11,14 +12,15 @@ type Stmt = { tax_year: number; sent_at: string; label: string };
 type Mine = {
   project_id: string; project_name: string; address: string; owner_name: string; pct: number; contribution: number; profit: number | null;
   monthly_cashflow: number; annual_cashflow: number; cash_return_pct: number | null; profit_return_pct: number | null; statements: Stmt[];
+  earned: number; paid: number; balance: number; payouts: { id: string; amount: number; date: string; note: string }[];
 };
-type Detail = { label: string; whole: { rent_received: number; expenses: number; net: number }; mine: { pct: number; rent_received: number; expenses: number; net: number; profit: number | null; contribution: number } };
+export type Detail = { project_name: string; address: string; owner_name: string; label: string; whole: { rent_received: number; expenses: number; net: number }; mine: { pct: number; rent_received: number; expenses: number; net: number; profit: number | null; contribution: number } };
 
 /** Co-owner's own view: their share, cash put in, returns and every statement sent to them, across everyone who shared projects. */
 export default function MyOwnership() {
   const s = useStyles();
   const { colors } = useTheme();
-  const q = useQuery({ queryKey: ["my-ownership"], queryFn: () => api<{ projects: Mine[]; totals: { contribution: number; profit: number; annual_cashflow: number } }>("/my-ownership") });
+  const q = useQuery({ queryKey: ["my-ownership"], queryFn: () => api<{ projects: Mine[]; totals: { contribution: number; profit: number; annual_cashflow: number; paid: number; balance: number } }>("/my-ownership") });
   const d = q.data;
 
   return (
@@ -31,6 +33,10 @@ export default function MyOwnership() {
             <View style={s.kpi}><Text style={s.kv}>{gbp(d.totals.contribution)}</Text><Text style={s.muted}>put in</Text></View>
             <View style={s.kpi}><Text style={s.kv}>{gbp(d.totals.profit)}</Text><Text style={s.muted}>profit share</Text></View>
             <View style={s.kpi}><Text style={[s.kv, { color: d.totals.annual_cashflow < 0 ? colors.error : colors.success }]}>{gbp(d.totals.annual_cashflow)}</Text><Text style={s.muted}>cashflow / yr</Text></View>
+          </Card>
+          <Card style={s.kpis} testID="my-ownership-payout-totals">
+            <View style={s.kpi}><Text style={s.kv}>{gbp(d.totals.paid)}</Text><Text style={s.muted}>paid to you</Text></View>
+            <View style={s.kpi}><Text style={[s.kv, { color: d.totals.balance > 0 ? colors.brandPrimary : colors.onSurface }]}>{gbp(d.totals.balance)}</Text><Text style={s.muted}>{d.totals.balance >= 0 ? "still owed to you" : "paid ahead"}</Text></View>
           </Card>
           {d.projects.map((p) => <ProjectCard key={p.project_id} p={p} />)}
         </>
@@ -65,6 +71,11 @@ function ProjectCard({ p }: { p: Mine }) {
           {p.profit_return_pct !== null ? `profit ${p.profit_return_pct}% of cash in` : ""}
         </Text>
       )}
+      <Text style={s.section}>Payouts</Text>
+      <Text style={s.line} testID={`my-ownership-balance-${p.project_id}`}>
+        Earned {gbp(p.earned)} · paid {gbp(p.paid)} · {p.balance > 0 ? `owed ${gbp(p.balance)}` : p.balance < 0 ? `paid ahead ${gbp(-p.balance)}` : "all square"}
+      </Text>
+      {p.payouts.map((x) => <Text key={x.id} style={s.muted}>{x.date} · {gbp(x.amount, 2)}{x.note ? ` · ${x.note}` : ""}</Text>)}
       <Text style={s.section}>Statements</Text>
       {!p.statements.length && <Text style={s.muted}>None sent yet. They arrive by email every April.</Text>}
       {p.statements.map((st) => (
@@ -83,6 +94,7 @@ function ProjectCard({ p }: { p: Mine }) {
               {open.d.mine.profit !== null && <Row k="Share of estimated profit" v={gbp(open.d.mine.profit, 2)} />}
               {open.d.mine.contribution > 0 && <Row k="Your capital contribution" v={gbp(open.d.mine.contribution, 2)} />}
               <Text style={s.muted}>Whole property: rent {gbp(open.d.whole.rent_received, 2)}, expenses {gbp(open.d.whole.expenses, 2)}, net {gbp(open.d.whole.net, 2)}. Figures shown at today&apos;s shares.</Text>
+              <Button small variant="outline" icon="download" title="Download PDF" onPress={() => shareCoownerStatement(open.d).catch((e) => toast(e?.message ?? "Could not create PDF", "error"))} testID={`my-statement-pdf-${p.project_id}-${st.tax_year}`} />
             </View>
           )}
         </View>

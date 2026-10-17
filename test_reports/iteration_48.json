@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 48 - PropertyPlug Payout Tracker + Repeat Repair Flags + Statement PDFs end-to-end validation. Backend: 9/9 pytest passed (test_iteration48.py) on preview URL covering (a) GET /api/project/payouts returns income {rent_received, expenses, net} and people[] with pct, earned=net*pct/100, paid, balance, payouts[]; (b) POST /api/project/payouts owner-only - acting co-owner gets 403, amount<=0 -> 422, unknown co_owner_id -> 400, bad date 'DD/MM/YYYY' -> 422; (c) DELETE /api/project/payouts/{id} removes the payout; (d) GET /api/my-ownership (co-owner view) exposes earned/paid/balance/payouts per project and totals.paid/totals.balance; (e) GET /api/repairs/history returns repeats[] with room 'Bathroom', count=2, keywords includes 'leak', and items[].repeat=true for the two Bathroom snags, both ids in repeats[0].ids. Frontend (390x844 preview): OWNER home surfaces payouts-panel with payout-person-{cid}, payout-balance-{cid} ('Overpaid \u00a3126' when payout > earned), payout-history-{cid} expanding to show 2025-10-15 payout with payout-delete-{pid} removal control, and payout-add-{cid} opening inline form with payout-amount/payout-date/payout-note/payout-save all wired. /repair-history screen renders repeat-flags card with repeat-flag-bathroom ('Bathroom: 2 repairs (2 open) \u00b7 \"leak\" Last reported 2026-10-17'), repair-filter-repeat chip toggles correctly, and repair-repeat-{id} REPEAT tag renders on both snag cards. CO-OWNER (fresh registered user with 30% share, \u00a35,000 contribution) /my-ownership shows my-ownership-payout-totals ('\u00a3100 paid to you / -\u00a3126 paid ahead') and my-ownership-balance-{pid} ('Earned -\u00a326 \u00b7 paid \u00a3100 \u00b7 paid ahead \u00a3126'). After inserting coowner_statements doc with sent:[email] (same iter47 trick, Resend sandbox limitation), my-statement-{pid}-2024 chip expanded my-statement-detail-{pid}-2024 panel with Rent received/Property expenses/Net income/Share of estimated profit/Your capital contribution rows plus whole-property summary, and my-statement-pdf-{pid}-2024 button clicked without crash (expo-print window.print path). CLEANUP: all seed removed (co_owners doc, user, ownership_shares, 1 payout, 2 snags, 1 coowner_statements) - verified empty response from /api/co-owners and /api/project/payouts after teardown.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration48.py",
+    "/app/test_reports/pytest/pytest_iteration48.xml",
+    "/app/test_reports/iteration_48.json"
+  ],
+  "action_items": [
+    "No code changes required. Payout Tracker, Repeat Repair Flags and Statement PDFs all work end-to-end on preview backend + Expo web frontend.",
+    "Known preview-only behaviour (same as iter47): Resend sandbox only delivers to delivered@resend.dev - to verify co-owner UI surfaces statements, test inserts coowner_statements doc directly in Mongo with sent:[email]. The owner-side POST /api/project/statements path still ran correctly in iter47 so no code gap."
+  ],
+  "critical_code_review_comments": [
+    "routes/ownership.py:211-223 payout_ledger computes earned = net * pct / 100 and balance = earned - paid - matches the UI 'Owed/Overpaid/All square' logic exactly (payouts-panel.tsx:50-52).",
+    "routes/ownership.py:238-251 add_payout: real_id guard gives 403 for acting co-owners, _people() ensures co_owner_id must be a known invitee of this project, date validated by pydantic regex AND date.fromisoformat; amount Field(gt=0) returns 422 for 0 and negatives.",
+    "routes/ownership.py:204-208 net_income_to_date iterates ALL rent_payments.paid_amount and ALL rental_expenses.amount for this project (no tax-year filter), which matches 'all-time' semantics the spec requires.",
+    "routes/ownership_views.py:48-49 /my-ownership returns payouts without co_owner_id in the per-project list (keeps only id/amount/date/note), while totals.paid and totals.balance sum across projects - verified in UI.",
+    "routes/snags.py:367-387 _repeats uses created_at >= 365-day cutoff + lowercase room group; keywords extracted via STOP+ISSUE_WORDS sort so 'leak' consistently floats to the top when it recurs - verified with 'Leak under sink' + 'Leak behind toilet'.",
+    "frontend/src/components/payouts-panel.tsx:34 - 'if (!d?.people.length) return null' means the panel is only visible when at least one co-owner has a share; good UX for owner-only projects.",
+    "frontend/app/repair-history.tsx:55 - testID uses `repeat-flag-${room.toLowerCase().replace(/\\s+/g,'-')}` which matches 'repeat-flag-bathroom' expectation.",
+    "frontend/app/my-ownership.tsx:97 - PDF button safely wrapped in catch -> toast on failure; verified no crash when window.print path runs."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration48.py",
+    "/app/test_reports/iteration_48.json",
+    "/app/test_reports/pytest/pytest_iteration48.xml"
+  ],
+  "success_rate": {"backend": "100% (9/9 pytest)", "frontend": "100% - owner payouts-panel (person/balance/history/add/form/delete), repair-history (repeat-flags/filter/tags) and co-owner my-ownership (payout totals/balance/statement detail/PDF button) all verified on preview 390x844"},
+  "seed_data_creation": "Fresh co-owner user ui48co<tag>@example.com with 30% share and \u00a35,000 contribution on demo project 6acf7cf334e1da0ef6b14f50, plus 2 Bathroom snags ('Leak under sink', 'Leak behind toilet'), 1 payout (\u00a3100 on 2025-10-15), and 1 coowner_statements doc for tax_year 2024. All created artefacts removed in a cleanup pass after UI verification - verified /api/co-owners returns [] and /api/project/payouts returns people:[] afterwards.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Preview env uses EXPO_PUBLIC_BACKEND_URL in frontend/.env (not EXPO_BACKEND_URL). Backend login JSON uses 'access_token'. Login UI: click 'Sign in' text on landing then fill 2 inputs and press Enter (NOT the Sign in button - there are two with the same text). Payouts panel only renders on home when at least one co-owner has a share AND the user is the owner (not acting as co-owner). To test co-owner statement visibility against any email besides delivered@resend.dev, insert into Mongo coowner_statements with sent:[email] - the UI will then surface my-statement-{pid}-{year} chip. Pytest invocation needs -o addopts=\"\" to avoid the xdist default from backend/pytest.ini breaking collection on this test file. test_iteration48.py has module-level BASE_URL assert - run with EXPO_PUBLIC_BACKEND_URL=<preview-url> prefix.",
+  "rca_of_issue": "N/A - no bugs found."
+}

@@ -244,3 +244,8 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 ## Co-owner portal view + portfolio ownership (Jun 2026)
 - routes/ownership_views.py (real_user, no money block): GET /api/my-ownership (co-owner's shares/contributions/returns + statements sent to them across owners; excludes tasks-only access), GET /api/my-ownership/statement?project_id&tax_year (404 unless sent to them), GET /api/ownership/portfolio (owner: per-person totals + per-project rows).
 - Screens: /my-ownership (link "My ownership & statements" in Co-owners screen "Shared with you"), /ownership-portfolio (link "Ownership across all properties" on Co-owners screen).
+
+## Payouts, repeat repairs, statement PDFs (Jun 2026)
+- Payouts: db.coowner_payouts. GET/POST /api/project/payouts, DELETE /api/project/payouts/{id} (owner only). Earned = current share % x (all rent_payments paid_amount − all rental_expenses); balance = earned − paid. PayoutsPanel in OwnershipSplitCard. /api/my-ownership adds earned/paid/balance/payouts + totals paid/balance.
+- Repeat repairs: /api/repairs/history adds repeats[] (rooms with 2+ repairs in 12 months, common keywords, open count, cost) and item.repeat; repair-history shows "Keeps coming back" card, REPEAT tags, Repeats filter; PDF includes section.
+- Statement PDF: my-ownership statement detail "Download PDF" (report.ts shareCoownerStatement).

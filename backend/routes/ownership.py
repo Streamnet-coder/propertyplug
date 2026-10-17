@@ -197,3 +197,63 @@ async def statement_scheduler():
         except Exception as e:
             logger.error(f"Co-owner statement scheduler error: {e}")
         await asyncio.sleep(6 * 3600)
+
+
+# ---------- Payout tracker: share of net rental income earned vs money paid out ----------
+
+async def net_income_to_date(owner_id: str, pid: str) -> dict:
+    q = {"user_id": owner_id, "project_id": pid}
+    rent = sum([float(p.get("paid_amount") or 0) async for p in db.rent_payments.find(q, {"paid_amount": 1})])
+    exp = sum([float(e.get("amount") or 0) async for e in db.rental_expenses.find(q, {"amount": 1})])
+    return {"rent_received": round(rent, 2), "expenses": round(exp, 2), "net": round(rent - exp, 2)}
+
+
+async def payout_ledger(owner: User, p) -> dict:
+    split, inc = await compute_split(owner, p), await net_income_to_date(owner.id, p.id)
+    pays = [{**{k: v for k, v in d.items() if k != "_id"}, "id": str(d["_id"])} async for d in db.coowner_payouts.find({"project_id": p.id}).sort("date", -1)]
+    people = []
+    for r in split["rows"]:
+        if r["is_owner"]:
+            continue
+        mine = [x for x in pays if x["co_owner_id"] == r["co_owner_id"]]
+        earned = round(inc["net"] * r["pct"] / 100, 2)
+        paid = round(sum(x["amount"] for x in mine), 2)
+        people.append({"co_owner_id": r["co_owner_id"], "name": r["name"], "email": r["email"], "pct": r["pct"], "earned": earned, "paid": paid,
+                       "balance": round(earned - paid, 2), "payouts": mine})
+    return {"income": inc, "people": people, "total_owed": round(sum(x["balance"] for x in people if x["balance"] > 0), 2)}
+
+
+@router.get("/project/payouts")
+async def get_payouts(user: User = Depends(current_user)):
+    return await payout_ledger(user, await get_project_doc(user))
+
+
+class PayoutIn(BaseModel):
+    co_owner_id: str
+    amount: float = Field(gt=0, le=1e9)
+    date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    note: str = Field("", max_length=200)
+
+
+@router.post("/project/payouts")
+async def add_payout(body: PayoutIn, user: User = Depends(current_user)):
+    if user.real_id is not None:
+        raise HTTPException(403, "Only the project owner can record payouts")
+    pid = await active_pid(user)
+    if body.co_owner_id not in {x["co_owner_id"] for x in await _people(user.id, pid)}:
+        raise HTTPException(400, "Payouts can only be recorded for people with access to this project")
+    try:
+        date.fromisoformat(body.date)
+    except ValueError:
+        raise HTTPException(400, "Date must be YYYY-MM-DD")
+    await db.coowner_payouts.insert_one({"project_id": pid, "owner_id": user.id, "co_owner_id": body.co_owner_id, "amount": round(body.amount, 2),
+                                         "date": body.date, "note": body.note.strip(), "created_at": now_iso()})
+    return await get_payouts(user)
+
+
+@router.delete("/project/payouts/{payout_id}")
+async def delete_payout(payout_id: str, user: User = Depends(current_user)):
+    if user.real_id is not None:
+        raise HTTPException(403, "Only the project owner can remove payouts")
+    await db.coowner_payouts.delete_one({"_id": oid(payout_id), "owner_id": user.id, "project_id": await active_pid(user)})
+    return await get_payouts(user)

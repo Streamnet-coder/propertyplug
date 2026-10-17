@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from core import db, oid
 from deps import load_user, real_user
 from models import Project, User
-from routes.ownership import compute_split, statement_preview
+from routes.ownership import compute_split, payout_ledger, statement_preview
 
 router = APIRouter()
 
@@ -38,14 +38,18 @@ async def _my_rows(user: User):
 @router.get("/my-ownership")
 async def my_ownership(user: User = Depends(real_user)):
     projects = []
-    async for owner, p, r, _ in _my_rows(user):
+    async for owner, p, r, c in _my_rows(user):
+        led = next((x for x in (await payout_ledger(owner, p))["people"] if x["co_owner_id"] == str(c["_id"])), None)
         stmts = [{"tax_year": s["tax_year"], "sent_at": s["sent_at"], "label": f"6 Apr {s['tax_year']} – 5 Apr {s['tax_year'] + 1}"}
                  async for s in db.coowner_statements.find({"project_id": p.id, "sent": user.email}).sort("tax_year", -1)]
         projects.append({"project_id": p.id, "project_name": p.name, "address": p.address, "owner_name": owner.name, "currency": p.currency,
                          "pct": r["pct"], "contribution": r["contribution"], "profit": r["profit"], "monthly_cashflow": r["monthly_cashflow"],
-                         "annual_cashflow": r["annual_cashflow"], "cash_return_pct": r["cash_return_pct"], "profit_return_pct": r["profit_return_pct"], "statements": stmts})
+                         "annual_cashflow": r["annual_cashflow"], "cash_return_pct": r["cash_return_pct"], "profit_return_pct": r["profit_return_pct"], "statements": stmts,
+                         "earned": led["earned"] if led else 0, "paid": led["paid"] if led else 0, "balance": led["balance"] if led else 0,
+                         "payouts": [{k: x[k] for k in ("id", "amount", "date", "note")} for x in (led["payouts"] if led else [])]})
     tot = lambda k: round(sum(x[k] or 0 for x in projects), 2)
-    return {"projects": projects, "totals": {"contribution": tot("contribution"), "profit": tot("profit"), "annual_cashflow": tot("annual_cashflow")}}
+    return {"projects": projects, "totals": {"contribution": tot("contribution"), "profit": tot("profit"), "annual_cashflow": tot("annual_cashflow"),
+                                             "paid": tot("paid"), "balance": tot("balance")}}
 
 
 @router.get("/my-ownership/statement")

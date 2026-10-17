@@ -4,7 +4,7 @@ import { ActivityIndicator, Text, View } from "react-native";
 
 import { api, gbp } from "@/src/api";
 import { PdfButton } from "@/src/components/pdf-button";
-import { Card, Chip, fonts, FormScreen, space } from "@/src/components/ui";
+import { Card, Chip, fonts, FormScreen, Icon, space } from "@/src/components/ui";
 import { useCanSeeMoney } from "@/src/money";
 import { useProject } from "@/src/queries";
 import { shareRepairHistory } from "@/src/report";
@@ -12,10 +12,11 @@ import { makeStyles, useTheme } from "@/src/theme";
 
 export type Repair = {
   id: string; room: string; description: string; priority: "low" | "medium" | "high"; status: "open" | "fixed"; source: "tenant" | "snag"; reported_by: string;
-  assignee: string; fixed_by: string; created_at: string; fixed_at: string | null; days: number; fix_cost: number | null; fix_note: string;
+  assignee: string; fixed_by: string; created_at: string; fixed_at: string | null; days: number; fix_cost: number | null; fix_note: string; repeat: boolean;
 };
-export type RepairHistory = { items: Repair[]; totals: { count: number; open: number; fixed: number; avg_days_to_fix: number | null; total_cost: number | null; tenant_reported: number } };
-type Filter = "all" | "open" | "fixed" | "tenant";
+export type RepeatFlag = { room: string; count: number; open: number; keywords: string[]; last: string; cost: number; ids: string[] };
+export type RepairHistory = { items: Repair[]; repeats: RepeatFlag[]; totals: { count: number; open: number; fixed: number; avg_days_to_fix: number | null; total_cost: number | null; tenant_reported: number } };
+type Filter = "all" | "open" | "fixed" | "tenant" | "repeat";
 export const dayText = (d: number) => (d < 1 ? "under a day" : `${Math.round(d)} day${Math.round(d) === 1 ? "" : "s"}`);
 
 export default function RepairHistoryScreen() {
@@ -26,7 +27,7 @@ export default function RepairHistoryScreen() {
   const [filter, setFilter] = useState<Filter>("all");
   const q = useQuery({ queryKey: ["repair-history"], queryFn: () => api<RepairHistory>("/repairs/history") });
   const t = q.data?.totals;
-  const items = (q.data?.items ?? []).filter((i) => filter === "all" || (filter === "tenant" ? i.source === "tenant" : i.status === filter));
+  const items = (q.data?.items ?? []).filter((i) => filter === "all" || (filter === "tenant" ? i.source === "tenant" : filter === "repeat" ? i.repeat : i.status === filter));
   const prio = { high: colors.error, medium: colors.brandPrimary, low: colors.muted };
 
   return (
@@ -43,11 +44,27 @@ export default function RepairHistoryScreen() {
           {money && t.total_cost !== null && <View style={s.kpi}><Text style={s.kv} testID="repair-history-cost">{gbp(t.total_cost)}</Text><Text style={s.muted}>spent</Text></View>}
         </Card>
       )}
+      {!!q.data?.repeats.length && (
+        <Card style={[{ gap: space.sm, borderColor: colors.brandPrimary, borderWidth: 1.5 }]} testID="repeat-flags">
+          <View style={s.between}>
+            <Icon name="repeat" size={18} color={colors.brandPrimary} />
+            <Text style={[s.name, { flex: 1 }]}>Keeps coming back</Text>
+          </View>
+          <Text style={s.muted}>Rooms with 2 or more repairs in the last 12 months. Worth finding the root cause.</Text>
+          {q.data.repeats.map((r) => (
+            <View key={r.room} style={s.flag} testID={`repeat-flag-${r.room.toLowerCase().replace(/\s+/g, "-")}`}>
+              <Text style={s.line}>{r.room}: {r.count} repairs{r.open ? ` (${r.open} open)` : ""}{r.keywords.length ? ` · “${r.keywords.join("”, “")}”` : ""}</Text>
+              <Text style={s.muted}>Last reported {r.last}{money && r.cost ? ` · ${gbp(r.cost, 2)} spent so far` : ""}</Text>
+            </View>
+          ))}
+        </Card>
+      )}
       <View style={s.chips}>
         <Chip label="All" selected={filter === "all"} onPress={() => setFilter("all")} testID="repair-filter-all" />
         <Chip label={`Open${t ? ` (${t.open})` : ""}`} selected={filter === "open"} onPress={() => setFilter("open")} testID="repair-filter-open" />
         <Chip label={`Fixed${t ? ` (${t.fixed})` : ""}`} selected={filter === "fixed"} onPress={() => setFilter("fixed")} testID="repair-filter-fixed" />
         <Chip label={`Tenant reported${t ? ` (${t.tenant_reported})` : ""}`} selected={filter === "tenant"} onPress={() => setFilter("tenant")} testID="repair-filter-tenant" />
+        {!!q.data?.repeats.length && <Chip label="Repeats" icon="repeat" selected={filter === "repeat"} onPress={() => setFilter("repeat")} testID="repair-filter-repeat" />}
       </View>
       {q.isLoading ? <ActivityIndicator color={colors.brand} /> : (
         <View style={{ gap: space.sm }}>
@@ -56,6 +73,7 @@ export default function RepairHistoryScreen() {
             <Card key={i.id} style={{ gap: 4 }} testID={`repair-${i.id}`}>
               <View style={s.between}>
                 <Text style={[s.name, { flex: 1 }]} numberOfLines={2}>{i.description}</Text>
+                {i.repeat && <Text style={[s.tag, { color: colors.brandPrimary }]} testID={`repair-repeat-${i.id}`}>REPEAT</Text>}
                 <Text style={[s.tag, { color: i.status === "fixed" ? colors.success : prio[i.priority] }]}>{i.status === "fixed" ? "FIXED" : i.priority.toUpperCase()}</Text>
               </View>
               <Text style={s.muted}>{i.room} · reported {i.created_at.slice(0, 10)}{i.reported_by ? ` by ${i.reported_by.replace("Tenant: ", "tenant ")}` : ""}</Text>
@@ -83,6 +101,7 @@ const useStyles = makeStyles((c) => ({
   between: { flexDirection: "row", gap: space.sm, alignItems: "flex-start" },
   name: { fontFamily: fonts.semibold, fontSize: 15, color: c.onSurface },
   tag: { fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.5 },
+  flag: { gap: 2, paddingVertical: 4 },
   line: { fontFamily: fonts.medium, fontSize: 13, color: c.onSurface },
   muted: { fontFamily: fonts.regular, fontSize: 12, color: c.muted, lineHeight: 17 },
 }));

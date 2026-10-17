@@ -172,7 +172,21 @@ async function brandHeader(kind: string, p: Project) {
 <p style="margin-top:6px;font-size:11px">${new Date().toLocaleDateString("en-GB")}</p></div>`;
 }
 
-export async function shareRepairHistory(h: { items: { room: string; description: string; priority: string; status: string; source: string; reported_by: string; assignee: string; fixed_by: string; created_at: string; fixed_at: string | null; days: number; fix_cost: number | null }[]; totals: { count: number; open: number; fixed: number; avg_days_to_fix: number | null; total_cost: number | null } }, name: string, money: boolean) {
+export async function shareCoownerStatement(d: { project_name: string; address: string; owner_name: string; label: string; whole: { rent_received: number; expenses: number; net: number }; mine: { pct: number; rent_received: number; expenses: number; net: number; profit: number | null; contribution: number } }) {
+  const m = d.mine;
+  const row = (k: string, v: string, b = false) => `<tr><td>${b ? `<b>${k}</b>` : k}</td><td class="n">${b ? `<b>${v}</b>` : v}</td></tr>`;
+  const body = `<div class="hdr"><div class="brand"><i>Property<b>Plug</b></i> · CO-OWNER STATEMENT</div><h1>${esc(d.project_name)}</h1><p>${esc(d.address)}</p>
+<p style="margin-top:6px;font-size:11px">Tax year ${esc(d.label)} · owner ${esc(d.owner_name)}</p></div>
+<h2>Your share (${m.pct}%)</h2><table>
+${row("Rent received", gbp(m.rent_received, 2))}${row("Property expenses", gbp(m.expenses, 2))}${row("Net income", gbp(m.net, 2), true)}
+${m.profit !== null ? row("Share of estimated profit", gbp(m.profit, 2)) : ""}${m.contribution ? row("Capital contribution", gbp(m.contribution, 2)) : ""}
+</table>
+<h2>Whole property</h2><table>${row("Rent received", gbp(d.whole.rent_received, 2))}${row("Property expenses", gbp(d.whole.expenses, 2))}${row("Net income", gbp(d.whole.net, 2), true)}</table>
+<p style="font-size:11px;color:#64748b">Grouped by month (April to March), at current ownership shares. Profit is an estimate (valuation minus purchase and budget). Please check with your accountant before filing.</p>`;
+  await printPdf(doc(body), `${d.project_name} statement ${d.label}`);
+}
+
+export async function shareRepairHistory(h: { repeats?: { room: string; count: number; open: number; keywords: string[]; last: string; cost: number }[]; items: { room: string; description: string; priority: string; status: string; source: string; reported_by: string; assignee: string; fixed_by: string; created_at: string; fixed_at: string | null; days: number; fix_cost: number | null }[]; totals: { count: number; open: number; fixed: number; avg_days_to_fix: number | null; total_cost: number | null } }, name: string, money: boolean) {
   const p = await api<Project>("/project");
   const days = (d: number) => (d < 1 ? "&lt;1" : String(Math.round(d)));
   const t = h.totals;
@@ -183,6 +197,8 @@ export async function shareRepairHistory(h: { items: { room: string; description
 <div class="kpi"><span>Avg days to fix</span><div>${t.avg_days_to_fix === null ? "–" : days(t.avg_days_to_fix)}</div></div>
 ${money && t.total_cost !== null ? `<div class="kpi"><span>Spent</span><div>${gbp(t.total_cost, 2)}</div></div>` : ""}
 </div>
+${h.repeats?.length ? `<h2>Keeps coming back</h2><table><tr><th>Room</th><th class="n">Repairs</th><th class="n">Open</th><th>Common words</th><th>Last</th>${money ? `<th class="n">Spent</th>` : ""}</tr>${h.repeats.map((r) => `<tr><td><b>${esc(r.room)}</b></td><td class="n">${r.count}</td><td class="n">${r.open}</td><td>${esc(r.keywords.join(", "))}</td><td>${r.last}</td>${money ? `<td class="n">${gbp(r.cost, 2)}</td>` : ""}</tr>`).join("")}</table>` : ""}
+<h2>All repairs</h2>
 <table><tr><th>Reported</th><th>Issue</th><th>Reported by</th><th>Fixed by</th><th>Status</th><th class="n">Days</th>${money ? `<th class="n">Cost</th>` : ""}</tr>
 ${h.items.map((i) => `<tr><td>${i.created_at.slice(0, 10)}</td><td><b>${esc(i.room)}</b> · ${esc(i.description)}</td><td>${esc(i.reported_by.replace("Tenant: ", "Tenant "))}</td><td>${esc(i.fixed_by || i.assignee)}</td><td class="${i.status === "fixed" ? "under" : "warn"}">${i.status === "fixed" ? `Fixed ${i.fixed_at?.slice(0, 10) ?? ""}` : "Open"}</td><td class="n">${days(i.days)}</td>${money ? `<td class="n">${i.fix_cost ? gbp(i.fix_cost, 2) : "–"}</td>` : ""}</tr>`).join("")}
 </table>`;

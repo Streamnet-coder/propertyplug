@@ -344,8 +344,44 @@ async def repair_history(user: User = Depends(current_user)):
                       "source": "tenant" if d.get("tenancy_id") or d.get("source") == "report_link" else "snag", "reported_by": d.get("reported_by") or "",
                       "assignee": a.get("name") or d.get("assignee") or "", "fixed_by": d.get("fixed_by") or "", "created_at": d["created_at"], "fixed_at": end and d["fixed_at"],
                       "days": round(((end or now) - start).total_seconds() / 86400, 1), "fix_cost": None if user.no_money else d.get("fix_cost"), "fix_note": d.get("fix_note", "")})
+    repeats = _repeats(items)
+    flagged = {i for r in repeats for i in r["ids"]}
+    for i in items:
+        i["repeat"] = i["id"] in flagged
     fixed = [i for i in items if i["status"] == "fixed"]
     costs = [i["fix_cost"] for i in fixed if i["fix_cost"]]
-    return {"items": items, "totals": {"count": len(items), "open": len(items) - len(fixed), "fixed": len(fixed),
+    return {"items": items, "repeats": repeats, "totals": {"count": len(items), "repeat_rooms": len(repeats), "open": len(items) - len(fixed), "fixed": len(fixed),
                                        "avg_days_to_fix": round(sum(i["days"] for i in fixed) / len(fixed), 1) if fixed else None,
                                        "total_cost": None if user.no_money else round(sum(costs), 2), "tenant_reported": sum(i["source"] == "tenant" for i in items)}}
+
+
+STOP = set("the a an and or of in on at to is it its was has have not no with for from by be are this that very bit still again keeps keep there room".split())
+ISSUE_WORDS = {"leak", "leaking", "damp", "mould", "mold", "boiler", "heating", "drip", "dripping", "crack", "blocked", "blockage", "drain", "toilet", "tap", "shower",
+               "window", "door", "lock", "roof", "gutter", "electric", "socket", "fuse", "radiator", "condensation", "pipe", "smell", "pest", "mice", "rats", "lights"}
+
+
+def _words(t: str) -> set:
+    return {w for w in re.findall(r"[a-z]+", t.lower()) if len(w) > 2 and w not in STOP}
+
+
+def _repeats(items: list) -> list:
+    """Rooms with 2+ repairs in the last 12 months, plus words that keep showing up (e.g. 'leak', 'damp')."""
+    from datetime import datetime, timedelta, timezone
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=365)).isoformat()
+    rooms: dict = {}
+    for i in items:
+        if i["created_at"] >= cutoff:
+            rooms.setdefault(i["room"].strip().lower(), []).append(i)
+    out = []
+    for group in rooms.values():
+        if len(group) < 2:
+            continue
+        counts: dict = {}
+        for i in group:
+            for w in _words(i["description"]):
+                counts[w] = counts.get(w, 0) + 1
+        common = sorted((w for w, n in counts.items() if n >= 2), key=lambda w: (w not in ISSUE_WORDS, -counts[w]))[:3]
+        out.append({"room": group[0]["room"], "count": len(group), "open": sum(i["status"] == "open" for i in group), "keywords": common,
+                    "last": max(i["created_at"] for i in group)[:10], "cost": round(sum(i["fix_cost"] or 0 for i in group), 2),
+                    "ids": [i["id"] for i in group]})
+    return sorted(out, key=lambda r: (-r["count"], r["room"]))

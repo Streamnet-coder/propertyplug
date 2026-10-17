@@ -5,6 +5,7 @@ import { Text, TextInput, View } from "react-native";
 import { api, gbp } from "@/src/api";
 import { Button, Card, fonts, radius, SectionTitle, space } from "@/src/components/ui";
 import { StatementsPanel } from "@/src/components/coowner-statements";
+import { PayoutsPanel } from "@/src/components/payouts-panel";
 import { queryClient } from "@/src/query-client";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
@@ -30,7 +31,7 @@ export function OwnershipSplitCard() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const save = useMutation({
     mutationFn: (b: { shares: Record<string, number>; contributions: Record<string, number> }) => api<Split>("/project/split", { method: "PUT", body: b }),
-    onSuccess: (d) => { queryClient.setQueryData(["split"], d); queryClient.invalidateQueries({ queryKey: ["statements"] }); setDraft(null); toast("Ownership split saved"); },
+    onSuccess: (d) => { queryClient.setQueryData(["split"], d); queryClient.invalidateQueries({ queryKey: ["statements"] }); queryClient.invalidateQueries({ queryKey: ["payouts"] }); setDraft(null); toast("Ownership split saved"); },
     onError: (e: Error) => toast(e.message, "error"),
   });
   const d = q.data;
@@ -108,6 +109,7 @@ export function OwnershipSplitCard() {
           </View>
         )}
         {d.has_split && d.can_edit && !draft && <StatementsPanel />}
+        {d.has_split && d.can_edit && !draft && <PayoutsPanel />}
       </Card>
     </View>
   );
