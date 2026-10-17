@@ -44,15 +44,15 @@ export function TenancyAlertsCard() {
   const unprotected = live.filter((t) => t.deposit > 0 && !t.deposit_protected);
   if (!ending.length && !unprotected.length) return null;
   const lines = [
-    ...ending.map((t) => `${t.tenant_name}: tenancy ends ${t.days_to_end === 0 ? "today" : `in ${t.days_to_end} day${t.days_to_end === 1 ? "" : "s"}`}`),
-    ...unprotected.map((t) => `${t.tenant_name}: deposit of ${gbp(t.deposit)} not protected`),
+    ...ending.map((t) => ({ k: `end-${t.id}`, v: `${t.tenant_name}: tenancy ends ${t.days_to_end === 0 ? "today" : `in ${t.days_to_end} day${t.days_to_end === 1 ? "" : "s"}`}` })),
+    ...unprotected.map((t) => ({ k: `dep-${t.id}`, v: `${t.tenant_name}: deposit of ${gbp(t.deposit)} not protected` })),
   ];
   return (
     <Pressable testID="tenancy-alert-card" onPress={() => { tap(); router.push("/rentals"); }} style={({ pressed }) => [s.alert, pressed && { opacity: 0.9 }]}>
       <View style={[s.icon, { backgroundColor: colors.orangeTint }]}><Icon name="calendar-clock" size={18} color={colors.warning} /></View>
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={s.title}>Tenancy heads-up</Text>
-        {lines.slice(0, 3).map((l) => <Text key={l} style={s.muted} numberOfLines={1}>{l}</Text>)}
+        {lines.slice(0, 3).map((l) => <Text key={l.k} style={s.muted} numberOfLines={1}>{l.v}</Text>)}
         {lines.length > 3 && <Text style={s.muted}>+{lines.length - 3} more</Text>}
       </View>
       <Icon name="chevron-right" size={18} color={colors.muted} />

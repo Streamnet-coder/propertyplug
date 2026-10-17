@@ -65,6 +65,7 @@ export default function Home() {
     { id: "report", icon: "share-2", label: "Share", onPress: () => router.push("/share-report") },
     { id: "receipt", icon: "receipt", label: "Receipt", onPress: () => router.push("/receipt-form") },
     { id: "snags", icon: "list-checks", label: "Snags", onPress: () => router.push("/snags") },
+    { id: "inbox", icon: "inbox", label: "My tasks", onPress: () => router.push("/inbox") },
   ];
   const actions = allActions.filter((a) => !(a.id === "brrr" && (p?.property_type === "land" || p?.purpose === "personal")) && (money || !["ai", "brrr", "report", "receipt"].includes(a.id)));
 

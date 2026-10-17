@@ -203,3 +203,6 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 
 ## Manager money permissions (Jun 2026)
 - co_owners.money_access (default true). False = tasks only: deps.effective sets owner.no_money; block_money router dependency (budget, quotes, stage_payments, ai, rentals, tenant_portal, share, /project/comparables) returns 403; project summaries zero money fields + money_hidden; PUT /project ignores money keys; rent roll skips. acting_as.money exposed; frontend useCanSeeMoney hides Budget tab, dashboard money cards, receipts, AI/BRRR/share actions.
+
+## Task inbox (Jun 2026)
+- GET /api/inbox (routes/inbox.py): open snags, tenant repairs (snags with tenancy_id) and not-done stages due within 30 days/overdue across all accessible projects (own + co-owned + manager-scoped), overdue first. /inbox "My tasks" screen with filters; Home quick action "My tasks"; tapping activates the item's project and opens /snags or /timeline.

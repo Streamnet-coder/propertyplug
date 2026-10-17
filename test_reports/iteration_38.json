@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 38 — Manager Task Inbox (GET /api/inbox + /inbox screen + Home 'My tasks' quick action). BACKEND 11/11 passed, 1 skipped (demo owner has only 1 project; multi-project exclusion assertion vacuous). Verified: auth required (401); response shape {items[], counts{repair,snag,stage,overdue,total}, projects}; snag with tenancy_id surfaces as kind 'repair', non-tenant open snag as 'snag', fixed snag excluded; non-done milestones within 30d horizon included as 'stage' with overdue=true when target_date<today and priority='high'; counts match items; items sorted overdue first (then high-priority repairs, then priority/date). Scoping: a TEST manager invited to only one project (POST /api/co-owners {email, project_ids:[pid], money_access:false}) only sees items from that scoped owner-project plus their own seeded project; same manager can call /api/inbox successfully (tasks-only, money_access=false). FRONTEND: home quick-action-inbox tapping navigates to inbox-screen; inbox-summary renders '7 open · 7 overdue · 1 project' on demo seed; inbox-filter-all/repair/snag/stage all present and functional (repair/snag chips correctly empty on demo, stage chip shows all 7 overdue milestones); inbox-empty renders 'All caught up / No open snags, tenant repairs or stages due in the next 30 days.'; tapping a stage item navigates to /timeline; back button returns to Home.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration38.py",
+    "/app/test_reports/pytest/pytest_iteration38.xml",
+    "/app/test_reports/iteration_38.json"
+  ],
+  "action_items": [
+    "Not blocking for this feature, but observed a React 'Encountered two children with the same key' console warning sourced from TenancyAlertsCard when the owner has multiple tenancies with identical tenant_name (reproduced by leftover duplicate TEST tenancies before cleanup — now removed). Consider keying tenancy alert rows by tenancy id instead of tenant_name to prevent future duplicate-key warnings."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/routes/inbox.py is tight (34 lines): correctly reuses access_filter(user) from projects.py so both owned projects, full co-owner projects and manager-scoped project_ids are handled uniformly. Open-only snag filter ('status':'open') and non-done milestone filter ('status':{'$ne':'done'}) match the spec. tenancy_id truthiness determines repair-vs-snag classification. Overdue = target_date < today (ISO string compare safe because YYYY-MM-DD). Horizon clamped to [1,365] days.",
+    "/app/frontend/app/inbox.tsx: Pressable testIDs follow inbox-item-{kind}-{id} as required. open() uses /projects/{id}/activate when active project differs, then invalidates all queries before routing — correct for the 'tap stage opens /timeline (activating item's project when it differs)' requirement. router.push conditional on kind maps stage→/timeline and anything else→/snags, matching spec (repair+snag both route to /snags screen where tenant repairs live).",
+    "/app/frontend/app/(tabs)/index.tsx line 68-70: 'My tasks' quick action is included for everyone (money and non-money users) because allActions.filter only strips ai/brrr/report/receipt when money is false — snags and inbox stay for tasks-only managers, which matches the spec that tasks-only managers can use /api/inbox."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration38.py (new, 11 passing + 1 skipped)",
+    "/app/test_reports/pytest/pytest_iteration38.xml (new JUnit)",
+    "/app/test_reports/iteration_38.json (new)"
+  ],
+  "success_rate": {
+    "backend": "100% — 11/11 passed + 1 vacuous skip",
+    "frontend": "100% — all testIDs render, filter chips work, stage→/timeline nav verified, empty state verified, back nav verified"
+  },
+  "seed_data_creation": "Fixture created & cleaned per run: 1 TEST tenancy on the demo project with portal + 1 tenant-reported repair snag via POST /api/t/{token}/repair, 1 owner open snag, 1 owner fixed snag, 1 future milestone (+3d), 1 overdue milestone (-1d). A TEST manager user (TEST_iter38mgr_<ts>_<rand>@example.com) was registered and invited as co-owner with project_ids=[demo_pid] & money_access=false, then deleted after tests. Final sweep (post-xdist dedup) confirms zero TEST_ tenancies / co-owners / milestones / snags remaining; demo project still active.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Base URL is EXPO_PUBLIC_BACKEND_URL. Auth form testIDs are auth-email-input / auth-password-input / auth-submit-button (not login-*). From landing, click text 'Sign in' first to reach the auth form. Inbox endpoint lives at GET /api/inbox and uses access_filter(user) so it benefits for free from co-owner scoping tests. On the frontend, quick-action-inbox is the 6th quick action and only requires scrolling slightly on 390x844 viewport. Rentals portal POST returns {\"url\": \".../api/t/<token>\"} — split the trailing path segment to get the token. pytest.ini forces xdist (-n auto --dist loadscope); if you use scope='module' setup fixtures, each worker runs them separately so test data duplicates. Either (a) override with `-o addopts=''` to run sequentially, or (b) use session fixtures + per-worker tagging to isolate seed data.",
+  "rca_of_issue": "N/A — no bugs found; feature works end-to-end."
+}
