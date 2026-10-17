@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { gbp, RentMonth, Rentals, Tenancy } from "@/src/api";
+import { RenewSheet } from "@/src/components/renew-sheet";
 import { RentLogSheet } from "@/src/components/rent-log-sheet";
 import { Button, Card, EmptyState, fonts, Icon, radius, SectionTitle, space, tap } from "@/src/components/ui";
 import { invalidate, useRentals } from "@/src/queries";
@@ -17,6 +18,7 @@ export default function RentalsScreen() {
   const insets = useSafeAreaInsets();
   const [year, setYear] = useState(new Date().getFullYear());
   const [log, setLog] = useState<{ t: Tenancy; m: RentMonth } | null>(null);
+  const [renew, setRenew] = useState<Tenancy | null>(null);
   const q = useRentals(year);
   const d = q.data;
 
@@ -52,7 +54,7 @@ export default function RentalsScreen() {
               <EmptyState icon="key-round" title="No tenancies yet" subtitle="Add your tenant to track rent each month, late payments and the deposit." testID="tenancies-empty" />
             ) : (
               <View style={{ gap: space.md }}>
-                {d.tenancies.map((t) => <TenancyCard key={t.id} t={t} year={year} onMonth={(m) => setLog({ t, m })} />)}
+                {d.tenancies.map((t) => <TenancyCard key={t.id} t={t} year={year} onMonth={(m) => setLog({ t, m })} onRenew={setRenew} />)}
               </View>
             )}
           </View>
@@ -84,6 +86,7 @@ export default function RentalsScreen() {
         <Button title="Expense" icon="plus" style={{ flex: 1 }} onPress={() => router.push({ pathname: "/rental-expense-form", params: { year: String(year) } })} testID="add-rental-expense-button" />
       </View>
       <RentLogSheet tenancy={log?.t ?? null} month={log?.m ?? null} onClose={() => setLog(null)} />
+      <RenewSheet tenancy={renew} onClose={() => setRenew(null)} />
     </View>
   );
 }
@@ -139,7 +142,7 @@ function Summary({ d }: { d: Rentals }) {
   );
 }
 
-function TenancyCard({ t, year, onMonth }: { t: Tenancy; year: number; onMonth: (m: RentMonth) => void }) {
+function TenancyCard({ t, year, onMonth, onRenew }: { t: Tenancy; year: number; onMonth: (m: RentMonth) => void; onRenew: (t: Tenancy) => void }) {
   const s = useStyles();
   const { colors } = useTheme();
   const router = useRouter();
@@ -158,7 +161,7 @@ function TenancyCard({ t, year, onMonth }: { t: Tenancy; year: number; onMonth: 
         </Pressable>
       </View>
       <View style={s.cells}>
-        <View style={s.cell}><Text style={s.cellVal}>{gbp(t.rent)}</Text><Text style={s.muted}>rent / mo (day {t.rent_day})</Text></View>
+        <View style={s.cell}><Text style={s.cellVal} testID={`tenancy-rent-${t.id}`}>{gbp(t.current_rent)}</Text><Text style={s.muted}>rent / mo (day {t.rent_day})</Text></View>
         <View style={s.cell}><Text style={s.cellVal}>{gbp(t.deposit)}</Text><Text style={s.muted} numberOfLines={1}>deposit{t.deposit_scheme ? ` · ${t.deposit_scheme}` : ""}</Text></View>
       </View>
       {t.arrears > 0 && (
@@ -167,6 +170,10 @@ function TenancyCard({ t, year, onMonth }: { t: Tenancy; year: number; onMonth: 
           <Text style={s.alertText}>{gbp(t.arrears, 2)} in arrears · {t.late_count} late month{t.late_count === 1 ? "" : "s"}</Text>
         </View>
       )}
+      {(() => {
+        const next = t.rent_changes.find((c) => c.from_month >= new Date().toISOString().slice(0, 7));
+        return next ? <Text style={s.muted} testID={`tenancy-rent-change-${t.id}`}>{next.from_month > new Date().toISOString().slice(0, 7) ? "Rent changes" : "Rent changed"} to {gbp(next.rent)} from {next.from_month}</Text> : null;
+      })()}
       {t.deposit > 0 && !t.deposit_protected && t.status !== "ended" && (
         <View style={[s.alert, { backgroundColor: colors.orangeTint }]} testID={`tenancy-deposit-warning-${t.id}`}>
           <Icon name="shield-alert" size={16} color={colors.warning} />
@@ -194,7 +201,10 @@ function TenancyCard({ t, year, onMonth }: { t: Tenancy; year: number; onMonth: 
       ) : (
         <Text style={s.muted}>No rent due in {year}.</Text>
       )}
-      <Text style={s.hint}>Tap a month to log rent received</Text>
+      <View style={{ flexDirection: "row", gap: space.sm, alignItems: "center" }}>
+        <Text style={[s.hint, { flex: 1, textAlign: "left" }]}>Tap a month to log rent{t.receipts_auto && t.tenant_email ? " · receipts auto-emailed" : ""}</Text>
+        <Button small variant="outline" icon="refresh-cw" title="Renew / extend" onPress={() => onRenew(t)} testID={`tenancy-renew-${t.id}`} />
+      </View>
     </Card>
   );
 }

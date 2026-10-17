@@ -9,7 +9,7 @@ import { invalidate, useRentals } from "@/src/queries";
 import { useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
-const EMPTY = { tenant_name: "", tenant_email: "", tenant_phone: "", rent: "", deposit: "", deposit_scheme: "", deposit_protected: false, start_date: "", end_date: "", rent_day: "1", notes: "" };
+const EMPTY = { tenant_name: "", tenant_email: "", tenant_phone: "", rent: "", deposit: "", deposit_scheme: "", deposit_protected: false, receipts_auto: true, start_date: "", end_date: "", rent_day: "1", notes: "" };
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export default function TenancyForm() {
@@ -24,7 +24,7 @@ export default function TenancyForm() {
   const set = (k: keyof typeof f) => (v: string | boolean) => setF((x) => ({ ...x, [k]: v }));
 
   useEffect(() => {
-    if (existing) setF(Object.fromEntries(Object.keys(EMPTY).map((k) => [k, k === "deposit_protected" ? !!existing.deposit_protected : String((existing as any)[k] ?? "")])) as typeof EMPTY);
+    if (existing) setF(Object.fromEntries(Object.keys(EMPTY).map((k) => [k, k === "deposit_protected" || k === "receipts_auto" ? !!(existing as any)[k] : String((existing as any)[k] ?? "")])) as typeof EMPTY);
   }, [existing]);
 
   const done = async (msg: string) => {
@@ -84,6 +84,14 @@ export default function TenancyForm() {
           <Chip label="Not yet" icon="shield-alert" selected={!f.deposit_protected} onPress={() => set("deposit_protected")(false)} testID="tenancy-protected-no" />
         </View>
         {!f.deposit_protected && Number(f.deposit) > 0 && <Text style={{ fontFamily: fonts.medium, fontSize: 12, color: colors.warning }} testID="tenancy-protect-warning">UK deposits must be protected within 30 days of receiving them.</Text>}
+      </View>
+      <View style={{ gap: space.sm }}>
+        <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.onSurfaceTertiary }}>Email a rent receipt when payments are logged?</Text>
+        <View style={{ flexDirection: "row", gap: space.sm }}>
+          <Chip label="Yes, auto-send" icon="mail-check" selected={f.receipts_auto} onPress={() => set("receipts_auto")(true)} testID="tenancy-receipts-on" />
+          <Chip label="Off" icon="mail-x" selected={!f.receipts_auto} onPress={() => set("receipts_auto")(false)} testID="tenancy-receipts-off" />
+        </View>
+        {f.receipts_auto && !f.tenant_email.trim() && <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted }}>Add the tenant&apos;s email to send receipts.</Text>}
       </View>
       <Field label="Notes" value={f.notes} onChangeText={set("notes")} multiline placeholder="Break clause, guarantor, inventory…" testID="tenancy-notes-input" />
       {error ? <Text style={{ color: colors.error, fontFamily: fonts.medium }} testID="tenancy-form-error">{error}</Text> : null}

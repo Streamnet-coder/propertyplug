@@ -25,9 +25,11 @@ export default function ProjectEdit() {
   const [f, setF] = useState({
     name: "", address: "", purchase_price: "", estimated_valuation: "", monthly_rent: "", refinance_ltv: "75", refinance_rate: "5.5", hard: "", soft: "", contingency: "", finish_type: "Medium Finish",
     currency: "GBP" as CurrencyCode, property_type: "residential" as Project["property_type"], plot_size: "", plot_unit: "acres" as Project["plot_unit"], planning_status: "none" as Project["planning_status"], intended_use: "", value_without_planning: "", value_with_planning: "", lat: "", lon: "",
-    purpose: "investment" as Project["purpose"], deposit: "", mortgage_rate: "4.5", mortgage_term: "25", mortgage_type: "repayment" as Project["mortgage_type"], remortgage_ltv: "85",
+    purpose: "investment" as Project["purpose"], deposit: "", mortgage_rate: "4.5", mortgage_term: "25", mortgage_type: "repayment" as Project["mortgage_type"], remortgage_ltv: "85", fixed_rate_end: "",
+    scen: [{ label: "", rate: "", fee: "" }, { label: "", rate: "", fee: "" }, { label: "", rate: "", fee: "" }],
   });
-  const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }));
+  const setScen = (i: number, k: "label" | "rate" | "fee") => (v: string) => setF((x) => ({ ...x, scen: x.scen.map((r, j) => (j === i ? { ...r, [k]: v } : r)) }));
+  const set = (k: Exclude<keyof typeof f, "scen">) => (v: string) => setF((x) => ({ ...x, [k]: v }));
   const isLand = f.property_type === "land";
   const c = sym(f.currency);
 
@@ -61,6 +63,11 @@ export default function ProjectEdit() {
         mortgage_term: String(p.mortgage_term),
         mortgage_type: p.mortgage_type,
         remortgage_ltv: String(p.remortgage_ltv),
+        fixed_rate_end: p.fixed_rate_end ?? "",
+        scen: [0, 1, 2].map((i) => {
+          const r = p.remortgage_scenarios?.[i];
+          return r ? { label: r.label, rate: String(r.rate), fee: r.fee ? String(r.fee) : "" } : { label: "", rate: "", fee: "" };
+        }),
       });
   }, [p, isNew]);
 
@@ -92,6 +99,8 @@ export default function ProjectEdit() {
           mortgage_term: Math.min(40, Math.max(1, Math.round(Number(f.mortgage_term) || 25))),
           mortgage_type: f.mortgage_type,
           remortgage_ltv: Math.min(100, Number(f.remortgage_ltv) || 0),
+          ...(isNew ? {} : { fixed_rate_end: f.fixed_rate_end.trim() || null }),
+          remortgage_scenarios: f.scen.filter((r) => Number(r.rate) > 0).map((r) => ({ label: r.label.trim(), rate: Number(r.rate), fee: Number(r.fee) || 0 })),
           ...pin,
         },
       }),
@@ -121,7 +130,7 @@ export default function ProjectEdit() {
     <FormScreen
       title={isNew ? "New project" : "Edit project"}
       testID="project-edit-screen"
-      footer={<Button title={isNew ? "Create project" : "Save project"} loading={save.isPending} onPress={() => (!f.name.trim() ? toast("Please enter a project name", "error") : pinError ? toast(pinError, "error") : save.mutate())} testID="project-save-button" />}
+      footer={<Button title={isNew ? "Create project" : "Save project"} loading={save.isPending} onPress={() => (!f.name.trim() ? toast("Please enter a project name", "error") : pinError ? toast(pinError, "error") : f.fixed_rate_end.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(f.fixed_rate_end.trim()) ? toast("Fixed-rate end date must be YYYY-MM-DD", "error") : f.scen.some((r) => r.rate.trim() && !(Number(r.rate) > 0 && Number(r.rate) <= 30)) ? toast("Remortgage rates must be between 0 and 30%", "error") : save.mutate())} testID="project-save-button" />}
     >
       <Field label="Project name" value={f.name} onChangeText={set("name")} placeholder={isLand ? "e.g. Ashby paddock plot" : "e.g. Derby terrace flip"} testID="project-name-input" />
       <Field label="Address" value={f.address} onChangeText={set("address")} placeholder="Street, town, postcode" testID="project-address-input" />
@@ -186,6 +195,16 @@ export default function ProjectEdit() {
                 <Chip label="Repayment" selected={f.mortgage_type === "repayment"} onPress={() => set("mortgage_type")("repayment")} testID="project-mortgage-repayment" />
                 <Chip label="Interest-only" selected={f.mortgage_type === "interest_only"} onPress={() => set("mortgage_type")("interest_only")} testID="project-mortgage-interest-only" />
               </View>
+              <Field label="Fixed rate ends (optional)" value={f.fixed_rate_end} onChangeText={set("fixed_rate_end")} placeholder="YYYY-MM-DD" testID="project-fixed-end-input" />
+              <Text style={label}>Remortgage rates to compare</Text>
+              <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted }}>Add up to 3 deals. We&apos;ll highlight the cheapest monthly payment and the cheapest over 2 years including fees.</Text>
+              {f.scen.map((r, i) => (
+                <View key={i} style={{ flexDirection: "row", gap: space.sm }}>
+                  <View style={{ flex: 1.3 }}><Field label={`Deal ${i + 1}`} value={r.label} onChangeText={setScen(i, "label")} placeholder="e.g. 2yr fix" testID={`project-scen-label-${i}`} /></View>
+                  <View style={{ flex: 1 }}><Field label="Rate %" value={r.rate} onChangeText={setScen(i, "rate")} {...num} testID={`project-scen-rate-${i}`} /></View>
+                  <View style={{ flex: 1 }}><Field label={`Fee (${c})`} value={r.fee} onChangeText={setScen(i, "fee")} {...num} testID={`project-scen-fee-${i}`} /></View>
+                </View>
+              ))}
             </>
           ) : (
             <>

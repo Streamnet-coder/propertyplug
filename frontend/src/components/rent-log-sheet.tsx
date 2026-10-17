@@ -28,10 +28,10 @@ export function RentLogSheet({ tenancy, month, onClose }: { tenancy: Tenancy | n
   }, [month]);
 
   const save = useMutation({
-    mutationFn: (paid: number) => api(`/rentals/tenancies/${tenancy!.id}/rent/${month!.month}`, { method: "PUT", body: { paid_amount: paid, paid_on: paid ? paidOn.trim() || null : null } }),
-    onSuccess: async (_, paid) => {
+    mutationFn: (paid: number) => api<{ receipt?: string | null }>(`/rentals/tenancies/${tenancy!.id}/rent/${month!.month}`, { method: "PUT", body: { paid_amount: paid, paid_on: paid ? paidOn.trim() || null : null } }),
+    onSuccess: async (r, paid) => {
       await invalidate("rentals");
-      toast(paid ? "Rent logged" : "Payment cleared");
+      toast(!paid ? "Payment cleared" : r.receipt === "sent" ? "Rent logged · receipt emailed" : r.receipt === "failed" ? "Rent logged · receipt email failed" : "Rent logged");
       onClose();
     },
     onError: (e: Error) => setError(e.message),

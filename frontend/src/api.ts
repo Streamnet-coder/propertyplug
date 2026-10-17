@@ -91,6 +91,8 @@ export type Project = {
   mortgage_term: number;
   mortgage_type: "repayment" | "interest_only";
   remortgage_ltv: number;
+  fixed_rate_end: string | null;
+  remortgage_scenarios: { label: string; rate: number; fee: number }[];
   home_finance: HomeFinance;
   plot_size: number;
   plot_unit: "acres" | "hectares";
@@ -208,10 +210,12 @@ export type PortalQuestion = { id: string; name: string; email: string; text: st
 export type RentStatus = "paid" | "partial" | "late" | "due";
 export type RentMonth = { month: string; due_on: string; due: number; paid: number; paid_on: string | null; status: RentStatus; reminded_at: string | null };
 export type Tenancy = { id: string; tenant_name: string; tenant_email: string; tenant_phone: string; rent: number; deposit: number; deposit_scheme: string; deposit_protected: boolean; start_date: string; end_date: string | null; rent_day: number; notes: string;
-  status: "active" | "upcoming" | "ended"; schedule: RentMonth[]; arrears: number; late_count: number; days_to_end: number | null };
+  status: "active" | "upcoming" | "ended"; schedule: RentMonth[]; arrears: number; late_count: number; days_to_end: number | null;
+  receipts_auto: boolean; current_rent: number; rent_changes: { from_month: string; rent: number }[]; renewals: { at: string; end_date: string | null; new_rent: number | null; rent_from: string | null }[] };
 export type RentalExpense = { id: string; category: string; amount: number; date: string; description: string };
 export type Rentals = { year: number; tenancies: Tenancy[]; expenses: RentalExpense[];
   summary: { rent_due: number; received: number; arrears: number; expenses: number; net: number; active_rent: number; by_category: Record<string, number>; monthly: { month: string; due: number; received: number; expenses: number; net: number }[] } };
 export type CompareLink = { id: string; token: string; url: string; before_id: string; after_id: string; title: string; created_at: string };
-export type HomeFinance = { loan: number; ltv_now: number; ltv_after: number; monthly_payment: number; total_interest: number; equity_now: number; equity_after: number; value_added: number; net_value_added: number;
+export type RemortgageScenario = { label: string; rate: number; fee: number; monthly_payment: number; vs_current: number; two_year_cost: number; best_monthly: boolean; best_two_year: boolean };
+export type HomeFinance = { fixed_rate_end: string | null; fixed_days_left: number | null; scenarios: RemortgageScenario[]; loan: number; ltv_now: number; ltv_after: number; monthly_payment: number; total_interest: number; equity_now: number; equity_after: number; value_added: number; net_value_added: number;
   remortgage: { max_loan: number; headroom: number; borrow_for_refurb: number; covers_refurb: boolean; shortfall: number; new_loan: number; new_payment: number; payment_increase: number; new_ltv: number; equity_after: number } };

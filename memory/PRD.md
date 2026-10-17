@@ -177,3 +177,8 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Lender pack: Rental income section (YTD received, costs, net, arrears, tenancies, monthly table) + cover KPIs.
 - Shareable before/after links: /api/compare-links CRUD, public /api/c/{token} branded slider page with trial CTA; ShareCompare card on /compare.
 - Project purpose investment|personal: personal hides BRRR (quick action, profile link, lender pack BRRR), shows Mortgage & equity + Remortgage cards (home_finance in project summary; deposit, mortgage_rate, mortgage_term, mortgage_type, remortgage_ltv). target_type "Home Renovation".
+
+## Iteration 32 (Jun 2026)
+- Tenancy renewal: POST /api/rentals/tenancies/{id}/renew (new end date or rolling, optional new rent from date -> rent_changes, renewals history, emails tenant terms). RenewSheet on tenancy cards.
+- Auto rent receipts (receipts_auto per tenancy, default on) emailed on rent log when amount changes; logged in Messages.
+- Personal mortgage: fixed_rate_end + FixedRateAlertCard (≤90 days / ended); up to 3 remortgage_scenarios with cheapest monthly + best 2-yr (incl. fees) highlights.

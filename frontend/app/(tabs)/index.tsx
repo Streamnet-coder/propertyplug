@@ -21,7 +21,7 @@ import { LandUplift, PlanningCard } from "@/src/components/land-cards";
 import { ExpiringAccessCard } from "@/src/components/expiring-access-card";
 import { OverdueRequestsCard } from "@/src/components/overdue-requests-card";
 import { RentalsCard, TenancyAlertsCard } from "@/src/components/rentals-card";
-import { HomeFinanceCard } from "@/src/components/home-finance-card";
+import { FixedRateAlertCard, HomeFinanceCard } from "@/src/components/home-finance-card";
 import { makeStyles, useTheme } from "@/src/theme";
 
 const HERO = "https://images.unsplash.com/photo-1714259830228-893a69a2d45b?crop=entropy&cs=srgb&fm=jpg&ixlib=rb-4.1.0&q=85&w=1200";
@@ -191,6 +191,7 @@ export default function Home() {
           <ExpiringAccessCard linkToPortal />
           <OverdueRequestsCard />
           {p.property_type !== "land" && <TenancyAlertsCard />}
+          <FixedRateAlertCard p={p} />
 
           {(expiring.data ?? []).length > 0 && (
             <Pressable testID="expiry-alert-card" onPress={() => { tap(); router.push("/documents"); }} style={[s.alertCard, { borderColor: expiring.data!.some((d) => d.expiry_status === "expired") ? colors.error : colors.brandPrimary }]}>

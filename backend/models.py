@@ -75,6 +75,8 @@ class Project(BaseDocument):
     mortgage_term: int = 25
     mortgage_type: Literal["repayment", "interest_only"] = "repayment"
     remortgage_ltv: float = 85
+    fixed_rate_end: Optional[str] = None
+    remortgage_scenarios: List[dict] = []
     plot_size: float = 0
     plot_unit: Literal["acres", "hectares"] = "acres"
     planning_status: Literal["none", "applied", "granted"] = "none"

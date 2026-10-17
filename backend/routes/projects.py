@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
-from typing import Literal, Optional
+from datetime import date
+from typing import List, Literal, Optional
 from bson import ObjectId
 from core import db, oid
 from models import User, Budget, Currency, Project
@@ -83,7 +84,18 @@ def home_finance(p: Project, total_budget: float) -> dict:
     new_loan = loan + borrow
     new_pay = monthly_payment(new_loan, p.mortgage_rate, p.mortgage_term, p.mortgage_type)
     r2 = lambda x: round(x, 2)
-    return {"loan": r2(loan), "ltv_now": r2(loan / p.purchase_price * 100) if p.purchase_price else 0,
+    scen = []
+    for i, sc in enumerate(p.remortgage_scenarios[:3]):
+        pay_i = monthly_payment(new_loan, sc["rate"], p.mortgage_term, p.mortgage_type)
+        scen.append({"label": sc.get("label") or f"Option {i + 1}", "rate": sc["rate"], "fee": sc.get("fee", 0), "monthly_payment": r2(pay_i),
+                     "vs_current": r2(pay_i - new_pay), "two_year_cost": r2(pay_i * 24 + sc.get("fee", 0))})
+    if scen:
+        best = min(scen, key=lambda x: x["monthly_payment"])
+        best_2y = min(scen, key=lambda x: x["two_year_cost"])
+        for x in scen:
+            x["best_monthly"], x["best_two_year"] = x is best, x is best_2y
+    days_left = (date.fromisoformat(p.fixed_rate_end) - date.today()).days if p.fixed_rate_end else None
+    return {"fixed_rate_end": p.fixed_rate_end, "fixed_days_left": days_left, "scenarios": scen,"loan": r2(loan), "ltv_now": r2(loan / p.purchase_price * 100) if p.purchase_price else 0,
             "ltv_after": r2(loan / value * 100) if value else 0, "monthly_payment": r2(pay), "total_interest": r2(total_interest),
             "equity_now": r2(p.purchase_price - loan), "equity_after": r2(value - loan),
             "value_added": r2(value - p.purchase_price), "net_value_added": r2(value - p.purchase_price - total_budget),
@@ -95,6 +107,12 @@ def home_finance(p: Project, total_budget: float) -> dict:
 
 def target_for(property_type: str, purpose: str) -> str:
     return "Land Investment" if property_type == "land" else "Home Renovation" if purpose == "personal" else "BRRR Refurbishment"
+
+
+class Scenario(BaseModel):
+    label: str = Field("", max_length=40)
+    rate: float = Field(gt=0, le=30)
+    fee: float = Field(0, ge=0)
 
 
 class ProjectUpdate(BaseModel):
@@ -115,6 +133,8 @@ class ProjectUpdate(BaseModel):
     mortgage_term: Optional[int] = Field(None, ge=1, le=40)
     mortgage_type: Optional[Literal["repayment", "interest_only"]] = None
     remortgage_ltv: Optional[float] = Field(None, ge=0, le=100)
+    fixed_rate_end: Optional[str] = None
+    remortgage_scenarios: Optional[List[Scenario]] = Field(None, max_length=3)
     plot_size: Optional[float] = None
     plot_unit: Optional[Literal["acres", "hectares"]] = None
     planning_status: Optional[Literal["none", "applied", "granted"]] = None
@@ -130,6 +150,13 @@ class ProjectUpdate(BaseModel):
 async def update_project(body: ProjectUpdate, user: User = Depends(current_user)):
     upd = body.model_dump(exclude_none=True)
     clear = upd.pop("clear_pin", False)
+    if "fixed_rate_end" in body.model_fields_set:
+        if body.fixed_rate_end:
+            try:
+                date.fromisoformat(body.fixed_rate_end)
+            except ValueError:
+                raise HTTPException(400, "Fixed-rate end date must be YYYY-MM-DD")
+        upd["fixed_rate_end"] = body.fixed_rate_end or None
     if "lat" in upd or "lon" in upd:
         if "lat" not in upd or "lon" not in upd:
             raise HTTPException(400, "Enter both latitude and longitude")
