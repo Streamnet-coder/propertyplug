@@ -687,7 +687,7 @@ async def create_doc_request(pid: str, body: DocRequestIn, email: str = Depends(
         html = (f'<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0f172a">'
                 f'<p>{E(lead["name"])} ({E(lead["company"])}) has asked for a document on <b>{E(p.get("name", "your project"))}</b>:</p>'
                 f'<p style="font-size:17px;font-weight:bold">{E(r["title"])}</p>{note_html}'
-                f'<p>Open Builder Assist → Documents → Stakeholder portal to share it or reply.</p></td></tr></table>')
+                f'<p>Open PropertyPlug → Documents → Stakeholder portal to share it or reply.</p></td></tr></table>')
         try:
             await send_email(to=owner["email"], subject=f"Document request from {lead['name']}: {r['title']}", html=html, reply_to=email)
         except EmailError as e:
@@ -709,7 +709,7 @@ async def remind_doc_request(pid: str, rid: str, email: str = Depends(portal_ema
     days = _req_out(r)["days_waiting"]
     html = (f'<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0f172a">'
             f'<p>Reminder: {E(lead["name"])} ({E(lead["company"])}) is still waiting for <b>{E(r["title"])}</b> on {E(p.get("name", "your project"))}.</p>'
-            f'<p>They asked {days} days ago. Open Builder Assist → Documents → Stakeholder portal to share it or reply.</p></td></tr></table>')
+            f'<p>They asked {days} days ago. Open PropertyPlug → Documents → Stakeholder portal to share it or reply.</p></td></tr></table>')
     try:
         await send_email(to=owner["email"], subject=f"Reminder: {lead['name']} is waiting for {r['title']}", html=html, reply_to=email)
     except EmailError as e:
@@ -789,7 +789,7 @@ document.querySelectorAll('.proj').forEach(a=>a.onclick=e=>{e.preventDefault();p
 function logout(e){e&&e.preventDefault();sessionStorage.removeItem('pt');login()}
 async function dl(pid,d){const r=await api(`/portal/projects/${pid}/documents/${d.id}`);const u=URL.createObjectURL(await r.blob());const a=document.createElement('a');a.href=u;a.download=d.filename;a.click();URL.revokeObjectURL(u)}
 async function project(pid,me){cur=pid;const p=await(await api(`/portal/projects/${pid}?week=${week}`)).json();sy=p.symbol||'£';const g=p.digest;
-$('#app').innerHTML=`<div class='hdr' id='portal-project'><div class='brand'>BUILDER <b>ASSIST</b> · STAKEHOLDER PORTAL</div><h1>${esc(p.name)}</h1><div>${esc(p.address)}</div><div style='font-size:12px;margin-top:6px'>${esc(me.handle||me.email)} · ${esc(p.role)} · ${p.expires_on?`<span id='access-ends'>access until ${esc(p.expires_on)}</span> · `:''}${me.projects.length>1?"<a href='#' id='all' style='color:#fff'>All projects</a> · ":""}<a href='#' id='logout' style='color:#fff'>Sign out</a></div></div>
+$('#app').innerHTML=`<div class='hdr' id='portal-project'><div class='brand'><i>Property<b>Plug</b></i> · STAKEHOLDER PORTAL</div><h1>${esc(p.name)}</h1><div>${esc(p.address)}</div><div style='font-size:12px;margin-top:6px'>${esc(me.handle||me.email)} · ${esc(p.role)} · ${p.expires_on?`<span id='access-ends'>access until ${esc(p.expires_on)}</span> · `:''}${me.projects.length>1?"<a href='#' id='all' style='color:#fff'>All projects</a> · ":""}<a href='#' id='logout' style='color:#fff'>Sign out</a></div></div>
 <div class='kpis' style='margin-top:14px'><div class='kpi'><span>Stage</span><div>${esc(p.stage||'-')}</div></div><div class='kpi'><span>Milestones</span><div>${p.milestones_done}/${p.milestones_total}</div></div><div class='kpi'><span>Budget</span><div>${gbp(p.total_budget)}</div></div><div class='kpi'><span>Spent</span><div>${gbp(p.total_spent)}</div></div></div>
 ${g?`<div class='card' id='portal-digest'><h2>Weekly update · ${week===0?'This week':week===1?'Last week':week+' weeks ago'}</h2><div class='kpis'><div class='kpi'><span>Spent</span><div>${gbp(g.spend.total)}</div></div><div class='kpi'><span>Snags fixed</span><div>${g.snags_fixed.length}</div></div><div class='kpi'><span>Stages done</span><div>${g.milestones_done.length}</div></div><div class='kpi'><span>Open snags</span><div>${g.snags_open_now}</div></div></div>
 ${g.milestones_done.map(m=>`<div class='cap'>✓ ${esc(m.name)}</div>`).join('')}<div style='display:flex;justify-content:space-between;margin-top:10px'><a href='#' id='prev'>← Previous week</a>${week>0?"<a href='#' id='next'>Next week →</a>":"<span></span>"}</div></div>`:''}
@@ -821,6 +821,6 @@ sessionStorage.getItem('pt')?home().catch(()=>login()):login();
 async def portal_page():
     css = PAGE_CSS + "input{width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;font-size:16px;margin:6px 0 10px}button{width:100%;padding:14px;border:0;border-radius:10px;background:#0f766e;color:#fff;font-weight:700;font-size:15px}.proj{display:block;padding:12px;border:1px solid #e2e8f0;border-radius:10px;margin-top:8px;color:#0f172a;text-decoration:none}a{color:#0f766e}"
     return HTMLResponse(f"<!DOCTYPE html><html><head><meta charset='utf-8'/><meta name='viewport' content='width=device-width,initial-scale=1'/><title>{E(EMAIL_FROM_NAME)} · Stakeholder portal</title>"
-                        f"<style>{css}</style></head><body><div class='wrap'><div class='hdr'><div class='brand'>BUILDER <b>ASSIST</b></div><h1>Stakeholder portal</h1>"
+                        f"<style>{css}</style></head><body><div class='wrap'><div class='hdr'><div class='brand'><i>Property<b>Plug</b></i></div><h1>Stakeholder portal</h1>"
                         f"<div>Project updates & documents shared with you</div></div><div id='app'></div><div class='foot'>Powered by {E(EMAIL_FROM_NAME)}</div></div>"
                         f"<script>{PORTAL_JS}</script></body></html>")

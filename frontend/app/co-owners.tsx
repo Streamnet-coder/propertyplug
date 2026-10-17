@@ -49,7 +49,7 @@ export default function CoOwners() {
       <Card style={{ gap: space.sm }}>
         <Text style={s.title}>Share responsibility</Text>
         <Text style={s.muted}>
-          Co-owners sign in with their own Builder Assist account and get full access to <Text style={s.bold}>all your current and future projects</Text>: budgets, snags, quotes, documents, the portal and more. They can edit everything, but they can&apos;t delete projects, manage your billing, or remove you. On your projects they get your plan&apos;s features.
+          Co-owners sign in with their own PropertyPlug account and get full access to <Text style={s.bold}>all your current and future projects</Text>: budgets, snags, quotes, documents, the portal and more. They can edit everything, but they can&apos;t delete projects, manage your billing, or remove you. On your projects they get your plan&apos;s features.
         </Text>
       </Card>
 

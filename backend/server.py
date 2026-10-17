@@ -19,7 +19,7 @@ for m in (auth, projects, budget, contacts, media, ai, payments, trades, milesto
 
 @api.get("/")
 async def root():
-    return {"message": "Builder Assist API"}
+    return {"message": "PropertyPlug API"}
 
 
 @app.get("/health")

@@ -112,7 +112,7 @@ async def public_digest(token: str, week: int = Query(0, ge=0, le=52)):
            + (f"<a id='digest-prev' href='/api/d/{E(token)}?week={week + 1}'>&larr; Previous week</a>" if week < 52 else "<span></span>")
            + (f"<a id='digest-next' href='/api/d/{E(token)}?week={week - 1}'>Next week &rarr;</a>" if week > 0 else "<span></span>") + "</div>")
     body = brand_block(await owner_branding(p.user_id), f"/api/d/{E(token)}/logo")
-    body += (f"<div class='hdr'><div class='brand'>BUILDER <b>ASSIST</b> · WEEKLY UPDATE</div><h1>{E(p.name)}</h1>"
+    body += (f"<div class='hdr'><div class='brand'><i>Property<b>Plug</b></i> · WEEKLY UPDATE</div><h1>{E(p.name)}</h1>"
              f"<div>{E(p.address)}</div><div style='font-size:12px;opacity:.85;margin-top:6px' id='digest-week'>{label} · {_d(d['week_start'])} – {_d(d['week_end'])}</div></div>")
     body += (f"<div class='kpis' style='margin-top:14px' id='digest-kpis'><div class='kpi'><span>Spent</span><div>{money(sp['total'], 2)}</div></div>"
              f"<div class='kpi'><span>vs week before</span><div>{'+' if diff > 0 else '-' if diff < 0 else ''}{money(abs(diff))}</div></div>"

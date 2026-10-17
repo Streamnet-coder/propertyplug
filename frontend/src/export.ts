@@ -26,4 +26,4 @@ export async function downloadFile(apiPath: string, name: string, mimeType: stri
 
 /** Download all account data as a ZIP of CSV spreadsheets. */
 export const downloadDataExport = () =>
-  downloadFile("/export", `builder-assist-export-${new Date().toISOString().slice(0, 10)}.zip`, "application/zip", "Save your Builder Assist data");
+  downloadFile("/export", `propertyplug-export-${new Date().toISOString().slice(0, 10)}.zip`, "application/zip", "Save your PropertyPlug data");

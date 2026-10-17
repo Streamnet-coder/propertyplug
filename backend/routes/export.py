@@ -56,8 +56,8 @@ async def export_data(user: User = Depends(real_user)):
         z.writestr("account.csv", "\ufeff" + acc.getvalue())
         for name, cols in EXPORTS.items():
             z.writestr(f"{name}.csv", "\ufeff" + await _csv(name, cols, user.id))  # BOM so Excel opens UTF-8 (e.g. £) correctly
-        z.writestr("README.txt", "Builder Assist data export\n\nEach CSV opens in Excel, Numbers or Google Sheets.\n"
+        z.writestr("README.txt", "PropertyPlug data export\n\nEach CSV opens in Excel, Numbers or Google Sheets.\n"
                                  "Photos and receipts are referenced by storage_path.\n"
                                  f"Exported {datetime.now(timezone.utc).strftime('%d %b %Y %H:%M UTC')}\n")
-    fname = f"builder-assist-export-{datetime.now(timezone.utc).date().isoformat()}.zip"
+    fname = f"propertyplug-export-{datetime.now(timezone.utc).date().isoformat()}.zip"
     return Response(mem.getvalue(), media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{fname}"'})

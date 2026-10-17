@@ -86,7 +86,7 @@ function buildHtml(
     .join("");
 
   return `${brandHtml}
-<div class="hdr"><div class="brand">BUILDER <b>ASSIST</b> · PROGRESS REPORT</div><h1>${esc(p.name)}</h1><p>${esc(p.address)}</p>
+<div class="hdr"><div class="brand"><i>Property<b>Plug</b></i> · PROGRESS REPORT</div><h1>${esc(p.name)}</h1><p>${esc(p.address)}</p>
 <p style="margin-top:6px;font-size:11px">${esc(p.target_type)} · ${esc(p.finish_type)} · ${new Date().toLocaleDateString("en-GB")}</p></div>
 <div class="kpis">
 <div class="kpi"><span>Purchase</span><div>${gbp(p.purchase_price)}</div></div>
@@ -154,7 +154,7 @@ async function brandHeader(kind: string, p: Project) {
   const bb = b.company_name || logo
     ? `<div class="bb">${logo ? `<img src="${logo}"/>` : ""}<div><div class="bc">${esc(b.company_name)}</div>${b.tagline ? `<div class="bd">${esc(b.tagline)}</div>` : ""}<div class="bd">${contacts}</div></div></div>`
     : "";
-  return `${bb}<div class="hdr"><div class="brand">BUILDER <b>ASSIST</b> · ${kind}</div><h1>${esc(p.name)}</h1><p>${esc(p.address)}</p>
+  return `${bb}<div class="hdr"><div class="brand"><i>Property<b>Plug</b></i> · ${kind}</div><h1>${esc(p.name)}</h1><p>${esc(p.address)}</p>
 <p style="margin-top:6px;font-size:11px">${new Date().toLocaleDateString("en-GB")}</p></div>`;
 }
 
@@ -162,7 +162,7 @@ const doc = (body: string) =>
   `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><style>${CSS}
 .warn{color:${colors.brandPrimary};font-weight:700} .pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700}
 .alerts{border:1px solid ${colors.border};border-radius:10px;padding:12px;margin-top:14px}</style></head><body>${body}
-<div class="foot">Generated with Builder Assist · ${new Date().toLocaleString("en-GB")} · Figures are owner-reported</div></body></html>`;
+<div class="foot">Generated with PropertyPlug · ${new Date().toLocaleString("en-GB")} · Figures are owner-reported</div></body></html>`;
 
 const kpis = (rows: [string, string][]) => `<div class="kpis">${rows.map(([l, v]) => `<div class="kpi"><span>${l}</span><div>${v}</div></div>`).join("")}</div>`;
 

@@ -209,7 +209,7 @@ async def tenant_portal(token: str, year: Optional[int] = None, reported: Option
     tk = E(token)
     fmt = lambda d: date.fromisoformat(d).strftime("%d %b %Y")
     body = brand_block(await owner_branding(t["user_id"]), f"/api/t/{tk}/logo")
-    body += (f"<div class='hdr'><div class='brand'>BUILDER <b>ASSIST</b> · TENANT PORTAL</div><h1>{E(address)}</h1>"
+    body += (f"<div class='hdr'><div class='brand'><i>Property<b>Plug</b></i> · TENANT PORTAL</div><h1>{E(address)}</h1>"
              f"<div>Hi {E(t['tenant_name'])} · managed by {E(sender)}</div></div>")
     if reported:
         body += "<div class='card' id='repair-sent-msg'><b class='under'>Thanks! Your repair report was sent to your landlord.</b></div>"
@@ -319,7 +319,7 @@ async def tenant_repair(token: str, room: str = Form(...), description: str = Fo
         address, _, _ = await _ctx(t["user_id"], t)
         html = _wrap(f'<p style="font-size:12px;letter-spacing:1px;color:{"#ef4444" if doc["priority"] == "high" else "#f97316"};font-weight:bold;margin:0">TENANT REPAIR REPORT · {doc["priority"].upper()}</p>'
                      f'<h1 style="font-size:20px;margin:8px 0 12px">{E(address)}</h1><p><b>{E(t["tenant_name"])}</b> reported a repair in <b>{E(doc["room"])}</b>:</p>'
-                     f'<p style="background:#f1f5f9;padding:12px;border-radius:8px">{E(doc["description"])}</p><p>It has been added to your snagging list in Builder Assist.</p>')
+                     f'<p style="background:#f1f5f9;padding:12px;border-radius:8px">{E(doc["description"])}</p><p>It has been added to your snagging list in PropertyPlug.</p>')
         try:
             await send_email(to=owner["email"], subject=f"Repair reported by {t['tenant_name']} · {address}", html=html, reply_to=t.get("tenant_email") or None)
         except EmailError:

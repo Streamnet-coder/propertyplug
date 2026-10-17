@@ -22,6 +22,7 @@ export default function RootLayout() {
     "Inter-SemiBold": require("../assets/fonts/Inter-SemiBold.ttf"),
     "Inter-Bold": require("../assets/fonts/Inter-Bold.ttf"),
     "Inter-ExtraBold": require("../assets/fonts/Inter-ExtraBold.ttf"),
+    "Inter-ExtraBoldItalic": require("../assets/fonts/Inter-ExtraBoldItalic.ttf"),
     Lucide: require("@react-native-vector-icons/lucide/fonts/Lucide.ttf"),
   });
 

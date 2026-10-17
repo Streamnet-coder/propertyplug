@@ -1,4 +1,4 @@
-"""Co-owners: another Builder Assist account with full edit access to all of an owner's current and future projects.
+"""Co-owners: another PropertyPlug account with full edit access to all of an owner's current and future projects.
 Co-owners can't delete projects, manage the owner's billing, or remove the owner. Matching is by email, so an invite
 works whether or not the person already has an account."""
 from bson import ObjectId
@@ -40,8 +40,8 @@ async def invite_co_owner(body: CoOwnerIn, user: User = Depends(real_user)):
     c = {"owner_id": user.id, "email": email, "invited_at": now_iso()}
     c["_id"] = (await db.co_owners.insert_one(c)).inserted_id
     has_account = bool(await db.users.find_one({"email": email}, {"_id": 1}))
-    step = ("Open Builder Assist and sign in. The shared projects appear in <b>My projects</b>, marked with the owner's name."
-            if has_account else f"Download Builder Assist and create an account with <b>{E(email)}</b>. The shared projects appear in <b>My projects</b>.")
+    step = ("Open PropertyPlug and sign in. The shared projects appear in <b>My projects</b>, marked with the owner's name."
+            if has_account else f"Download PropertyPlug and create an account with <b>{E(email)}</b>. The shared projects appear in <b>My projects</b>.")
     html = (f'<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0f172a">'
             f'<h2 style="margin:0 0 12px">You\'re now a co-owner</h2><p>{E(user.name)} has made you a co-owner of all their {E(EMAIL_FROM_NAME)} projects. '
             f'You can view and edit budgets, snags, quotes, documents and everything else.</p><p>{step}</p></td></tr></table>')

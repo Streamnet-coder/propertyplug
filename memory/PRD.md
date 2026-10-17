@@ -192,3 +192,6 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Repair updates: tenant emailed when a portal-reported repair is marked fixed (owner app or trade link); portal lists repair reports with status.
 - Tenant documents: PUT /api/rentals/tenancies/{id}/documents shares Document Library files on the tenant portal (with expiry), download /api/t/{token}/doc/{did}; picker in tenant portal sheet.
 - Portfolio rent roll: GET /api/portfolio/rent-roll?year (home-currency totals, per-property + tenants); /rent-roll screen from Projects header.
+
+## Rebrand (Jun 2026)
+- App renamed Builder Assist -> PropertyPlug (app.json name, EMAIL_FROM_NAME, all share pages/emails/reports/Stripe product names). Wordmark "PropertyPlug" in Inter-ExtraBoldItalic (assets/fonts) with italic tagline "All landlord needs"; brand icon house-plug.

@@ -69,7 +69,7 @@ export default function TradesFinder() {
   };
 
   const inviteMsg = (t: Trade) =>
-    `Hi ${t.name}, I found you on Builder Assist. I'm looking for a ${TRADES.find((x) => x.key === t.trade)?.role.toLowerCase()} for a project${project ? ` at ${project.address}` : ""}. Could you quote?`;
+    `Hi ${t.name}, I found you on PropertyPlug. I'm looking for a ${TRADES.find((x) => x.key === t.trade)?.role.toLowerCase()} for a project${project ? ` at ${project.address}` : ""}. Could you quote?`;
   const open = (url: string) => Linking.openURL(url).catch(() => toast("Can't open this on your device", "error"));
 
   const act = (icon: IconName, color: string, onPress: () => void, testID: string) => (

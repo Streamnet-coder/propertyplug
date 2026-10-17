@@ -132,7 +132,7 @@ async def public_quote_form(token: str):
     p = await db.projects.find_one({"_id": ObjectId(q.project_id)}) or {}
     CURRENCY.set(p.get("currency") or "GBP")
     closed = e.status in ("accepted", "declined")
-    body = brand_block(await owner_branding(q.user_id), f"/api/q/{E(token)}/logo") + f"""<div class='hdr'><div class='brand'>BUILDER <b>ASSIST</b> · QUOTE REQUEST</div><h1>{E(q.title)}</h1>
+    body = brand_block(await owner_branding(q.user_id), f"/api/q/{E(token)}/logo") + f"""<div class='hdr'><div class='brand'><i>Property<b>Plug</b></i> · QUOTE REQUEST</div><h1>{E(q.title)}</h1>
 <div>For {E(e.name)} · {E(p.get('address', ''))}</div></div>
 <div class='card'><h2>Job description</h2><div style='white-space:pre-wrap;line-height:1.5'>{E(q.description)}</div></div>"""
     if closed:

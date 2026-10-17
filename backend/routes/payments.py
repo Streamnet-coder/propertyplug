@@ -89,7 +89,7 @@ async def payment_status(session_id: str, request: Request, user: User = Depends
 
 @router.get("/payments/done", response_class=HTMLResponse)
 async def payment_done(session_id: Optional[str] = None, cancelled: Optional[str] = None):
-    msg = "Payment cancelled." if cancelled else "Payment received! You can now return to Builder Assist."
+    msg = "Payment cancelled." if cancelled else "Payment received! You can now return to PropertyPlug."
     return f"<html><body style='font-family:sans-serif;text-align:center;padding:60px'><h2>{msg}</h2></body></html>"
 
 

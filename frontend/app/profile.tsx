@@ -158,7 +158,7 @@ export default function Profile() {
           <View style={s.pro} testID="upgrade-card">
             <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
               <Icon name="crown" size={22} color={colors.brandPrimary} />
-              <Text style={s.proTitle}>{paidActive ? "Extend or go lifetime" : "Builder Assist Pro"}</Text>
+              <Text style={s.proTitle}>{paidActive ? "Extend or go lifetime" : "PropertyPlug Pro"}</Text>
             </View>
             <Text style={s.proSub} testID="upgrade-card-subtitle">Built for BRRR investors & developers. Co-owners on your projects get Pro too.</Text>
             <View style={{ gap: space.sm, marginVertical: space.md }}>
@@ -258,7 +258,7 @@ export default function Profile() {
         <Pressable testID="delete-account-link" onPress={() => router.push("/delete-account")} style={{ alignItems: "center", minHeight: 44, justifyContent: "center" }}>
           <Text style={[s.muted, { color: colors.error, fontFamily: fonts.semibold }]}>Delete account</Text>
         </Pressable>
-        <Text style={[s.muted, { textAlign: "center" }]}>© 2026 Builder Assist Ltd · Secure UK cloud storage</Text>
+        <Text style={[s.muted, { textAlign: "center" }]}>© 2026 PropertyPlug Ltd · Secure UK cloud storage</Text>
       </ScrollView>
     </View>
   );

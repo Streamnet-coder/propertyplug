@@ -65,7 +65,7 @@ async def public_report(token: str):
             by_ms.setdefault(m["milestone_id"], []).append(m)
     cats = [("Hard costs", p.budget.hard, s["spent"]["hard"]), ("Soft costs", p.budget.soft, s["spent"]["soft"]),
             ("Contingency", p.budget.contingency, s["spent"]["contingency"])]
-    body = brand + f"""<div class='hdr'><div class='brand'>BUILDER <b>ASSIST</b> · LIVE PROJECT REPORT</div><h1>{E(p.name)}</h1>
+    body = brand + f"""<div class='hdr'><div class='brand'><i>Property<b>Plug</b></i> · LIVE PROJECT REPORT</div><h1>{E(p.name)}</h1>
 <div>{E(p.address)}</div><div style='font-size:12px;opacity:.85;margin-top:6px'>{E(p.target_type)} · {E(p.finish_type)} · Updated {datetime.now(timezone.utc).strftime('%d %b %Y %H:%M')} UTC</div></div>
 <div class='kpis' style='margin-top:14px'><div class='kpi'><span>Purchase</span><div>{money(p.purchase_price)}</div></div>
 <div class='kpi'><span>Est. valuation</span><div>{money(p.estimated_valuation)}</div></div><div class='kpi'><span>Budget</span><div>{money(s['total_budget'])}</div></div>

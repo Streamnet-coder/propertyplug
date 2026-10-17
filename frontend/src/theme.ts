@@ -1,4 +1,4 @@
-// Design tokens for Builder Assist (light theme). Keys match the "color" block of /app/design_guidelines.json.
+// Design tokens for PropertyPlug (light theme). Keys match the "color" block of /app/design_guidelines.json.
 import { useMemo } from "react";
 import { Appearance, StyleSheet, useColorScheme } from "react-native";
 

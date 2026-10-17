@@ -13,7 +13,7 @@ export function BrandMark({ size = 40 }: { size?: number }) {
       end={{ x: 1, y: 0 }}
       style={{ width: size, height: size, borderRadius: size * 0.3, alignItems: "center", justifyContent: "center" }}
     >
-      <Icon name="hard-hat" size={size * 0.55} color={colors.onBrand} />
+      <Icon name="house-plug" size={size * 0.55} color={colors.onBrand} />
     </LinearGradient>
   );
 }
@@ -24,10 +24,10 @@ export function BrandLogo() {
     <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
       <BrandMark size={38} />
       <View>
-        <Text style={{ fontFamily: fonts.extrabold, fontSize: 17, color: colors.onSurface, letterSpacing: -0.3 }}>
-          BUILDER <Text style={{ color: colors.brandPrimary }}>ASSIST</Text>
+        <Text style={{ fontFamily: "Inter-ExtraBoldItalic", fontSize: 19, color: colors.onSurface, letterSpacing: -0.4 }} testID="brand-wordmark">
+          Property<Text style={{ color: colors.brandPrimary }}>Plug</Text>
         </Text>
-        <Text style={{ fontFamily: fonts.semibold, fontSize: 9, color: colors.muted, letterSpacing: 1.2 }}>RENOVATION & BRRR</Text>
+        <Text style={{ fontFamily: fonts.medium, fontStyle: "italic", fontSize: 10, color: colors.muted, letterSpacing: 0.3 }} testID="brand-tagline">All landlord needs</Text>
       </View>
     </View>
   );

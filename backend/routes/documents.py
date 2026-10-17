@@ -195,7 +195,7 @@ async def public_document(token: str):
     if not d:
         return page("Link expired", "<div class='card'><h2>This document link is no longer active</h2><p>Ask the sender for a new link.</p></div>")
     p = await db.projects.find_one({"_id": ObjectId(d["project_id"])}, {"name": 1, "address": 1}) or {}
-    body = (f"<div class='hdr'><div class='brand'>BUILDER <b>ASSIST</b> · SHARED DOCUMENT</div><h1 id='doc-title'>{E(d['title'])}</h1>"
+    body = (f"<div class='hdr'><div class='brand'><i>Property<b>Plug</b></i> · SHARED DOCUMENT</div><h1 id='doc-title'>{E(d['title'])}</h1>"
             f"<div>{E(p.get('name', ''))}{' · ' + E(p.get('address', '')) if p.get('address') else ''}</div></div>"
             f"<div class='card'><div class='kpis'><div class='kpi'><span>Type</span><div id='doc-type'>{E(d['doc_type'])}</div></div>"
             f"<div class='kpi'><span>File</span><div>{E(d['ext'].upper())} · {_mb(d['size'])}</div></div></div>"
@@ -280,7 +280,7 @@ async def public_folder(token: str):
         f"<tr><td><b>{E(d['title'])}</b><div class='cap'>{E(d['doc_type'])} · {E(d['ext'].upper())} · {_mb(d['size'])}"
         + (f" · expires {E(d['expires_on'])}" if d.get("expires_on") else "") + f"</div></td>"
         f"<td class='n'><a class='folder-doc' href='/api/f/{E(token)}/d/{d['_id']}'>Download</a></td></tr>" for d in docs)
-    body = (f"<div class='hdr'><div class='brand'>BUILDER <b>ASSIST</b> · SHARED FOLDER</div><h1 id='folder-title'>{E(f['title'])}</h1>"
+    body = (f"<div class='hdr'><div class='brand'><i>Property<b>Plug</b></i> · SHARED FOLDER</div><h1 id='folder-title'>{E(f['title'])}</h1>"
             f"<div>{E(p.get('name', ''))}{' · ' + E(p.get('address', '')) if p.get('address') else ''}</div></div>"
             f"<div class='card'><h2 id='folder-count'>{len(docs)} document{'s' if len(docs) != 1 else ''}</h2><table>{rows}</table>"
             f"<a id='folder-zip' href='/api/f/{E(token)}/zip' style='display:block;text-align:center;background:#0f766e;color:#fff;padding:14px;border-radius:10px;font-weight:700;text-decoration:none;margin-top:12px'>Download all (ZIP)</a></div>")

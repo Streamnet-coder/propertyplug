@@ -72,7 +72,7 @@ async def create_subscription_checkout(user: User, tier: str, origin: str) -> di
     params = dict(
         mode="subscription",
         line_items=[{"quantity": 1, "price_data": {"currency": "gbp", "unit_amount": round(t["price"] * 100), "recurring": {"interval": INTERVAL[tier]},
-                                                  "product_data": {"name": f"Builder Assist Pro ({t['label']})"}}}],
+                                                  "product_data": {"name": f"PropertyPlug Pro ({t['label']})"}}}],
         success_url=f"{origin}/api/payments/done?session_id={{CHECKOUT_SESSION_ID}}",
         cancel_url=f"{origin}/api/payments/done?cancelled=1",
         client_reference_id=user.id,
@@ -165,14 +165,14 @@ async def billing_history(user: User = Depends(real_user)):
     out = []
     async for t in db.payment_transactions.find({"user_id": user.id, "payment_status": "paid", "kind": {"$ne": "subscription"}}).sort("created_at", -1):
         tier = (t.get("metadata") or {}).get("tier", "lifetime")
-        out.append({"id": t["session_id"], "date": t.get("paid_at") or t["created_at"], "description": f"Builder Assist Pro ({PRO_TIERS.get(tier, PRO_TIERS['lifetime'])['label']})",
+        out.append({"id": t["session_id"], "date": t.get("paid_at") or t["created_at"], "description": f"PropertyPlug Pro ({PRO_TIERS.get(tier, PRO_TIERS['lifetime'])['label']})",
                     "amount": float(t["amount"]), "currency": t.get("currency", "gbp").upper(), "status": "paid", "receipt": "local", "url": None})
     if user.stripe_customer_id and stripe.api_key:
         try:
             inv = await run_in_threadpool(lambda: stripe.Invoice.list(customer=user.stripe_customer_id, limit=50))
             for i in inv.auto_paging_iter():
                 if i.status in ("paid", "open", "uncollectible"):
-                    line = (i.lines.data[0].description if i.lines and i.lines.data else None) or "Builder Assist Pro"
+                    line = (i.lines.data[0].description if i.lines and i.lines.data else None) or "PropertyPlug Pro"
                     out.append({"id": i.id, "date": datetime.fromtimestamp(i.created, timezone.utc).isoformat(), "description": line,
                                 "amount": i.amount_paid / 100 if i.status == "paid" else i.amount_due / 100, "currency": i.currency.upper(),
                                 "status": "paid" if i.status == "paid" else "failed" if i.status == "uncollectible" else "due",
@@ -194,8 +194,8 @@ async def receipt_page(session_id: str, t: str = Query(...)):
     return HTMLResponse(f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Receipt</title>
 <style>body{{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a;max-width:560px;margin:24px auto;padding:0 16px}}h1{{color:#0f766e}}
 table{{width:100%;border-collapse:collapse;margin:16px 0}}td{{padding:10px 0;border-bottom:1px solid #e2e8f0}}.r{{text-align:right}}.cap{{color:#64748b;font-size:13px}}button{{padding:10px 16px;border-radius:8px;border:0;background:#0f766e;color:#fff;font-weight:600}}@media print{{button{{display:none}}}}</style></head>
-<body><h1>Builder Assist</h1><h2>Receipt</h2><p class="cap">Receipt no. {E(session_id[-12:].upper())} · {d}</p>
+<body><h1>PropertyPlug</h1><h2>Receipt</h2><p class="cap">Receipt no. {E(session_id[-12:].upper())} · {d}</p>
 <p><b>Billed to</b><br>{E(user.name)}<br>{E(user.email)}</p>
-<table><tr><td>Builder Assist Pro ({E(PRO_TIERS.get(tier, PRO_TIERS['lifetime'])['label'])})</td><td class="r">£{float(tx['amount']):,.2f}</td></tr>
+<table><tr><td>PropertyPlug Pro ({E(PRO_TIERS.get(tier, PRO_TIERS['lifetime'])['label'])})</td><td class="r">£{float(tx['amount']):,.2f}</td></tr>
 <tr><td><b>Total paid</b></td><td class="r"><b>£{float(tx['amount']):,.2f}</b></td></tr></table>
 <p class="cap">Paid by card via Stripe. Status: paid.</p><button onclick="window.print()">Print / save as PDF</button></body></html>""")

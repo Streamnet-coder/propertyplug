@@ -5,7 +5,7 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/src/auth";
-import { BrandMark } from "@/src/components/brand";
+import { BrandLogo } from "@/src/components/brand";
 import { Button, fonts, Field, Icon, space } from "@/src/components/ui";
 import { makeStyles, useTheme } from "@/src/theme";
 
@@ -53,7 +53,7 @@ export default function AuthScreen() {
           <Icon name="arrow-left" size={22} />
         </Pressable>
         <View style={{ marginTop: space.xl, gap: space.sm }}>
-          <BrandMark size={52} />
+          <BrandLogo />
           <Text style={s.title}>{isReg ? "Start your free trial" : "Welcome back"}</Text>
           <Text style={s.sub}>{isReg ? "30 days free. Your first project is pre-loaded so you can explore instantly." : "Sign in to manage your developments."}</Text>
         </View>

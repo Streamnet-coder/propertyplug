@@ -1,6 +1,6 @@
 """Company reply-to address (verified) + owner notifications.
 
-Emails always leave from the platform's managed sender (display name = Builder Assist); a verified
+Emails always leave from the platform's managed sender (display name = PropertyPlug); a verified
 company address is used as Reply-To so partners' replies land in the owner's company inbox.
 """
 import secrets

@@ -81,7 +81,7 @@ async def public_compare(token: str):
     after = await db.media.find_one({"_id": oid(d["after_id"])}, {"title": 1, "date": 1}) or {}
     t = E(token)
     body = brand_block(await owner_branding(d["user_id"]), f"/api/c/{t}/logo")
-    body += (f"<div class='hdr'><div class='brand'>BUILDER <b>ASSIST</b> · BEFORE &amp; AFTER</div><h1>{E(d.get('title') or proj.get('name', 'Transformation'))}</h1>"
+    body += (f"<div class='hdr'><div class='brand'><i>Property<b>Plug</b></i> · BEFORE &amp; AFTER</div><h1>{E(d.get('title') or proj.get('name', 'Transformation'))}</h1>"
              f"<div>{E(proj.get('address', ''))}</div></div>")
     body += (f"<style>{SLIDER_CSS}</style><div class='card'><div class='ba' id='ba'><img src='/api/c/{t}/photo/after' alt='after'/>"
              f"<img class='b' src='/api/c/{t}/photo/before' alt='before'/><div class='ln'></div><div class='h'>&#8596;</div>"
