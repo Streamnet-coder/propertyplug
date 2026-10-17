@@ -1,0 +1,50 @@
+{
+  "summary": "Iteration 36 — Manager Money Access permission flag. BACKEND: 25/25 passed (1 skipped). All API behaviour correct: money_access persists on POST/PUT/GET /co-owners and /co-owners/shared-with-me; /auth/me returns acting_as.money=false; /api/project exposes money_hidden=true with every money scalar zeroed (total_budget, purchase_price, estimated_valuation, total_spent, home_finance.*); /api/projects shared row zeroed+money_hidden; 403 on /line-items, /receipts, /quotes, /stage-payments, /rentals, /project/comparables, /project/share and POST /ai/estimate; 200 on /milestones, /snags, /media, /documents, /contacts; PUT /api/project with purchase_price does NOT change owner's value; /api/portfolio/rent-roll excludes the shared project; public /api/t/{token} and /api/q/{token} bypass block_money (no bearer passes HTTPBearer(auto_error=False) + block_money early-returns); switching money_access True on PUT restores 200 and money_hidden disappears. FRONTEND OWNER /co-owners screen: invite-money-full / invite-money-tasks chips present, invite-role-co-owner / invite-role-manager present, co-owner-role-{id} shows 'Manager · <project> · tasks only (no money)' for tasks-only and 'Co-owner · all projects · full access' for full co-owner, co-owner-scope-{id} edit opens edit-money-{id}-full/tasks chips, co-owner-scope-save-{id} persists money_access change (verified via API), co-owner-limit-{id} present on full co-owner card. FRONTEND TASKS-ONLY MANAGER: BROKEN — Budget tab is still visible, hero shows project-total-spent (not project-stage-progress), budget-details-link, receipts-see-all, add-expense-button, media-tab-receipts, AI cost / Receipt / Share quick actions all still render. Root cause isolated below.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "(tabs)/_layout.tsx — Budget tab", "issue": "Budget tab remains visible when signed in as tasks-only manager because user.acting_as is not populated on fresh login (see RCA).", "testID": "tab-budget", "priority": "CRITICAL"},
+      {"component": "(tabs)/index.tsx — hero + money sections", "issue": "project-total-spent, budget-details-link, receipts-see-all, add-expense-button, rent-yield-* still render for tasks-only manager; project-stage-progress is missing. Same RCA: user.acting_as.money comes back undefined from /auth/login.", "testID": "project-total-spent / project-stage-progress / add-expense-button", "priority": "CRITICAL"},
+      {"component": "(tabs)/index.tsx — quick actions", "issue": "quick-action-ai, quick-action-brrr, quick-action-report (share), quick-action-receipt not filtered out for tasks-only manager (same RCA).", "testID": "quick-action-*", "priority": "CRITICAL"},
+      {"component": "(tabs)/media.tsx — Receipts chip", "issue": "media-tab-receipts chip still renders for tasks-only manager (same RCA).", "testID": "media-tab-receipts", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Fresh login as tasks-only manager", "issue": "POST /auth/login (and /auth/register) returns user_out(u) without the effective() wrapper → the response user object has acting_as = null. Frontend auth.tsx stores this on login and never refetches /auth/me, so useCanSeeMoney() returns true (default). All money-gated UI stays visible. Backend /auth/me returns the correct acting_as.money=false but the frontend only calls /auth/me on cold-start token restore, not after signIn/signUp.", "affected_testIDs": ["tab-budget","project-total-spent","add-expense-button","budget-details-link","media-tab-receipts","receipts-see-all","quick-action-ai","quick-action-report","quick-action-receipt"]}
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration36.py",
+    "/app/test_reports/pytest/pytest_iteration36.xml"
+  ],
+  "action_items": [
+    "FIX /app/backend/routes/auth.py — both /auth/register and /auth/login must return user_out(u, await effective(u)) so acting_as (including .money) is populated for freshly-logged-in co-owners/managers. One-liner for each endpoint.",
+    "Alternatively (defence in depth) in /app/frontend/src/auth.tsx handle(): after setApiToken + setUser, call `setUser(await api<User>('/auth/me'))` so the UI always has the effective view regardless of what /auth/login returns.",
+    "After the fix, re-run frontend verification for tasks-only manager: tab-budget absent, project-stage-progress visible, project-total-spent/add-expense-button/budget-details-link/receipts-see-all/media-tab-receipts/quick-action-ai|brrr|report|receipt absent."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/routes/auth.py register & login return user_out(u) only — missing effective(u) wrapper (RCA of all tasks-only UI bugs).",
+    "deps.block_money() correctly early-returns when there is no bearer, so public /q/{token} and /t/{token} are reachable without auth; verified by /api/t/not-a-real-token returning 404 (route reached) rather than 403.",
+    "deps.hide_money() zeroes nested home_finance values recursively and keeps structure (project doesn't crash the UI).",
+    "projects.PUT /api/project drops money keys for no_money users (line 153) so manager can't overwrite owner's purchase_price — verified by test.",
+    "server.py applies block_money dep on budget/quotes/stage_payments/ai/rentals/tenant_portal/share routers plus explicit dep on /project/comparables — covers all 8 endpoints from the spec.",
+    "Frontend money.ts hook is 1 line and correct; the bug is purely that user.acting_as is never fed into it after login because of the backend omission above.",
+    "co-owners.tsx MoneyToggle uses testPrefix pattern — invite-money-{full|tasks} and edit-money-{cid}-{full|tasks} both exist, co-owner-limit-{id} shown only when editing.full, co-owner-scope-save-{id} invokes PUT /co-owners/{id} with {project_ids, money_access} — matches backend contract.",
+    "deps.effective sets owner.no_money from share.money_access which is read in projects.get_project and projects.list_projects (hide_money applied) — single source of truth."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration36.py (new)",
+    "/app/test_reports/pytest/pytest_iteration36.xml (new)",
+    "/app/test_reports/iteration_36.json (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (25/25 passed, 1 skipped — quote token flow couldn't be reproduced in test harness; public /t/{token} negative verifies no money-block)",
+    "frontend": "Owner /co-owners screen 100% verified. Tasks-only manager UI FAILS all hiding checks because /auth/login response is missing acting_as — see RCA. UI code itself is correct."
+  },
+  "seed_data_creation": "Pytest created a TEST_iter36 manager user; a TEST_iter36 owner user for 'bad project 404' test; UI test created TEST_iter36ui_* manager and two owner-side co-owners (test_iter36co_*, test_iter36mgr_*). All removed in teardown + final cleanup pass. Demo owner's Nottingham Victorian Refurb project reactivated at the end.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "After the /auth/login effective() fix, replay the tasks-only manager login path from this report: register a user, demo owner invites with money_access:false, manager activates project, then sign the manager in via UI. Expect tab-budget hidden, project-stage-progress visible, no add-expense/budget-details/receipts/media-receipts chip, quick-actions = {snags, timeline, team} only (ai/brrr/report/receipt filtered). The money.ts hook returns `user?.acting_as?.money !== false`, so acting_as.money being `false` is REQUIRED on the login payload. Base URL env is EXPO_PUBLIC_BACKEND_URL (not EXPO_BACKEND_URL). Auth storage key is `mba_auth_token` (stored as JSON-encoded string in localStorage).",
+  "rca_of_issue": "BUG: Tasks-only manager UI shows all money sections after fresh login.  REPRODUCTION: 1) Owner POST /api/co-owners {email, project_ids:[pid], money_access:false}. 2) Manager POST /api/projects/{pid}/activate. 3) Manager POST /api/auth/login → inspect response.user.acting_as — it is null even though /api/auth/me returns acting_as={owner_id,owner_name,money:false}. 4) Frontend /src/auth.tsx handle() sets user = response.user and never calls /auth/me afterwards. 5) useCanSeeMoney() reads user?.acting_as?.money !== false → `undefined !== false` → true → every money gate renders.  ROOT CAUSE: /app/backend/routes/auth.py lines 29 and 37 call user_out(u) without the effective() wrapper that /auth/me uses on line 42.  FIX: `return {\"access_token\": make_token(u.id), \"user\": user_out(u, await effective(u))}` for both register and login. Alternatively (or in addition) make frontend auth.tsx handle() call refresh() after storing the token."
+}

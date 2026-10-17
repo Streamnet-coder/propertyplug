@@ -35,6 +35,7 @@ class User(BaseDocument):
     acting_owner_id: Optional[str] = None  # set while a co-owner has one of this owner's projects open
     real_id: Optional[str] = Field(None, exclude=True)  # runtime only: the co-owner actually signed in
     real_name: Optional[str] = Field(None, exclude=True)
+    no_money: bool = Field(False, exclude=True)  # runtime only: shared access without money (tasks-only)
     created_at: str = Field(default_factory=now_iso)
 
 

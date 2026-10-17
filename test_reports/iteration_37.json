@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 37 — Retest of tasks-only manager UI after /auth/login & /auth/register fix. ALL CHECKS PASS. Backend sanity: POST /api/auth/login for a tasks-only manager now returns user.acting_as = {owner_id, owner_name, money: false}; /auth/me returns the same. FRONTEND tasks-only manager: tab-budget hidden; hero shows project-stage-progress (30% of stages done) with subtitle 'Tasks access · money figures hidden' instead of project-total-spent; add-expense-button, budget-details-link, receipts-see-all are all absent; quick actions = ['quick-action-snags'] only (ai/brrr/report/receipt filtered out); Media screen renders only media-tab-photos chip (media-tab-receipts hidden); Profile exposes no BRRR calculator or Share report rows (only profile-link-ai remains, which is the general AI assistant link, not BRRR; the only 'BRRR' text on screen is inside the generic Pro upgrade marketing card). Switching back to the manager's own seeded project (POST /projects/{pid}/activate via tapping the project row) restores tab-budget, project-total-spent, add-expense-button, budget-details-link, receipts-see-all and the full quick-action set (ai/brrr/report/receipt/snags). REGRESSION demo owner (demo@mybuilder.app) shows tab-budget, project-total-spent, 42% used budget bar, add-expense, budget-details, receipts-see-all, and quick actions ai/report/receipt/snags — unchanged.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/setup_iter37.py",
+    "/app/backend/tests/cleanup_iter37.py",
+    "/app/test_reports/iteration_37.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "/app/backend/routes/auth.py register & login now call user_out(u, await effective(u)) — confirmed by curl: manager /auth/login returns acting_as.money=false. The one-line fix on each endpoint is the correct minimal patch.",
+    "Frontend money.ts hook (user?.acting_as?.money !== false) now receives the correct value on fresh login because auth.tsx handle() stores response.user, which now contains acting_as.",
+    "profile.tsx row filter `(money || !['brrr','share'].includes(r.id))` correctly suppresses the BRRR calculator and Share report rows when money=false — verified in UI (no profile-link-brrr/share testIDs rendered for manager).",
+    "(tabs)/_layout.tsx filters out budget tab when money=false — verified: tab-budget absent for tasks-only manager, present after they switch to their own project."
+  ],
+  "updated_files": [
+    "/app/backend/tests/setup_iter37.py (new)",
+    "/app/backend/tests/cleanup_iter37.py (new)",
+    "/app/test_reports/iteration_37.json (new)"
+  ],
+  "success_rate": {
+    "backend": "100% — /auth/login payload verified via curl + setup_iter37.py; backend was already 25/25 in iter36",
+    "frontend": "100% — tasks-only manager hiding, switch-back restoration, and owner regression all pass"
+  },
+  "seed_data_creation": "Setup created manager TEST_iter37mgr_1792234908@example.com with password ManagerPass123! and invited it as a co-owner (money_access=false) on the demo project 6acf7cf334e1da0ef6b14f50. Cleanup deleted the co-owner row and the manager account via DELETE /auth/account, and reactivated the demo project for the owner. No leftover TEST data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The /auth/login + /auth/register effective() fix is confirmed working. The tasks-only manager permission flow is complete end-to-end (backend 25/25 iter36 + frontend 100% this iter). Base URL is EXPO_PUBLIC_BACKEND_URL. For future co-owner UI tests, note that profile.tsx uses `profile-link-{id}` testIDs and the hidden rows for money=false are the ones with id in ['brrr','share']; share-report path is /share-report and brrr path is /brrr. The Projects screen row testID is `project-row-{pid}` and tapping it activates that project (fires POST /projects/{pid}/activate under the hood).",
+  "rca_of_issue": "N/A — iter36 RCA already resolved by main agent. This iteration only verified the fix."
+}

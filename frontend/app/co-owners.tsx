@@ -11,8 +11,8 @@ import { queryClient } from "@/src/query-client";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
-type CoOwner = { id: string; email: string; name: string | null; has_account: boolean; invited_at: string; role: "co_owner" | "manager"; project_ids: string[] | null; project_names: string[] | null };
-type Shared = { owner_id: string; owner_name: string; owner_email: string; since: string; projects: number; role: "co_owner" | "manager" };
+type CoOwner = { id: string; email: string; name: string | null; has_account: boolean; invited_at: string; role: "co_owner" | "manager"; project_ids: string[] | null; project_names: string[] | null; money_access: boolean };
+type Shared = { owner_id: string; owner_name: string; owner_email: string; since: string; projects: number; role: "co_owner" | "manager"; money_access: boolean };
 
 export default function CoOwners() {
   const s = useStyles();
@@ -24,17 +24,19 @@ export default function CoOwners() {
   const [confirm, setConfirm] = useState<string | null>(null);
   const [role, setRole] = useState<"co_owner" | "manager">("co_owner");
   const [picked, setPicked] = useState<string[]>([]);
-  const [editing, setEditing] = useState<{ id: string; pids: string[] } | null>(null);
+  const [editing, setEditing] = useState<{ id: string; pids: string[]; money: boolean; full: boolean } | null>(null);
+  const [moneyAccess, setMoneyAccess] = useState(true);
   const projects = useProjects();
   const ownProjects = (projects.data ?? []).filter((p) => !p.shared);
   const mine = useQuery({ queryKey: ["co-owners"], queryFn: () => api<CoOwner[]>("/co-owners") });
   const shared = useQuery({ queryKey: ["co-owners", "shared"], queryFn: () => api<Shared[]>("/co-owners/shared-with-me") });
 
   const invite = useMutation({
-    mutationFn: () => api<CoOwner & { email_sent: boolean }>("/co-owners", { body: { email: email.trim(), project_ids: role === "manager" ? picked : null } }),
+    mutationFn: () => api<CoOwner & { email_sent: boolean }>("/co-owners", { body: { email: email.trim(), project_ids: role === "manager" ? picked : null, money_access: moneyAccess } }),
     onSuccess: async (c) => {
       setEmail("");
       setPicked([]);
+      setMoneyAccess(true);
       await queryClient.invalidateQueries({ queryKey: ["co-owners"] });
       toast(c.email_sent ? `Invite sent to ${c.email}` : `${c.email} added. The email couldn't be sent, so let them know yourself`, c.email_sent ? "success" : "info");
     },
@@ -46,8 +48,8 @@ export default function CoOwners() {
     onError: (e: Error) => toast(e.message, "error"),
   });
   const scope = useMutation({
-    mutationFn: (v: { id: string; pids: string[] | null }) => api<CoOwner>(`/co-owners/${v.id}`, { method: "PUT", body: { project_ids: v.pids } }),
-    onSuccess: async (c) => { setEditing(null); await queryClient.invalidateQueries({ queryKey: ["co-owners"] }); toast(c.role === "manager" ? "Projects updated" : "Now a co-owner of all projects"); },
+    mutationFn: (v: { id: string; pids: string[] | null; money: boolean }) => api<CoOwner>(`/co-owners/${v.id}`, { method: "PUT", body: { project_ids: v.pids, money_access: v.money } }),
+    onSuccess: async (c) => { setEditing(null); await queryClient.invalidateQueries({ queryKey: ["co-owners"] }); toast(c.role === "manager" ? "Access updated" : "Now a co-owner of all projects"); },
     onError: (e: Error) => toast(e.message, "error"),
   });
   const leave = useMutation({
@@ -74,6 +76,7 @@ export default function CoOwners() {
         <Chip label="Manager · chosen projects" icon="briefcase" selected={role === "manager"} onPress={() => setRole("manager")} testID="invite-role-manager" />
       </View>
       {role === "manager" && <ProjectPicker projects={ownProjects} picked={picked} onChange={setPicked} testPrefix="invite-project" />}
+      <MoneyToggle value={moneyAccess} onChange={setMoneyAccess} testPrefix="invite-money" />
       <Button icon="user-plus" title={role === "manager" ? "Make manager" : "Make co-owner"} loading={invite.isPending}
         disabled={!/^\S+@\S+\.\S+$/.test(email.trim()) || (role === "manager" && !picked.length)} onPress={() => invite.mutate()} testID="co-owner-invite-button" />
 
@@ -87,7 +90,7 @@ export default function CoOwners() {
               <Text style={s.name}>{c.name || c.email}</Text>
               <Text style={s.muted}>{c.name ? `${c.email} · ` : ""}{c.has_account ? "Has access now" : "Invited · waiting for them to sign up"}</Text>
               <Text style={[s.muted, { color: colors.brand, fontFamily: fonts.semibold }]} testID={`co-owner-role-${c.id}`}>
-                {c.role === "manager" ? `Manager · ${(c.project_names ?? []).join(", ")}` : "Co-owner · all projects"}
+                {c.role === "manager" ? `Manager · ${(c.project_names ?? []).join(", ")}` : "Co-owner · all projects"}{c.money_access ? " · full access" : " · tasks only (no money)"}
               </Text>
             </View>
             {confirm !== c.id && (
@@ -96,15 +99,17 @@ export default function CoOwners() {
           </View>
           {editing?.id === c.id ? (
             <View style={{ gap: space.sm }}>
-              <ProjectPicker projects={ownProjects} picked={editing.pids} onChange={(pids) => setEditing({ id: c.id, pids })} testPrefix={`edit-project-${c.id}`} />
+              {!editing.full && <ProjectPicker projects={ownProjects} picked={editing.pids} onChange={(pids) => setEditing({ ...editing, pids })} testPrefix={`edit-project-${c.id}`} />}
+              {editing.full && <Button small variant="ghost" icon="briefcase" title="Limit to chosen projects (manager)" onPress={() => setEditing({ ...editing, full: false })} testID={`co-owner-limit-${c.id}`} />}
+              <MoneyToggle value={editing.money} onChange={(money) => setEditing({ ...editing, money })} testPrefix={`edit-money-${c.id}`} />
               <View style={{ flexDirection: "row", gap: space.sm }}>
                 <Button small variant="outline" title="Cancel" onPress={() => setEditing(null)} style={{ flex: 1 }} testID={`co-owner-scope-cancel-${c.id}`} />
-                <Button small title="Save projects" disabled={!editing.pids.length} loading={scope.isPending} onPress={() => scope.mutate({ id: c.id, pids: editing.pids })} style={{ flex: 1 }} testID={`co-owner-scope-save-${c.id}`} />
+                <Button small title="Save access" disabled={!editing.full && !editing.pids.length} loading={scope.isPending} onPress={() => scope.mutate({ id: c.id, pids: editing.full ? null : editing.pids, money: editing.money })} style={{ flex: 1 }} testID={`co-owner-scope-save-${c.id}`} />
               </View>
-              {c.role === "manager" && <Button small variant="ghost" icon="users" title="Give access to all projects (co-owner)" onPress={() => scope.mutate({ id: c.id, pids: null })} testID={`co-owner-make-full-${c.id}`} />}
+              {c.role === "manager" && <Button small variant="ghost" icon="users" title="Give access to all projects (co-owner)" onPress={() => scope.mutate({ id: c.id, pids: null, money: editing.money })} testID={`co-owner-make-full-${c.id}`} />}
             </View>
           ) : confirm !== c.id && (
-            <Button small variant="ghost" icon="briefcase" title={c.role === "manager" ? "Change projects" : "Limit to chosen projects"} onPress={() => setEditing({ id: c.id, pids: c.project_ids ?? [] })} testID={`co-owner-scope-${c.id}`} />
+            <Button small variant="ghost" icon="briefcase" title="Change access" onPress={() => setEditing({ id: c.id, pids: c.project_ids ?? [], money: c.money_access, full: c.role === "co_owner" })} testID={`co-owner-scope-${c.id}`} />
           )}
           {confirm === c.id && (
             <View style={{ flexDirection: "row", gap: space.sm }}>
@@ -122,7 +127,7 @@ export default function CoOwners() {
             <Icon name="users" size={20} color={colors.brand} />
             <View style={{ flex: 1 }}>
               <Text style={s.name}>{o.owner_name}</Text>
-              <Text style={s.muted}>{o.role === "manager" ? "Manager" : "Co-owner"} · {o.owner_email} · {o.projects} project{o.projects === 1 ? "" : "s"} · open from My projects</Text>
+              <Text style={s.muted}>{o.role === "manager" ? "Manager" : "Co-owner"}{o.money_access ? "" : " (tasks only)"} · {o.owner_email} · {o.projects} project{o.projects === 1 ? "" : "s"} · open from My projects</Text>
             </View>
             {confirm !== o.owner_id && (
               <Pressable onPress={() => setConfirm(o.owner_id)} hitSlop={8} testID={`shared-leave-${o.owner_id}`}><Text style={[s.muted, { color: colors.error }]}>Leave</Text></Pressable>
@@ -137,6 +142,20 @@ export default function CoOwners() {
         </Card>
       ))}
     </FormScreen>
+  );
+}
+
+function MoneyToggle({ value, onChange, testPrefix }: { value: boolean; onChange: (v: boolean) => void; testPrefix: string }) {
+  const s = useStyles();
+  return (
+    <View style={{ gap: space.sm }}>
+      <Text style={s.muted}>What can they see?</Text>
+      <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}>
+        <Chip label="Full access incl. money" icon="wallet" selected={value} onPress={() => onChange(true)} testID={`${testPrefix}-full`} />
+        <Chip label="Day-to-day tasks only" icon="list-checks" selected={!value} onPress={() => onChange(false)} testID={`${testPrefix}-tasks`} />
+      </View>
+      {!value && <Text style={s.muted}>Hides budgets, receipts, quotes, payments, rent, BRRR and mortgage figures, and reports. They keep the timeline, snags, photos, documents, team and messages.</Text>}
+    </View>
   );
 }
 

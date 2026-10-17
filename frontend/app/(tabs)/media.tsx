@@ -10,6 +10,7 @@ import { api, fileUrl, gbp, MediaItem, Receipt } from "@/src/api";
 import { Button, Chip, EmptyState, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { usesNativeTabs } from "@/src/navigation";
 import { invalidate, useMedia, useReceipts } from "@/src/queries";
+import { useCanSeeMoney } from "@/src/money";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
@@ -28,11 +29,12 @@ export default function MediaScreen() {
   const [tab, setTab] = useState<Tab>("photos");
   const [preview, setPreview] = useState<{ kind: Tab; item: MediaItem | Receipt } | null>(null);
   const media = useMedia();
-  const receipts = useReceipts();
+  const money = useCanSeeMoney();
+  const receipts = useReceipts(money);
 
   useEffect(() => {
-    if (params.tab === "receipts" || params.tab === "photos") setTab(params.tab);
-  }, [params.tab]);
+    if ((params.tab === "receipts" && money) || params.tab === "photos") setTab(params.tab);
+  }, [params.tab, money]);
 
   const del = useMutation({
     mutationFn: (p: { kind: Tab; id: string }) => api(p.kind === "photos" ? `/media/${p.id}` : `/receipts/${p.id}`, { method: "DELETE" }),
@@ -64,7 +66,7 @@ export default function MediaScreen() {
       <View style={s.chipRow}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
           <Chip label={`Photos${media.data ? ` (${media.data.length})` : ""}`} icon="image" selected={tab === "photos"} onPress={() => setTab("photos")} testID="media-tab-photos" />
-          <Chip label={`Receipts${receipts.data ? ` (${receipts.data.length})` : ""}`} icon="receipt" selected={tab === "receipts"} onPress={() => setTab("receipts")} testID="media-tab-receipts" />
+          {money && <Chip label={`Receipts${receipts.data ? ` (${receipts.data.length})` : ""}`} icon="receipt" selected={tab === "receipts"} onPress={() => setTab("receipts")} testID="media-tab-receipts" />}
         </ScrollView>
       </View>
 

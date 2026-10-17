@@ -5,7 +5,7 @@ from typing import List, Literal, Optional
 from bson import ObjectId
 from core import db, oid
 from models import User, Budget, Currency, Project
-from deps import current_user, effective, pro_user, real_user, active_pid, get_project_doc
+from deps import MONEY_KEYS, block_money, current_user, effective, hide_money, pro_user, real_user, active_pid, get_project_doc
 from seed import seed_milestones
 
 router = APIRouter()
@@ -13,7 +13,8 @@ router = APIRouter()
 
 @router.get("/project")
 async def get_project(user: User = Depends(current_user)):
-    return await project_summary(await get_project_doc(user))
+    out = await project_summary(await get_project_doc(user))
+    return hide_money(out) if user.no_money else out
 
 
 async def project_summary(p: Project) -> dict:
@@ -149,8 +150,10 @@ class ProjectUpdate(BaseModel):
 @router.put("/project")
 async def update_project(body: ProjectUpdate, user: User = Depends(current_user)):
     upd = body.model_dump(exclude_none=True)
+    if user.no_money:
+        upd = {k: v for k, v in upd.items() if k not in MONEY_KEYS and k not in ("mortgage_term", "mortgage_type", "fixed_rate_end")}
     clear = upd.pop("clear_pin", False)
-    if "fixed_rate_end" in body.model_fields_set:
+    if "fixed_rate_end" in body.model_fields_set and not user.no_money:
         if body.fixed_rate_end:
             try:
                 date.fromisoformat(body.fixed_rate_end)
@@ -172,7 +175,7 @@ async def update_project(body: ProjectUpdate, user: User = Depends(current_user)
     return await get_project(user)
 
 
-@router.get("/project/comparables")
+@router.get("/project/comparables", dependencies=[Depends(block_money)])
 async def comparables(user: User = Depends(pro_user)):
     p = await get_project_doc(user)
     return [c.model_dump() for c in p.comparables]
@@ -231,9 +234,12 @@ async def accessible_projects(user: User) -> list:
     docs = await db.projects.find(await access_filter(user), {"comparables": 0}).sort("_id", 1).to_list(1000)
     docs.sort(key=lambda d: d["user_id"] != user.id)
     out = await project_summaries([Project.from_mongo(d) for d in docs])
-    for d, s in zip(docs, out):
+    no_money = {c["owner_id"] async for c in db.co_owners.find({"email": user.email, "money_access": False}, {"owner_id": 1})}
+    for i, (d, s) in enumerate(zip(docs, out)):
         s["shared"] = d["user_id"] != user.id
         s["owner_name"] = owners.get(d["user_id"]) if s["shared"] else None
+        if s["shared"] and d["user_id"] in no_money:
+            out[i] = s = hide_money(s)
     return out
 
 

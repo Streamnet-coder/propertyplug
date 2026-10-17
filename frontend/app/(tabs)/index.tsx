@@ -21,6 +21,7 @@ import { LandUplift, PlanningCard } from "@/src/components/land-cards";
 import { ExpiringAccessCard } from "@/src/components/expiring-access-card";
 import { OverdueRequestsCard } from "@/src/components/overdue-requests-card";
 import { RentalsCard, TenancyAlertsCard } from "@/src/components/rentals-card";
+import { useCanSeeMoney } from "@/src/money";
 import { FixedRateAlertCard, HomeFinanceCard } from "@/src/components/home-finance-card";
 import { makeStyles, useTheme } from "@/src/theme";
 
@@ -34,9 +35,10 @@ export default function Home() {
   const { colors } = useTheme();
   const { user } = useAuth();
   const project = useProject();
-  const receipts = useReceipts();
+  const money = useCanSeeMoney();
+  const receipts = useReceipts(money);
   const digest = useDigest(0);
-  const lineItems = useLineItems();
+  const lineItems = useLineItems(money);
   const expiring = useQuery({ queryKey: ["documents", "expiring"], queryFn: () => api<DocItem[]>("/documents/expiring") });
   const over = (lineItems.data ?? []).filter((i) => i.alert === "over").length;
   const near = (lineItems.data ?? []).filter((i) => i.alert === "near").length;
@@ -64,7 +66,7 @@ export default function Home() {
     { id: "receipt", icon: "receipt", label: "Receipt", onPress: () => router.push("/receipt-form") },
     { id: "snags", icon: "list-checks", label: "Snags", onPress: () => router.push("/snags") },
   ];
-  const actions = allActions.filter((a) => !(a.id === "brrr" && (p?.property_type === "land" || p?.purpose === "personal")));
+  const actions = allActions.filter((a) => !(a.id === "brrr" && (p?.property_type === "land" || p?.purpose === "personal")) && (money || !["ai", "brrr", "report", "receipt"].includes(a.id)));
 
   return (
     <View style={s.root} testID="home-screen">
@@ -116,6 +118,7 @@ export default function Home() {
                 <Icon name="map-pin" size={13} color={colors.onSurfaceInverse} />
                 <Text style={s.heroAddr} numberOfLines={1}>{p.address}</Text>
               </View>
+              {money ? (<>
               <View style={s.heroMetrics}>
                 <View>
                   <Text style={s.heroLabel}>Spent vs budget</Text>
@@ -130,6 +133,14 @@ export default function Home() {
               <View style={s.bar}>
                 <View style={[s.barFill, { width: `${pct}%` }]} />
               </View>
+              </>) : (
+                <View style={s.heroMetrics}>
+                  <View>
+                    <Text style={s.heroLabel}>Tasks access · money figures hidden</Text>
+                    <Text style={s.heroBig} testID="project-stage-progress">{msPct}% <Text style={s.heroOf}>of stages done</Text></Text>
+                  </View>
+                </View>
+              )}
             </View>
           </Animated.View>
 
@@ -177,7 +188,7 @@ export default function Home() {
             <Text style={s.muted}>{msPct}% of stages complete</Text>
           </Pressable>
 
-          {over + near > 0 && (
+          {money && over + near > 0 && (
             <Pressable testID="variance-alert-card" onPress={() => { tap(); router.push("/budget"); }} style={[s.alertCard, { borderColor: over ? colors.error : colors.brandPrimary }]}>
               <Icon name="triangle-alert" size={20} color={over ? colors.error : colors.brandPrimary} />
               <View style={{ flex: 1 }}>
@@ -190,8 +201,8 @@ export default function Home() {
 
           <ExpiringAccessCard linkToPortal />
           <OverdueRequestsCard />
-          {p.property_type !== "land" && <TenancyAlertsCard />}
-          <FixedRateAlertCard p={p} />
+          {money && p.property_type !== "land" && <TenancyAlertsCard />}
+          {money && <FixedRateAlertCard p={p} />}
 
           {(expiring.data ?? []).length > 0 && (
             <Pressable testID="expiry-alert-card" onPress={() => { tap(); router.push("/documents"); }} style={[s.alertCard, { borderColor: expiring.data!.some((d) => d.expiry_status === "expired") ? colors.error : colors.brandPrimary }]}>
@@ -245,6 +256,7 @@ export default function Home() {
             </View>
           </Pressable>
 
+          {money && (<>
           <View>
             <SectionTitle title="Budget breakdown" action="Details" onAction={() => router.push("/(tabs)/budget")} testID="budget-details-link" />
             <Card style={{ gap: space.lg }}>
@@ -357,10 +369,12 @@ export default function Home() {
               {receipts.data?.length === 0 && <Text style={[s.muted, { padding: space.lg, textAlign: "center" }]}>No receipts yet</Text>}
             </Card>
           </View>
+          </>)}
+          {!money && p.property_type === "land" && <PlanningCard />}
         </ScrollView>
       )}
 
-      {p && (
+      {p && money && (
         <BlurView intensity={40} tint="light" style={[s.cta, { paddingBottom: bottomChrome + space.md }]}>
           <Button title="Add Expense" icon="plus" onPress={() => router.push("/receipt-form")} testID="add-expense-button" />
         </BlurView>

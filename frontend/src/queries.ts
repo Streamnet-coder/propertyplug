@@ -7,9 +7,9 @@ export const useProject = () => useQuery({ queryKey: ["project"], queryFn: () =>
 export const usePortfolio = () => useQuery({ queryKey: ["projects", "portfolio"], queryFn: () => api<Portfolio>("/portfolio") });
 export const usePortfolioMap = () => useQuery({ queryKey: ["projects", "map"], queryFn: () => api<MapPin[]>("/portfolio/map") });
 export const usePlanning = () => useQuery({ queryKey: ["planning"], queryFn: () => api<PlanningApp[]>("/planning") });
-export const useLineItems = () => useQuery({ queryKey: ["line-items"], queryFn: () => api<LineItem[]>("/line-items") });
+export const useLineItems = (enabled = true) => useQuery({ queryKey: ["line-items"], queryFn: () => api<LineItem[]>("/line-items"), enabled });
 export const useSpendTrend = () => useQuery({ queryKey: ["line-items", "trend"], queryFn: () => api<SpendTrend>("/line-items/trend") });
-export const useReceipts = () => useQuery({ queryKey: ["receipts"], queryFn: () => api<Receipt[]>("/receipts") });
+export const useReceipts = (enabled = true) => useQuery({ queryKey: ["receipts"], queryFn: () => api<Receipt[]>("/receipts"), enabled });
 export const useMedia = () => useQuery({ queryKey: ["media"], queryFn: () => api<MediaItem[]>("/media") });
 export const useContacts = (kind: ContactKind, enabled = true) =>
   useQuery({ queryKey: ["contacts", kind], queryFn: () => api<Contact[]>(`/contacts?kind=${kind}`), enabled });

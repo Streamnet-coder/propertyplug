@@ -200,3 +200,6 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 
 ## Managers (Jun 2026)
 - co_owners.project_ids: null = co-owner (all projects), list = manager (full access to chosen projects only). access_filter() in routes/projects.py used by project list, activate, portfolio map, rent roll; deps.effective() pins managers to allowed projects. PUT /api/co-owners/{id} changes scope. UI: /co-owners "Co-owners & managers" with role chips + project picker.
+
+## Manager money permissions (Jun 2026)
+- co_owners.money_access (default true). False = tasks only: deps.effective sets owner.no_money; block_money router dependency (budget, quotes, stage_payments, ai, rentals, tenant_portal, share, /project/comparables) returns 403; project summaries zero money fields + money_hidden; PUT /project ignores money keys; rent roll skips. acting_as.money exposed; frontend useCanSeeMoney hides Budget tab, dashboard money cards, receipts, AI/BRRR/share actions.

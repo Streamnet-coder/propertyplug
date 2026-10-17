@@ -59,7 +59,7 @@ export function gbp(n: number, decimals = 0, cur: CurrencyCode = currency) {
 }
 
 export type User = { id: string; name: string; email: string; plan: "basic" | "pro"; own_plan: "basic" | "pro"; paid_pro: boolean; trial_ends: string; active_project_id?: string | null;
-  pro_tier: "monthly" | "yearly" | "lifetime" | null; pro_until: string | null; acting_as: { owner_id: string; owner_name: string } | null;
+  pro_tier: "monthly" | "yearly" | "lifetime" | null; pro_until: string | null; acting_as: { owner_id: string; owner_name: string; money?: boolean } | null;
   auto_renew: boolean; has_subscription: boolean; sub_status: string | null };
 export type Category = "Hard Cost" | "Soft Cost" | "Contingency";
 export type Project = {
@@ -86,6 +86,7 @@ export type Project = {
   currency: CurrencyCode;
   property_type: "residential" | "land";
   purpose: "investment" | "personal";
+  money_hidden?: boolean;
   deposit: number;
   mortgage_rate: number;
   mortgage_term: number;

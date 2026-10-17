@@ -26,7 +26,7 @@ class LoginIn(BaseModel):
 @router.post("/auth/register")
 async def register(body: RegisterIn):
     u = await create_user(body.name, body.email, body.password)
-    return {"access_token": make_token(u.id), "user": user_out(u)}
+    return {"access_token": make_token(u.id), "user": user_out(u, await effective(u))}
 
 
 @router.post("/auth/login")
@@ -34,7 +34,7 @@ async def login(body: LoginIn):
     u = User.from_mongo(await db.users.find_one({"email": body.email.lower()}))
     if not u or not bcrypt.checkpw(body.password.encode(), u.password_hash.encode()):
         raise HTTPException(401, "Incorrect email or password")
-    return {"access_token": make_token(u.id), "user": user_out(u)}
+    return {"access_token": make_token(u.id), "user": user_out(u, await effective(u))}
 
 
 @router.get("/auth/me")

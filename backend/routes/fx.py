@@ -130,7 +130,7 @@ async def rent_roll(year: Optional[int] = None, user: User = Depends(real_user))
     totals = {k: 0.0 for k in keys}
     rows = []
     for s in await accessible_projects(user):
-        if s.get("property_type") == "land":
+        if s.get("property_type") == "land" or s.get("money_hidden"):
             continue
         r = await compute_rentals({"project_id": s["id"]}, year)
         if not r["tenancies"] and not r["expenses"]:

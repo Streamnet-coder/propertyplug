@@ -8,6 +8,7 @@ import { api, BACKEND_URL, User } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Button, Card, fonts, Icon, IconName, radius, space, tap } from "@/src/components/ui";
 import { invalidate, useProject, useReferrals } from "@/src/queries";
+import { useCanSeeMoney } from "@/src/money";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
@@ -33,6 +34,7 @@ export default function Profile() {
   const { user, setUser, signOut, refresh } = useAuth();
   const referrals = useReferrals();
   const { data: project } = useProject();
+  const money = useCanSeeMoney();
   const [paying, setPaying] = useState(false);
   const [tier, setTier] = useState<(typeof TIERS)[number]["id"]>("yearly");
   const [renewBusy, setRenewBusy] = useState(false);
@@ -245,7 +247,7 @@ export default function Profile() {
             { icon: "pencil" as IconName, label: "Edit project details", onPress: () => router.push("/project-edit"), id: "edit-project" },
             { icon: "calculator" as IconName, label: "BRRR calculator", onPress: () => router.push("/brrr"), id: "brrr" },
             { icon: "sparkles" as IconName, label: "AI cost estimate", onPress: () => router.push("/ai-estimate"), id: "ai" },
-          ].filter((r) => !(r.id === "brrr" && (project?.purpose === "personal" || project?.property_type === "land"))).map((r, i) => (
+          ].filter((r) => !(r.id === "brrr" && (project?.purpose === "personal" || project?.property_type === "land")) && (money || !["brrr", "share"].includes(r.id))).map((r, i) => (
             <Pressable key={r.id} testID={`profile-link-${r.id}`} onPress={() => { tap(); r.onPress(); }} style={[s.link, i > 0 && s.divider]}>
               <Icon name={r.icon} size={20} color={colors.brand} />
               <Text style={[s.rowTitle, { flex: 1 }]}>{r.label}</Text>

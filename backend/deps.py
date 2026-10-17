@@ -66,6 +66,7 @@ async def effective(u: User) -> User:
             owner = None
         if owner:
             owner.active_project_id, owner.real_id, owner.real_name = u.active_project_id, u.id, u.name
+            owner.no_money = share.get("money_access") is False
             return owner
     # Access was removed: fall back to their own projects.
     await db.users.update_one({"_id": ObjectId(u.id)}, {"$set": {"acting_owner_id": None, "active_project_id": None}})
@@ -79,6 +80,38 @@ async def current_user(cred: HTTPAuthorizationCredentials = Depends(bearer)) -> 
 
 async def user_from_token(raw: str) -> User:
     return await effective(await load_user(decode_uid(raw)))
+
+
+async def block_money(cred: HTTPAuthorizationCredentials = Depends(bearer)):
+    """Router-level guard for money areas: tasks-only managers/co-owners get 403. Public (token) pages have no bearer and pass."""
+    if cred:
+        try:
+            u = await user_from_token(cred.credentials)
+        except HTTPException:
+            return
+        if u.no_money:
+            raise HTTPException(403, "Your access to this project doesn't include money")
+
+
+MONEY_KEYS = ("purchase_price", "estimated_valuation", "budget", "spent", "total_budget", "total_spent", "rent_yield", "home_finance", "monthly_rent",
+              "deposit", "remortgage_scenarios", "value_without_planning", "value_with_planning", "refinance_ltv", "refinance_rate", "mortgage_rate", "remortgage_ltv")
+
+
+def _zero(v):
+    if isinstance(v, bool) or v is None or isinstance(v, str):
+        return v
+    if isinstance(v, (int, float)):
+        return 0
+    if isinstance(v, dict):
+        return {k: _zero(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return []
+    return v
+
+
+def hide_money(summary: dict) -> dict:
+    """Zero every money figure in a project summary (keeps the shape so the app never crashes) and flag it."""
+    return {**summary, **{k: _zero(summary[k]) for k in MONEY_KEYS if k in summary}, "money_hidden": True}
 
 
 async def pro_user(user: User = Depends(current_user)) -> User:
@@ -95,7 +128,7 @@ def user_out(u: User, eff: User | None = None):
             "auto_renew": bool(u.stripe_subscription_id and u.sub_status in ("active", "trialing", "past_due") and not u.cancel_at_period_end and u.pro_tier != "lifetime"),
             "has_subscription": bool(u.stripe_subscription_id and u.sub_status in ("active", "trialing", "past_due") and u.pro_tier != "lifetime"),
             "sub_status": u.sub_status,
-            "acting_as": {"owner_id": eff.id, "owner_name": eff.name} if eff.id != u.id else None}
+            "acting_as": {"owner_id": eff.id, "owner_name": eff.name, "money": not eff.no_money} if eff.id != u.id else None}
 
 
 async def active_pid(user: User) -> str:

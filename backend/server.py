@@ -1,4 +1,5 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import Depends, FastAPI, APIRouter
+from deps import block_money
 from starlette.middleware.cors import CORSMiddleware
 
 from core import client, db, logger
@@ -14,7 +15,7 @@ api = APIRouter(prefix="/api")
 
 for m in (auth, projects, budget, contacts, media, ai, payments, trades, milestones, branding, referrals, share, quotes,
           stage_payments, snags, shopping, digest, export, messages, email_settings, ratings, documents, portal, fx, planning, co_owners, activity, subscriptions, rentals, compare_share, tenant_portal):
-    api.include_router(m.router)
+    api.include_router(m.router, dependencies=[Depends(block_money)] if m in (budget, quotes, stage_payments, ai, rentals, tenant_portal, share) else [])
 
 
 @api.get("/")

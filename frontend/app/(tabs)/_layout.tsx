@@ -3,6 +3,7 @@ import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { Platform } from "react-native";
 
 import { useAuth } from "@/src/auth";
+import { useCanSeeMoney } from "@/src/money";
 import { fonts, Icon, IconName, tap } from "@/src/components/ui";
 import { usesNativeTabs } from "@/src/navigation";
 import { useTheme } from "@/src/theme";
@@ -17,12 +18,13 @@ const TABS: { name: string; title: string; icon: IconName; sf: string }[] = [
 export default function TabsLayout() {
   const { user, loading } = useAuth();
   const { colors } = useTheme();
+  const money = useCanSeeMoney();
   if (!loading && !user) return <Redirect href="/welcome" />;
 
   if (usesNativeTabs) {
     return (
       <NativeTabs tintColor={colors.brand}>
-        {TABS.map((t) => (
+        {TABS.filter((t) => money || t.name !== "budget").map((t) => (
           <NativeTabs.Trigger key={t.name} name={t.name}>
             <NativeTabs.Trigger.Icon sf={t.sf as any} />
             <NativeTabs.Trigger.Label>{t.title}</NativeTabs.Trigger.Label>
@@ -54,6 +56,7 @@ export default function TabsLayout() {
           name={t.name}
           options={{
             title: t.title,
+            href: !money && t.name === "budget" ? null : undefined,
             tabBarButtonTestID: `tab-${t.name === "index" ? "home" : t.name}`,
             tabBarIcon: ({ color }) => <Icon name={t.icon} size={22} color={color as string} />,
           }}
