@@ -7,13 +7,13 @@ from storage import init_storage
 import asyncio
 
 from routes import (ai, auth, branding, budget, contacts, digest, documents, portal, email_settings, export, media, messages, ratings, milestones, payments, projects, quotes,
-                    referrals, share, shopping, snags, stage_payments, trades, fx, planning, co_owners, activity, subscriptions, rentals, compare_share)
+                    referrals, share, shopping, snags, stage_payments, trades, fx, planning, co_owners, activity, subscriptions, rentals, compare_share, tenant_portal)
 
 app = FastAPI()
 api = APIRouter(prefix="/api")
 
 for m in (auth, projects, budget, contacts, media, ai, payments, trades, milestones, branding, referrals, share, quotes,
-          stage_payments, snags, shopping, digest, export, messages, email_settings, ratings, documents, portal, fx, planning, co_owners, activity, subscriptions, rentals, compare_share):
+          stage_payments, snags, shopping, digest, export, messages, email_settings, ratings, documents, portal, fx, planning, co_owners, activity, subscriptions, rentals, compare_share, tenant_portal):
     api.include_router(m.router)
 
 
@@ -81,7 +81,10 @@ async def startup():
     await db.compare_links.create_index("token", unique=True)
     for coll in (db.tenancies, db.rent_payments, db.rental_expenses, db.rent_reminders):
         await coll.create_index([("user_id", 1), ("project_id", 1)])
+    await db.tenancies.create_index("portal_token", sparse=True)
+    await db.rent_statements.create_index([("tenancy_id", 1), ("year", 1)])
     asyncio.create_task(digest.digest_scheduler())
+    asyncio.create_task(tenant_portal.statement_scheduler())
     try:
         init_storage()
     except Exception as e:

@@ -214,4 +214,5 @@ class Snag(BaseDocument):
     fix_photo_path: Optional[str] = None
     fixed_by: Optional[str] = None
     fix_note: str = ""
+    reported_by: str = ""
     created_at: str = Field(default_factory=now_iso)

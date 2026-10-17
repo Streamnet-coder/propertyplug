@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 
 import { gbp, Project } from "@/src/api";
+import { OverpaymentPlanner } from "@/src/components/overpayment-planner";
 import { Card, fonts, Icon, radius, SectionTitle, space } from "@/src/components/ui";
 import { makeStyles, useTheme } from "@/src/theme";
 
@@ -46,6 +47,7 @@ export function HomeFinanceCard({ p }: { p: Project }) {
           </Text>
         )}
       </Card>
+      <OverpaymentPlanner p={p} />
       <Card style={{ gap: space.md }} testID="remortgage-card">
         <Text style={s.title}>Remortgage to fund the refurb</Text>
         <Text style={s.muted}>Borrow against the after-refurb value of {gbp(p.estimated_valuation)} at up to {p.remortgage_ltv}% LTV.</Text>

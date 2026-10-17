@@ -40,6 +40,7 @@ class TenancyIn(BaseModel):
     end_date: Optional[str] = None
     rent_day: int = Field(default=1, ge=1, le=28)
     receipts_auto: bool = True
+    statements_auto: bool = True
     notes: str = ""
 
     _d = field_validator("start_date", "end_date")(classmethod(lambda cls, v: _iso(v)))
@@ -88,6 +89,21 @@ def rent_for(t: dict, month: str) -> float:
     return rent
 
 
+def build_schedule(t: dict, year: int, pays: dict, reminded: dict, today: date) -> list:
+    """Month-by-month rent rows for `year`; pays/reminded are keyed by (tenancy_id, YYYY-MM)."""
+    tid = str(t["_id"])
+    out = []
+    for mo in _months(date.fromisoformat(t["start_date"]), date.fromisoformat(t["end_date"]) if t.get("end_date") else None, year):
+        due_on = date(int(mo[:4]), int(mo[5:]), t.get("rent_day", 1))
+        p = pays.get((tid, mo))
+        paid = float(p["paid_amount"]) if p else 0.0
+        due = rent_for(t, mo)
+        status = "paid" if paid >= due else "partial" if paid > 0 else "late" if due_on < today else "due"
+        out.append({"month": mo, "due_on": due_on.isoformat(), "due": due, "paid": paid, "paid_on": p.get("paid_on") if p else None,
+                    "status": status, "reminded_at": reminded.get((tid, mo))})
+    return out
+
+
 def _tenancy_status(t: dict, today: date):
     s = date.fromisoformat(t["start_date"])
     e = date.fromisoformat(t["end_date"]) if t.get("end_date") else None
@@ -112,22 +128,16 @@ async def rentals(year: Optional[int] = None, user: User = Depends(current_user)
     t_out = []
     for t in tenancies:
         tid = str(t["_id"])
-        sched = []
-        for mo in _months(date.fromisoformat(t["start_date"]), date.fromisoformat(t["end_date"]) if t.get("end_date") else None, year):
-            due_on = date(int(mo[:4]), int(mo[5:]), t.get("rent_day", 1))
-            p = pays.get((tid, mo))
-            paid = float(p["paid_amount"]) if p else 0.0
-            due = rent_for(t, mo)
-            status = "paid" if paid >= due else "partial" if paid > 0 else "late" if due_on < today else "due"
-            sched.append({"month": mo, "due_on": due_on.isoformat(), "due": due, "paid": paid, "paid_on": p.get("paid_on") if p else None, "status": status,
-                          "reminded_at": reminded.get((tid, mo))})
-            monthly[mo]["due"] += due
-            monthly[mo]["received"] += paid
+        sched = build_schedule(t, year, pays, reminded, today)
+        for r in sched:
+            monthly[r["month"]]["due"] += r["due"]
+            monthly[r["month"]]["received"] += r["paid"]
         arrears = sum(r["due"] - r["paid"] for r in sched if r["status"] in ("late", "partial") and r["due_on"] <= today.isoformat())
         st = _tenancy_status(t, today)
         end = t.get("end_date")
-        t_out.append({**{k: v for k, v in t.items() if k not in ("_id", "user_id")}, "id": tid, "status": st,
-                      "deposit_protected": bool(t.get("deposit_protected")), "receipts_auto": t.get("receipts_auto", True),
+        t_out.append({**{k: v for k, v in t.items() if k not in ("_id", "user_id", "portal_token", "portal_origin")}, "id": tid, "status": st,
+                      "deposit_protected": bool(t.get("deposit_protected")), "receipts_auto": t.get("receipts_auto", True), "statements_auto": t.get("statements_auto", True),
+                      "portal_url": f"{t['portal_origin'].rstrip('/')}/api/t/{t['portal_token']}" if t.get("portal_token") else None,
                       "current_rent": rent_for(t, today.isoformat()[:7]), "rent_changes": t.get("rent_changes") or [], "renewals": t.get("renewals") or [],
                       "days_to_end": (date.fromisoformat(end) - today).days if end and st != "ended" else None,
                       "schedule": sched, "arrears": round(arrears, 2), "late_count": sum(r["status"] == "late" for r in sched)})
@@ -179,6 +189,7 @@ async def delete_tenancy(tid: str, user: User = Depends(current_user)):
     await db.tenancies.delete_one({"_id": oid(tid), "user_id": user.id})
     await db.rent_payments.delete_many({"tenancy_id": tid, "user_id": user.id})
     await db.rent_reminders.delete_many({"tenancy_id": tid, "user_id": user.id})
+    await db.rent_statements.delete_many({"tenancy_id": tid, "user_id": user.id})
     return {"ok": True}
 
 
@@ -267,7 +278,7 @@ async def send_reminder(tid: str, body: RemindIn, user: User = Depends(current_u
         raise HTTPException(400, "This month is already paid")
     due_on = date(int(body.month[:4]), int(body.month[5:]), t.get("rent_day", 1))
     late = due_on < date.today()
-    address, sender, _ = await _ctx(user, t)
+    address, sender, _ = await _ctx(user.id, t)
     owed = money(due_amt - paid, 2) if late and paid else money(due_amt, 2)
     subject = f"{'Rent overdue' if late else 'Friendly reminder: rent due'} {due_on.strftime('%d %b')} · {address}"
     html = reminder_html(t["tenant_name"], address, owed, due_on.isoformat(), late, money(paid, 2) if paid else "", sender)
@@ -286,11 +297,11 @@ async def send_reminder(tid: str, body: RemindIn, user: User = Depends(current_u
     return {"ok": True, "kind": "late" if late else "upcoming", "sent_at": sent_at}
 
 
-async def _ctx(user: User, t: dict):
+async def _ctx(uid: str, t: dict):
     """(property address, sender name, branding footer html) for tenant emails; also sets the money() currency."""
     proj = await db.projects.find_one({"_id": ObjectId(t["project_id"])}, {"address": 1, "name": 1, "currency": 1}) or {}
     CURRENCY.set(proj.get("currency") or "GBP")
-    owner = await db.users.find_one({"_id": ObjectId(user.id)}, {"name": 1, "branding": 1}) or {}
+    owner = await db.users.find_one({"_id": ObjectId(uid)}, {"name": 1, "branding": 1}) or {}
     b = owner.get("branding") or {}
     sender = b.get("company_name") or owner.get("name", "Your landlord")
     contacts = " · ".join(E(x) for x in (b.get("contact_name"), b.get("phone"), b.get("email"), b.get("website")) if x)
@@ -310,7 +321,7 @@ def _row(k: str, v: str) -> str:
 
 
 async def _send_receipt(user: User, t: dict, month: str, amount: float, paid_on: str):
-    address, sender, head = await _ctx(user, t)
+    address, sender, head = await _ctx(user.id, t)
     due = rent_for(t, month)
     mlabel = date.fromisoformat(f"{month}-01").strftime("%B %Y")
     balance = max(0.0, due - amount)
@@ -360,7 +371,7 @@ async def renew_tenancy(tid: str, body: RenewIn, user: User = Depends(current_us
     await db.tenancies.update_one({"_id": t["_id"]}, upd)
     emailed = None
     if body.notify and t.get("tenant_email"):
-        address, sender, head = await _ctx(user, t)
+        address, sender, head = await _ctx(user.id, t)
         fmt = lambda d: date.fromisoformat(d).strftime("%d %B %Y")
         rows = _row("Tenancy term", f"{fmt(t['start_date'])} to {fmt(body.end_date)}" if body.end_date else "Rolling month-to-month (periodic)")
         rows += _row("Previous end date", fmt(t["end_date"]) if t.get("end_date") else "Rolling")

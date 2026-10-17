@@ -93,7 +93,7 @@ export default function Snags() {
                   <Text style={[s.desc, item.status === "fixed" && { textDecorationLine: "line-through" }]} numberOfLines={2}>{item.description}</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     <View style={[s.dot, { backgroundColor: prio[item.priority] }]} />
-                    <Text style={s.muted}>{item.room} · {item.priority}{item.assignee ? ` · ${item.assignee}` : ""}</Text>
+                    <Text style={s.muted}>{item.room} · {item.priority}{item.assignee ? ` · ${item.assignee}` : ""}{item.reported_by ? ` · ${item.reported_by}` : ""}</Text>
                   </View>
                   {item.fixed_by ? (
                     <Text style={[s.muted, { color: colors.success, fontFamily: fonts.semibold }]} testID={`snag-fixed-by-${item.id}`}>

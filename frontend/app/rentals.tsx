@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { gbp, RentMonth, Rentals, Tenancy } from "@/src/api";
 import { RenewSheet } from "@/src/components/renew-sheet";
+import { SendAllStatements, TenancyActions } from "@/src/components/tenancy-actions";
 import { RentLogSheet } from "@/src/components/rent-log-sheet";
 import { Button, Card, EmptyState, fonts, Icon, radius, SectionTitle, space, tap } from "@/src/components/ui";
 import { invalidate, useRentals } from "@/src/queries";
@@ -50,6 +51,7 @@ export default function RentalsScreen() {
 
           <View>
             <SectionTitle title={`Tenancies (${d.tenancies.length})`} />
+            {d.tenancies.some((t) => t.tenant_email) && <SendAllStatements year={year} />}
             {d.tenancies.length === 0 ? (
               <EmptyState icon="key-round" title="No tenancies yet" subtitle="Add your tenant to track rent each month, late payments and the deposit." testID="tenancies-empty" />
             ) : (
@@ -203,8 +205,8 @@ function TenancyCard({ t, year, onMonth, onRenew }: { t: Tenancy; year: number; 
       )}
       <View style={{ flexDirection: "row", gap: space.sm, alignItems: "center" }}>
         <Text style={[s.hint, { flex: 1, textAlign: "left" }]}>Tap a month to log rent{t.receipts_auto && t.tenant_email ? " · receipts auto-emailed" : ""}</Text>
-        <Button small variant="outline" icon="refresh-cw" title="Renew / extend" onPress={() => onRenew(t)} testID={`tenancy-renew-${t.id}`} />
       </View>
+      <TenancyActions t={t} year={year} onRenew={() => onRenew(t)} />
     </Card>
   );
 }

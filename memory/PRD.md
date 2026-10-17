@@ -182,3 +182,8 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Tenancy renewal: POST /api/rentals/tenancies/{id}/renew (new end date or rolling, optional new rent from date -> rent_changes, renewals history, emails tenant terms). RenewSheet on tenancy cards.
 - Auto rent receipts (receipts_auto per tenancy, default on) emailed on rent log when amount changes; logged in Messages.
 - Personal mortgage: fixed_rate_end + FixedRateAlertCard (≤90 days / ended); up to 3 remortgage_scenarios with cheapest monthly + best 2-yr (incl. fees) highlights.
+
+## Iteration 33 (Jun 2026)
+- Annual rent statements: POST /api/rentals/tenancies/{id}/statement, POST /api/rentals/statements (all), auto every January for previous year (statements_auto per tenancy, rent_statements dedup, statement_scheduler hourly).
+- Tenant portal: POST/DELETE /api/rentals/tenancies/{id}/portal; public /api/t/{token} (terms, deposit, rent schedule with year nav, printable receipts /receipt/{YYYY-MM}, repair form -> snag with reported_by + owner email, 10/day limit).
+- Overpayment planner (client-side) with monthly slider (@react-native-community/slider) + lump sum on personal-home dashboard.
