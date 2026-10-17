@@ -8,13 +8,13 @@ from storage import init_storage
 import asyncio
 
 from routes import (ai, auth, branding, budget, contacts, digest, documents, portal, email_settings, export, media, messages, ratings, milestones, payments, projects, quotes,
-                    referrals, share, shopping, snags, stage_payments, trades, fx, planning, co_owners, activity, subscriptions, rentals, compare_share, tenant_portal, inbox, report_links, ownership)
+                    referrals, share, shopping, snags, stage_payments, trades, fx, planning, co_owners, activity, subscriptions, rentals, compare_share, tenant_portal, inbox, report_links, ownership, ownership_views)
 
 app = FastAPI()
 api = APIRouter(prefix="/api")
 
 for m in (auth, projects, budget, contacts, media, ai, payments, trades, milestones, branding, referrals, share, quotes,
-          stage_payments, snags, shopping, digest, export, messages, email_settings, ratings, documents, portal, fx, planning, co_owners, activity, subscriptions, rentals, compare_share, tenant_portal, inbox, report_links, ownership):
+          stage_payments, snags, shopping, digest, export, messages, email_settings, ratings, documents, portal, fx, planning, co_owners, activity, subscriptions, rentals, compare_share, tenant_portal, inbox, report_links, ownership, ownership_views):
     api.include_router(m.router, dependencies=[Depends(block_money)] if m in (budget, quotes, stage_payments, ai, rentals, tenant_portal, share) else [])
 
 

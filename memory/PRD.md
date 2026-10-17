@@ -240,3 +240,7 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - ownership_shares.contributions {co_owner_id|"owner": amount}; split rows include contribution, cash_return_pct (annual cashflow share / contribution), profit_return_pct. PUT /api/project/split accepts contributions.
 - Statements: UK tax year (6 Apr–5 Apr, grouped by month Apr–Mar). GET /api/project/statements?tax_year=Y preview; POST {tax_year} (owner only) emails each co-owner with pct>0 their share of rent, expenses, net, profit, contribution + owner copy; db.coowner_statements log. statement_scheduler auto-sends within 60 days after 6 April once per project/tax year. UI StatementsPanel inside OwnershipSplitCard.
 - Repair history: GET /api/repairs/history (items with days, fixed_by, fix_cost hidden for no-money, totals). Screen /repair-history (history icon on Snagging list header) with filters + PDF (report.ts shareRepairHistory).
+
+## Co-owner portal view + portfolio ownership (Jun 2026)
+- routes/ownership_views.py (real_user, no money block): GET /api/my-ownership (co-owner's shares/contributions/returns + statements sent to them across owners; excludes tasks-only access), GET /api/my-ownership/statement?project_id&tax_year (404 unless sent to them), GET /api/ownership/portfolio (owner: per-person totals + per-project rows).
+- Screens: /my-ownership (link "My ownership & statements" in Co-owners screen "Shared with you"), /ownership-portfolio (link "Ownership across all properties" on Co-owners screen).

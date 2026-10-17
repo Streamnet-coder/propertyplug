@@ -74,6 +74,7 @@ export default function CoOwners() {
       </Card>
 
       <Button small variant="outline" icon="history" title="See who changed what" onPress={() => router.push("/project-activity")} testID="co-owners-activity-link" />
+      <Button small variant="outline" icon="pie-chart" title="Ownership across all properties" onPress={() => router.push("/ownership-portfolio")} testID="co-owners-portfolio-link" />
 
       <Text style={s.section}>Invite someone</Text>
       <Field label="Their email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" placeholder="partner@example.com" testID="co-owner-email-input" />
@@ -123,6 +124,9 @@ export default function CoOwners() {
       ))}
 
       {(shared.data ?? []).length > 0 && <Text style={s.section}>Shared with you</Text>}
+      {(shared.data ?? []).length > 0 && (
+        <Button small variant="secondary" icon="wallet" title="My ownership & statements" onPress={() => router.push("/my-ownership")} testID="co-owners-my-ownership-link" />
+      )}
       {(shared.data ?? []).map((o) => (
         <Card key={o.owner_id} style={{ gap: space.sm }} testID={`shared-owner-${o.owner_id}`}>
           <View style={s.row}>

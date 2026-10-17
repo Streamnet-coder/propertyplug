@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 47 - PropertyPlug 'Co-owner Portal View + Portfolio Ownership Summary' end-to-end validation. Backend: 9/9 pytest passed (test_iteration47.py) on preview URL covering (a) GET /api/my-ownership as co-owner own7b068e@example.com returns Nottingham project with pct=25.0, contribution=10000.0, profit, monthly/annual_cashflow, cash_return_pct, profit_return_pct, statements[], owner_name 'Demo Builder' and totals.contribution=10000.0; (b) GET /api/my-ownership/statement with no statement sent -> 404 'No statement was sent to you for that year'; unknown project id -> 404 'Project not found'; (c) POST /api/project/statements {tax_year:2025} as owner succeeds (own7b068e@example.com in failed[] because not a verified Resend recipient, so test falls back to inserting coowner_statements doc with sent:[email]) - GET /api/my-ownership/statement then returns {label:'6 Apr 2025 - 5 Apr 2026', whole:{rent_received,expenses,net}, mine:{pct:25.0, rent_received, expenses, net, profit, contribution:10000.0}}; (d) tax_year 2025 then appears in GET /api/my-ownership project.statements[]; (e) GET /api/ownership/portfolio as demo owner returns people[0].is_owner=true (Demo Builder first), co-owner person entry keyed by co_owner_id 6ad39c08204308b856c65c6d with contribution=10000.0 and projects=1, plus projects[] row for 6acf7cf334e1da0ef6b14f50 with the co-owner row at pct=25.0; (f) fresh registered user with no shares returns {projects:[], totals.contribution:0}; (g) tasks-only manager (co_owners doc with role=manager, money_access=false, project_ids=[pid]) given a share+contribution in ownership_shares is still returned [] by /api/my-ownership (excluded correctly by _my_rows money_access check). Frontend (390x844 preview): OWNER flow /co-owners -> co-owners-portfolio-link navigates to ownership-portfolio-screen; ownership-person-owner card renders 'Demo Builder (you)' with KPIs '£40,000 put in / £23,625 profit share / £3,952 cashflow/yr' and 'Cash return 9.9% a year'; ownership-person-6ad39c08204308b856c65c6d card renders 'Olly Owner / own7b068e@example.com / 1 property / £10,000 put in / £7,875 profit share / £1,317 cashflow/yr / Cash return 13.2% a year'; ownership-project-6acf7cf334e1da0ef6b14f50 shows 'Nottingham Victorian Refurb / Demo Builder 75% £40,000 in / Olly Owner 25% £10,000 in'; co-owners-my-ownership-link correctly NOT shown for owner. CO-OWNER flow (own7b068e@example.com login) /co-owners -> 'Shared with you' section surfaces co-owners-my-ownership-link; tapping navigates to my-ownership-screen; my-ownership-totals renders '£10,000 put in / £7,875 profit share / £1,317 cashflow/yr'; my-ownership-6acf7cf334e1da0ef6b14f50 card shows '25% Your share, £10,000 Put in, £7,875 Profit share, £110 Cashflow/mo, Cash return 13.2%/yr · profit 78.8% of cash in'; after inserting sent:[own7b068e@example.com] into coowner_statements, my-statement-6acf7cf334e1da0ef6b14f50-2025 chip ('6 Apr 2025 - 5 Apr 2026 sent 2026-10-17') renders and tapping expands my-statement-detail-6acf7cf334e1da0ef6b14f50-2025 showing 'Rent received (25%) £0.00 / Property expenses £0.00 / Net income £0.00 / Share of estimated profit £7,875.00 / Your capital contribution £10,000.00' plus whole-property summary. CLEANUP: all test seed removed (co_owners doc 6ad39c08204308b856c65c6d, user own7b068e@example.com, ownership_shares doc for pid, 1 coowner_statements doc, 1 iter47 fresh user). No ownership artefacts remain on demo project.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration47.py",
+    "/app/test_reports/pytest/pytest_iteration47.xml",
+    "/app/test_reports/iteration_47.json"
+  ],
+  "action_items": [
+    "No code changes required. Co-owner portal view (/my-ownership) and owner portfolio summary (/ownership-portfolio) work end-to-end on preview backend + Expo web frontend.",
+    "Known preview-only behaviour: Resend only delivers to the sandbox address delivered@resend.dev; sending statements to arbitrary emails (incl. own7b068e@example.com) lands in failed[] with sent:[]. The coowner_statements doc is still persisted so the owner trail is correct, but /my-ownership will NOT list that year for the co-owner (filter requires their email in sent[]). This is working as designed - just worth documenting."
+  ],
+  "critical_code_review_comments": [
+    "routes/ownership_views.py:16-20 _my_rows filters out money_access=False co_owners docs (tasks-only manager hidden) and matches on $or shares/contributions > 0 - verified.",
+    "routes/ownership_views.py:26-28 respects per-project scoping: if c['project_ids'] is a list, only those pids yield rows (so a manager tied to one project cannot see shares in another).",
+    "routes/ownership_views.py:42-43 statements filter is {'project_id': p.id, 'sent': user.email} which Mongo-matches when email is in the sent[] array - verified.",
+    "routes/ownership_views.py:55-56 /my-ownership/statement 404 when caller's email not in sent[] for that tax year - verified.",
+    "routes/ownership_views.py:69-91 /ownership/portfolio aggregates per-person contribution/profit/annual_cashflow across projects, sorts owner-first then by contribution desc, computes cash_return_pct=annual_cashflow/contribution*100 with None guard - verified against UI numbers.",
+    "frontend/app/my-ownership.tsx:46-50 statement detail fetched on tap via useMutation; same chip toggles open/closed with open?.ty check - good UX.",
+    "frontend/app/my-ownership.tsx:62-66 cash_return_pct/profit_return_pct line is rendered only when at least one is non-null; the ' · ' separator is conditional on both.",
+    "frontend/app/ownership-portfolio.tsx:26 person card testID uses `ownership-person-${p.key}` where key is co_owner_id or literal 'owner' (set in backend 79) - matches spec exactly."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration47.py"
+  ],
+  "success_rate": {"backend": "100% (9/9 pytest)", "frontend": "100% - owner portfolio screen (owner card + co-owner card + project card) and co-owner my-ownership screen (totals + project card + statement chip + expanded detail) all verified on preview with viewport 390x844"},
+  "seed_data_creation": "Main agent left co_owners doc 6ad39c08204308b856c65c6d (own7b068e@example.com, user pass12345) with 25% share and £10,000 contribution on demo project 6acf7cf334e1da0ef6b14f50 - used for all tests. Backend test also registered one fresh iter47 user to prove empty response. All of the above (co_owner doc, user, ownership_shares doc, coowner_statements docs, iter47 user) removed in a final cleanup script run after UI verification.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Preview env uses EXPO_PUBLIC_BACKEND_URL (not EXPO_BACKEND_URL) in frontend/.env. Backend login JSON uses 'access_token'. Project activation endpoint is POST /api/projects/{pid}/activate (no body). Resend only delivers to delivered@resend.dev on this account; to test co-owner statement visibility against any other email, send then update the coowner_statements doc 'sent' array in Mongo (same trick used here). The 'owner-first' sort order in /ownership/portfolio means people[0].is_owner is always true when the owner has any contribution or share.",
+  "rca_of_issue": "N/A - no bugs found."
+}
