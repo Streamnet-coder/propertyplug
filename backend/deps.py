@@ -49,7 +49,17 @@ async def effective(u: User) -> User:
     The returned owner object keeps the co-owner's own active project and remembers who is really signed in (real_id)."""
     if not u.acting_owner_id or u.acting_owner_id == u.id:
         return u
-    if await db.co_owners.find_one({"owner_id": u.acting_owner_id, "email": u.email}):
+    share = await db.co_owners.find_one({"owner_id": u.acting_owner_id, "email": u.email})
+    if share and share.get("project_ids") is not None:
+        # Manager: only the chosen projects. Keep the open one if allowed, else switch to the first allowed that still exists.
+        allowed = [p for p in share["project_ids"] if ObjectId.is_valid(p)]
+        ok = [str(d["_id"]) async for d in db.projects.find({"_id": {"$in": [ObjectId(p) for p in allowed]}, "user_id": u.acting_owner_id}, {"_id": 1})]
+        if not ok:
+            share = None
+        elif u.active_project_id not in ok:
+            u.active_project_id = ok[0]
+            await db.users.update_one({"_id": ObjectId(u.id)}, {"$set": {"active_project_id": ok[0]}})
+    if share:
         try:
             owner = await load_user(u.acting_owner_id)
         except HTTPException:

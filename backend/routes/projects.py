@@ -213,10 +213,22 @@ async def shared_owners(user: User) -> dict:
     return {str(u["_id"]): u["name"] async for u in db.users.find({"_id": {"$in": [ObjectId(i) for i in ids]}}, {"name": 1})}
 
 
+async def access_filter(user: User) -> dict:
+    """Mongo filter for projects this person can open: their own, every project of owners who made them a co-owner,
+    and only the listed projects where they are a manager (co_owners doc with project_ids)."""
+    full, picked = [], []
+    async for c in db.co_owners.find({"email": user.email}, {"owner_id": 1, "project_ids": 1}):
+        if c.get("project_ids") is None:
+            full.append(c["owner_id"])
+        else:
+            picked += [oid(i) for i in c["project_ids"]]
+    return {"$or": [{"user_id": {"$in": [user.id, *full]}}, {"_id": {"$in": picked}}]}
+
+
 async def accessible_projects(user: User) -> list:
-    """The person's own projects followed by all projects of owners who share with them (current and future)."""
+    """The person's own projects followed by projects shared with them (co-owner: all; manager: chosen ones)."""
     owners = await shared_owners(user)
-    docs = await db.projects.find({"user_id": {"$in": [user.id, *owners]}}, {"comparables": 0}).sort("_id", 1).to_list(1000)
+    docs = await db.projects.find(await access_filter(user), {"comparables": 0}).sort("_id", 1).to_list(1000)
     docs.sort(key=lambda d: d["user_id"] != user.id)
     out = await project_summaries([Project.from_mongo(d) for d in docs])
     for d, s in zip(docs, out):
@@ -250,7 +262,7 @@ async def create_project(body: ProjectCreate, user: User = Depends(real_user)):
 @router.post("/projects/{pid}/activate")
 async def activate_project(pid: str, user: User = Depends(real_user)):
     doc = await db.projects.find_one({"_id": oid(pid)})
-    if not doc or (doc["user_id"] != user.id and doc["user_id"] not in await shared_owners(user)):
+    if not doc or not await db.projects.find_one({"_id": doc["_id"], **await access_filter(user)}, {"_id": 1}):
         raise HTTPException(404, "Project not found")
     acting = None if doc["user_id"] == user.id else doc["user_id"]
     await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"active_project_id": pid, "acting_owner_id": acting}})

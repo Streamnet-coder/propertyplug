@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 35: tested the new co-owners-and-managers scope feature (owner invites a manager restricted to specific projects). Backend 15/15 pytest passed covering invite validation (400 empty list, 404 bad pid, 404 project-not-owned-by-inviter, 400 duplicate invite), role/project_names in POST/PUT/GET responses, email_sent flag, shared-with-me role+count, manager data access (only picked project appears as shared, cannot activate others, activating allowed project returns 200 and /api/project, /api/line-items & /api/rentals work on allowed project), scope-change auto-switches active project, /api/portfolio/map and /api/portfolio/rent-roll exclude non-allowed projects, removal falls back to invitee's own projects, and full co-owner (null project_ids) sees every owner project. Frontend /co-owners screen loads via testID co-owners-screen; invite-role-co-owner / invite-role-manager chips toggle correctly, selecting Manager reveals invite-project-picker, button text switches to 'Make manager' vs 'Make co-owner', and co-owner-invite-button is disabled until both a valid email and (for manager) at least one project is picked.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration35.py",
+    "/app/test_reports/pytest/pytest_iteration35.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "co_owners.py `_check_pids` correctly dedupes, 400s empty list, and 404s project not owned by the inviter.",
+    "deps.effective() for managers filters allowed project_ids against still-existing projects owned by the acting owner and auto-switches `active_project_id` to the first allowed when the current one no longer qualifies, then persists it (good).",
+    "If a manager's access is revoked, effective() falls back to their own projects and clears acting_owner_id/active_project_id (good — tested).",
+    "projects.access_filter() returns a $or over own + full-co-owner owners + explicit project ids for managers, which is reused by /portfolio/map, /portfolio/rent-roll (via accessible_projects), activate_project, and shared_with_me count — single source of truth (good).",
+    "co_owners.py imports ObjectId directly from bson in /shared-with-me instead of using the project's `oid()` helper used elsewhere; mild inconsistency but fine (both validate IDs the same way).",
+    "`_out` performs 2 DB round-trips per co-owner row (users.find_one + projects.find). With MAX_CO_OWNERS=10 that's fine, but if the limit ever grows consider batching users and projects lookups.",
+    "Front-end: invite-project-picker test id is on the container; checkbox items use invite-project-{pid} and edit-project-{cid}-{pid} prefixes — all consistent with the request spec."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration35.py (new)",
+    "/app/test_reports/pytest/pytest_iteration35.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "Verified: role chips, project picker visibility, invite button disabled/enabled states, button-label switches; existing co-owner card edit flow verified structurally (demo had no co-owners live during UI run after cleanup)"},
+  "seed_data_creation": "During pytest a TEST_iter35 invitee user, a TEST_iter35 'other owner' user, and (only if the demo owner had just 1 project) a TEST_iter35_Scope_<hex> second project were created. All removed in teardown; demo owner's original project is reactivated at the end (test_zz_cleanup_demo_active).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run test_iteration35.py with `-o addopts=` to disable xdist — state flows across test classes (invite created in TestInviteAndScope is reused by TestManagerAccess & TestFullCoOwner). Env: EXPO_PUBLIC_BACKEND_URL in /app/frontend/.env (not EXPO_BACKEND_URL). Login testIDs: auth-email-input, auth-password-input, auth-submit-button. The /co-owners route is accessible directly (Expo Router) but the auth token in web storage sometimes 401s after a hard refresh in Playwright; drive via /login first if you need the data queries to populate. On the UI, picker container itself is `invite-project-picker` and item ids are `invite-project-{pid}` — don't confuse the two when counting checkboxes.",
+  "rca_of_issue": "No bugs discovered. All feature requirements from the request are implemented correctly."
+}

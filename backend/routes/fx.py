@@ -62,9 +62,9 @@ async def set_home_currency(body: HomeIn, user: User = Depends(real_user)):
 @router.get("/portfolio/map")
 async def portfolio_map(user: User = Depends(real_user)):
     """Every accessible project (own + co-owned) with a map pin. Addresses are geocoded once via Nominatim (cached on the project); manual pins win."""
-    from routes.projects import shared_owners
+    from routes.projects import access_filter
     active = (await effective(user)).active_project_id
-    docs = await db.projects.find({"user_id": {"$in": [user.id, *await shared_owners(user)]}}, {"comparables": 0}).sort("_id", 1).to_list(1000)
+    docs = await db.projects.find(await access_filter(user), {"comparables": 0}).sort("_id", 1).to_list(1000)
     todo = [d for d in docs if d.get("address", "").strip() and (d.get("geocoded_for") != d["address"] or "country" not in d)]
     if todo:
         async with httpx.AsyncClient(timeout=8, headers={"User-Agent": "builder-assist/1.0 (support@mybuilder.app)"}) as c:

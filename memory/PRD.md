@@ -197,3 +197,6 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - App renamed Builder Assist -> PropertyPlug (app.json name, EMAIL_FROM_NAME, all share pages/emails/reports/Stripe product names). Wordmark "PropertyPlug" in Inter-ExtraBoldItalic (assets/fonts) with italic tagline "All landlord needs"; brand icon house-plug.
 - Welcome copy refreshed for landlords + renovators (headline, pill, lead, 7 features incl. rent tracker, tenant portal, rent roll).
 - New app icon (teal gradient + white house-plug), Android adaptive icon (bg #0f766e), favicon, splash (mark + italic PropertyPlug wordmark + tagline on white).
+
+## Managers (Jun 2026)
+- co_owners.project_ids: null = co-owner (all projects), list = manager (full access to chosen projects only). access_filter() in routes/projects.py used by project list, activate, portfolio map, rent roll; deps.effective() pins managers to allowed projects. PUT /api/co-owners/{id} changes scope. UI: /co-owners "Co-owners & managers" with role chips + project picker.
