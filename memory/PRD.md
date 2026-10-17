@@ -231,3 +231,12 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 ## Co-owner project scoping (Jun 2026)
 - co_owners / co_owner_links now store explicit role (co_owner|manager). Co-owner: project_ids None (all, incl. future) or chosen list; always money_access True. Manager: chosen list (required), money optional. Legacy docs without role derive it from project_ids. POST/PUT /api/co-owners and POST /api/co-owner-links accept {role, project_ids, money_access}.
 - UI: co-owners.tsx AccessPicker (role chips, co-owner All/Chosen scope, project picker, money toggle for managers only) for invite + Change access; TeamInviteCard co-owner All projects / This project only.
+
+## Auto-include new projects + ownership split (Jun 2026)
+- co_owners.auto_add (only for chosen-project people). POST /api/projects accepts add_co_owner_ids (None -> those with auto_add); $addToSet project_ids. New project form shows NewProjectTeamPicker ticks (pre-ticked = auto_add); co-owners screen AccessPicker has "Auto-add new projects" chip.
+- Ownership split: db.ownership_shares {project_id, shares{co_owner_id: pct}}. GET/PUT /api/project/split (money-blocked; PUT owner only, sum<=100, people must have access). Owner keeps remainder. Profit = valuation - (purchase+budget); rent/mo, cashflow/mo & /yr per person. Home OwnershipSplitCard (below RentalsCard, BRRR mode) + PDF progress report "Ownership split" section when any share set.
+
+## Co-owner statements, capital contributions, repair history (Jun 2026)
+- ownership_shares.contributions {co_owner_id|"owner": amount}; split rows include contribution, cash_return_pct (annual cashflow share / contribution), profit_return_pct. PUT /api/project/split accepts contributions.
+- Statements: UK tax year (6 Apr–5 Apr, grouped by month Apr–Mar). GET /api/project/statements?tax_year=Y preview; POST {tax_year} (owner only) emails each co-owner with pct>0 their share of rent, expenses, net, profit, contribution + owner copy; db.coowner_statements log. statement_scheduler auto-sends within 60 days after 6 April once per project/tax year. UI StatementsPanel inside OwnershipSplitCard.
+- Repair history: GET /api/repairs/history (items with days, fixed_by, fix_cost hidden for no-money, totals). Screen /repair-history (history icon on Snagging list header) with filters + PDF (report.ts shareRepairHistory).

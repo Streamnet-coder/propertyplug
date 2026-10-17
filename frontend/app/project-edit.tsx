@@ -5,6 +5,7 @@ import { ScrollView, Text, View } from "react-native";
 
 import { api, CURRENCIES, CurrencyCode, Project, setCurrency, sym } from "@/src/api";
 import { Button, Chip, Field, fonts, FormScreen, space } from "@/src/components/ui";
+import { NewProjectTeamPicker } from "@/src/components/new-project-team-picker";
 import { invalidate, useProject } from "@/src/queries";
 import { queryClient } from "@/src/query-client";
 import { useTheme } from "@/src/theme";
@@ -30,6 +31,7 @@ export default function ProjectEdit() {
   });
   const setScen = (i: number, k: "label" | "rate" | "fee") => (v: string) => setF((x) => ({ ...x, scen: x.scen.map((r, j) => (j === i ? { ...r, [k]: v } : r)) }));
   const set = (k: Exclude<keyof typeof f, "scen">) => (v: string) => setF((x) => ({ ...x, [k]: v }));
+  const [teamIds, setTeamIds] = useState<string[] | null>(null);
   const isLand = f.property_type === "land";
   const c = sym(f.currency);
 
@@ -99,7 +101,7 @@ export default function ProjectEdit() {
           mortgage_term: Math.min(40, Math.max(1, Math.round(Number(f.mortgage_term) || 25))),
           mortgage_type: f.mortgage_type,
           remortgage_ltv: Math.min(100, Number(f.remortgage_ltv) || 0),
-          ...(isNew ? {} : { fixed_rate_end: f.fixed_rate_end.trim() || null }),
+          ...(isNew ? { add_co_owner_ids: teamIds ?? undefined } : { fixed_rate_end: f.fixed_rate_end.trim() || null }),
           remortgage_scenarios: f.scen.filter((r) => Number(r.rate) > 0).map((r) => ({ label: r.label.trim(), rate: Number(r.rate), fee: Number(r.fee) || 0 })),
           ...pin,
         },
@@ -230,6 +232,7 @@ export default function ProjectEdit() {
           ))}
         </ScrollView>
       )}
+      {isNew && <NewProjectTeamPicker onChange={setTeamIds} />}
       <Text style={label}>Map pin</Text>
       <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: -space.sm }}>
         {p?.pin_manual && !isNew ? "Using your coordinates." : "Found automatically from the address. Enter coordinates to place it exactly."}

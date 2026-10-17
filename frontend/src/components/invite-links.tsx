@@ -16,14 +16,14 @@ export const accessLabel = (a: { role: "co_owner" | "manager"; project_names: st
   `${a.role === "co_owner" ? "Co-owner" : "Manager"} · ${a.project_names ? a.project_names.join(", ") : "all projects"}`;
 
 /** Create one-person, 7-day invite links using the same role / projects / money choices as the email invite. */
-export function InviteLinks({ projectIds, moneyAccess, disabled, role }: { projectIds: string[] | null; moneyAccess: boolean; disabled: boolean; role: "co_owner" | "manager" }) {
+export function InviteLinks({ projectIds, moneyAccess, disabled, role, autoAdd = false }: { projectIds: string[] | null; moneyAccess: boolean; disabled: boolean; role: "co_owner" | "manager"; autoAdd?: boolean }) {
   const s = useStyles();
   const toast = useToast();
   const links = useQuery({ queryKey: ["co-owner-links"], queryFn: () => api<Link[]>("/co-owner-links") });
   const share = (l: Link) =>
     Share.share({ message: `Join my projects on PropertyPlug: ${urlFor(l.token)}`, url: urlFor(l.token) }).catch(() => undefined);
   const create = useMutation({
-    mutationFn: () => api<Link>("/co-owner-links", { body: { role, project_ids: projectIds, money_access: role === "co_owner" ? true : moneyAccess } }),
+    mutationFn: () => api<Link>("/co-owner-links", { body: { role, project_ids: projectIds, money_access: role === "co_owner" ? true : moneyAccess, auto_add: projectIds !== null && autoAdd } }),
     onSuccess: async (l) => {
       await queryClient.invalidateQueries({ queryKey: ["co-owner-links"] });
       share(l);

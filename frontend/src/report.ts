@@ -4,6 +4,7 @@ import { Platform } from "react-native";
 
 import { api, Branding, Comparable, fileUrl, gbp, LineItem, MediaItem, Milestone, Project, Receipt, Rentals, Signature, Snag, SnagSignoff } from "@/src/api";
 import { colors } from "@/src/theme";
+import type { Split } from "@/src/components/ownership-split-card";
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
 
@@ -46,6 +47,7 @@ function buildHtml(
   photos: { m: MediaItem; src: string | null }[],
   milestones: Milestone[],
   brand: { b: Branding; logo: string | null },
+  split: Split | null = null,
 ) {
   const stageName = Object.fromEntries(milestones.map((m) => [m.id, m.name]));
   const { b, logo } = brand;
@@ -96,6 +98,7 @@ function buildHtml(
 </div>
 <div><b>${pct}% of budget used</b> · ${remaining >= 0 ? `${gbp(remaining)} remaining` : `<span class="over">${gbp(-remaining)} over budget</span>`}<div class="bar"><i style="width:${Math.min(100, pct)}%"></i></div></div>
 ${msHtml}
+${splitHtml(split)}
 <h2>Budget breakdown</h2>
 <table><tr><th>Category</th><th class="n">Budget</th><th class="n">Spent</th><th class="n">Variance</th></tr>
 ${cats.map(([l, b, s]) => `<tr><td>${l}</td><td class="n">${gbp(b)}</td><td class="n">${gbp(s)}</td><td class="n ${b - s < 0 ? "over" : "under"}">${gbp(b - s)}</td></tr>`).join("")}
@@ -126,6 +129,7 @@ async function progressBody() {
     api<Milestone[]>("/milestones"),
   ]);
   const b = await api<Branding>("/branding");
+  const split = await api<Split>("/project/split").catch(() => null);
   const logo = b.logo_path ? await toDataUri(fileUrl(b.logo_path)) : null;
   const photos = await Promise.all(
     media.slice(0, 12).map(async (m) => {
@@ -133,7 +137,17 @@ async function progressBody() {
       return { m, src: url ? await toDataUri(url) : null };
     }),
   );
-  return buildHtml(p, items, receipts, photos, milestones, { b, logo });
+  return buildHtml(p, items, receipts, photos, milestones, { b, logo }, split);
+}
+
+function splitHtml(split: Split | null) {
+  if (!split || !split.has_split) return "";
+  const prof = split.figures.profit !== null;
+  return `<h2>Ownership split</h2>
+<table><tr><th>Owner</th><th class="n">Share</th>${prof ? `<th class="n">Profit</th>` : ""}<th class="n">Rent / mo</th><th class="n">Cashflow / mo</th><th class="n">Cashflow / yr</th></tr>
+${split.rows.map((r) => `<tr><td>${esc(r.name)}</td><td class="n">${r.pct}%</td>${prof ? `<td class="n">${gbp(r.profit ?? 0)}</td>` : ""}<td class="n">${gbp(r.monthly_rent)}</td><td class="n ${r.monthly_cashflow < 0 ? "over" : ""}">${gbp(r.monthly_cashflow)}</td><td class="n ${r.annual_cashflow < 0 ? "over" : ""}">${gbp(r.annual_cashflow)}</td></tr>`).join("")}
+</table>
+<p style="font-size:11px;color:#64748b">${prof ? `Profit ${gbp(split.figures.profit!)} = valuation minus purchase and budget. ` : ""}Cashflow = rent minus mortgage.</p>`;
 }
 
 export async function printPdf(html: string, title: string) {
@@ -156,6 +170,23 @@ async function brandHeader(kind: string, p: Project) {
     : "";
   return `${bb}<div class="hdr"><div class="brand"><i>Property<b>Plug</b></i> · ${kind}</div><h1>${esc(p.name)}</h1><p>${esc(p.address)}</p>
 <p style="margin-top:6px;font-size:11px">${new Date().toLocaleDateString("en-GB")}</p></div>`;
+}
+
+export async function shareRepairHistory(h: { items: { room: string; description: string; priority: string; status: string; source: string; reported_by: string; assignee: string; fixed_by: string; created_at: string; fixed_at: string | null; days: number; fix_cost: number | null }[]; totals: { count: number; open: number; fixed: number; avg_days_to_fix: number | null; total_cost: number | null } }, name: string, money: boolean) {
+  const p = await api<Project>("/project");
+  const days = (d: number) => (d < 1 ? "&lt;1" : String(Math.round(d)));
+  const t = h.totals;
+  const body = `${await brandHeader("REPAIR HISTORY", p)}
+<div class="kpis">
+<div class="kpi"><span>Repairs</span><div>${t.count}</div></div>
+<div class="kpi"><span>Open</span><div>${t.open}</div></div>
+<div class="kpi"><span>Avg days to fix</span><div>${t.avg_days_to_fix === null ? "–" : days(t.avg_days_to_fix)}</div></div>
+${money && t.total_cost !== null ? `<div class="kpi"><span>Spent</span><div>${gbp(t.total_cost, 2)}</div></div>` : ""}
+</div>
+<table><tr><th>Reported</th><th>Issue</th><th>Reported by</th><th>Fixed by</th><th>Status</th><th class="n">Days</th>${money ? `<th class="n">Cost</th>` : ""}</tr>
+${h.items.map((i) => `<tr><td>${i.created_at.slice(0, 10)}</td><td><b>${esc(i.room)}</b> · ${esc(i.description)}</td><td>${esc(i.reported_by.replace("Tenant: ", "Tenant "))}</td><td>${esc(i.fixed_by || i.assignee)}</td><td class="${i.status === "fixed" ? "under" : "warn"}">${i.status === "fixed" ? `Fixed ${i.fixed_at?.slice(0, 10) ?? ""}` : "Open"}</td><td class="n">${days(i.days)}</td>${money ? `<td class="n">${i.fix_cost ? gbp(i.fix_cost, 2) : "–"}</td>` : ""}</tr>`).join("")}
+</table>`;
+  await printPdf(doc(body), `${name} repair history`);
 }
 
 const doc = (body: string) =>

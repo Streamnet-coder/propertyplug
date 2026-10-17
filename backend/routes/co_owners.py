@@ -25,6 +25,7 @@ class ScopeIn(BaseModel):
     project_ids: Optional[List[str]] = Field(None, max_length=200)
     money_access: bool = True
     role: Optional[Role] = None
+    auto_add: bool = False  # chosen-projects people: also get every new project the owner creates
 
 
 class CoOwnerIn(ScopeIn):
@@ -40,7 +41,8 @@ async def _access(owner_id: str, body: ScopeIn) -> dict:
     role = body.role or ("co_owner" if body.project_ids is None else "manager")
     if role == "manager" and body.project_ids is None:
         raise HTTPException(400, "Pick at least one project for the manager")
-    return {"role": role, "project_ids": await _check_pids(owner_id, body.project_ids), "money_access": True if role == "co_owner" else body.money_access}
+    return {"role": role, "project_ids": await _check_pids(owner_id, body.project_ids), "money_access": True if role == "co_owner" else body.money_access,
+            "auto_add": body.auto_add and body.project_ids is not None}
 
 
 def _what(c: dict, names: Optional[List[str]]) -> str:
@@ -67,7 +69,7 @@ async def _out(c: dict) -> dict:
     names = [p["name"] async for p in db.projects.find({"_id": {"$in": [oid(i) for i in pids]}}, {"name": 1})] if pids is not None else None
     return {"id": str(c["_id"]), "email": c["email"], "name": u["name"] if u else None, "has_account": bool(u), "invited_at": c["invited_at"],
             "role": _role(c), "project_ids": pids, "project_names": names,
-            "money_access": c.get("money_access", True) is not False}
+            "money_access": c.get("money_access", True) is not False, "auto_add": bool(c.get("auto_add"))}
 
 
 @router.get("/co-owners")
@@ -224,7 +226,7 @@ async def accept_link(token: str, user: User = Depends(real_user)):
     if not claimed.modified_count:
         raise HTTPException(410, "This invite link has already been used. Ask for a new one")
     await db.co_owners.insert_one({"owner_id": d["owner_id"], "email": user.email, "invited_at": now_iso(), "project_ids": d.get("project_ids"),
-                                   "role": _role(d), "money_access": d.get("money_access", True), "via_link": True})
+                                   "role": _role(d), "money_access": d.get("money_access", True), "auto_add": bool(d.get("auto_add")), "via_link": True})
     owner = await db.users.find_one({"_id": ObjectId(d["owner_id"])}, {"name": 1, "email": 1}) or {}
     if owner.get("email"):
         try:

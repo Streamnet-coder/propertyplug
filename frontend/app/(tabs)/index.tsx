@@ -22,6 +22,7 @@ import { ExpiringAccessCard } from "@/src/components/expiring-access-card";
 import { OverdueRequestsCard } from "@/src/components/overdue-requests-card";
 import { RentalsCard, TenancyAlertsCard } from "@/src/components/rentals-card";
 import { useCanSeeMoney } from "@/src/money";
+import { OwnershipSplitCard } from "@/src/components/ownership-split-card";
 import { FixedRateAlertCard, HomeFinanceCard } from "@/src/components/home-finance-card";
 import { makeStyles, useTheme } from "@/src/theme";
 
@@ -349,6 +350,7 @@ export default function Home() {
             )}
             </>)}
             <RentalsCard />
+            {money && <OwnershipSplitCard />}
           </View>
           )}
 

@@ -55,6 +55,9 @@ export default function Snags() {
           </Pressable>
           <Text style={[s.headerTitle, { flex: 1, marginLeft: space.md }]}>Snagging list</Text>
           <PdfButton onGenerate={shareSnagPdf} testID="snags-pdf-button" />
+          <Pressable testID="snags-history-button" accessibilityLabel="Repair history" onPress={() => { tap(); router.push("/repair-history"); }} style={s.back} hitSlop={10}>
+            <Icon name="history" size={20} color={colors.brand} />
+          </Pressable>
           <Pressable testID="snags-report-link-button" accessibilityLabel="Tenant report link" onPress={() => { tap(); setReportLink(true); }} style={s.back} hitSlop={10}>
             <Icon name="megaphone" size={20} color={colors.brandPrimary} />
           </Pressable>

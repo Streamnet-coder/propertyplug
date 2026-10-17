@@ -183,6 +183,7 @@ async def comparables(user: User = Depends(pro_user)):
 
 class ProjectCreate(BaseModel):
     name: str
+    add_co_owner_ids: Optional[List[str]] = Field(None, max_length=50)
     address: str = ""
     target_type: str = "BRRR Refurbishment"
     finish_type: str = "Medium Finish"
@@ -258,9 +259,16 @@ async def create_project(body: ProjectCreate, user: User = Depends(real_user)):
         raise HTTPException(400, "Project name is required")
     if body.property_type == "land" or body.purpose == "personal":
         body.target_type = target_for(body.property_type, body.purpose)
-    p = Project(user_id=user.id, pin_manual=body.lat is not None and body.lon is not None, **body.model_dump())
+    p = Project(user_id=user.id, pin_manual=body.lat is not None and body.lon is not None, **body.model_dump(exclude={"add_co_owner_ids"}))
     p.id = str((await db.projects.insert_one(p.to_mongo())).inserted_id)
     await seed_milestones(user.id, p.id)
+    # Co-owners/managers on chosen projects: add the ticked ones (default: those with "auto-add new projects" on).
+    q = {"owner_id": user.id, "project_ids": {"$ne": None}}
+    if body.add_co_owner_ids is None:
+        q["auto_add"] = True
+    else:
+        q["_id"] = {"$in": [oid(i) for i in body.add_co_owner_ids]}
+    await db.co_owners.update_many(q, {"$addToSet": {"project_ids": p.id}})
     await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"active_project_id": p.id, "acting_owner_id": None}})
     return await project_summary(p)
 

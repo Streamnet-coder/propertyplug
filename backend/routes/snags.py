@@ -327,3 +327,25 @@ async def snag_logo(token: str):
     if not link:
         raise HTTPException(404, "Not found")
     return await serve_logo(link["user_id"])
+
+
+@router.get("/repairs/history")
+async def repair_history(user: User = Depends(current_user)):
+    """Every snag/repair on the active property: who reported, who fixed, cost and days to fix, with totals."""
+    from datetime import datetime
+    docs = await db.snags.find({"user_id": user.id, "project_id": await active_pid(user)}).sort("created_at", -1).to_list(2000)
+    now = datetime.now().astimezone()
+    items = []
+    for d in docs:
+        start = datetime.fromisoformat(d["created_at"])
+        end = datetime.fromisoformat(d["fixed_at"]) if d.get("status") == "fixed" and d.get("fixed_at") else None
+        a = d.get("assigned_to") or {}
+        items.append({"id": str(d["_id"]), "room": d["room"], "description": d["description"], "priority": d.get("priority", "medium"), "status": d.get("status", "open"),
+                      "source": "tenant" if d.get("tenancy_id") or d.get("source") == "report_link" else "snag", "reported_by": d.get("reported_by") or "",
+                      "assignee": a.get("name") or d.get("assignee") or "", "fixed_by": d.get("fixed_by") or "", "created_at": d["created_at"], "fixed_at": end and d["fixed_at"],
+                      "days": round(((end or now) - start).total_seconds() / 86400, 1), "fix_cost": None if user.no_money else d.get("fix_cost"), "fix_note": d.get("fix_note", "")})
+    fixed = [i for i in items if i["status"] == "fixed"]
+    costs = [i["fix_cost"] for i in fixed if i["fix_cost"]]
+    return {"items": items, "totals": {"count": len(items), "open": len(items) - len(fixed), "fixed": len(fixed),
+                                       "avg_days_to_fix": round(sum(i["days"] for i in fixed) / len(fixed), 1) if fixed else None,
+                                       "total_cost": None if user.no_money else round(sum(costs), 2), "tenant_reported": sum(i["source"] == "tenant" for i in items)}}

@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 46 - PropertyPlug 'Co-owner statements + capital contributions + repair history' end-to-end validation. Backend: 12/12 pytest passed on preview URL (test_iteration46.py) covering (a) PUT /api/project/split with contributions {owner:n, co_owner_id:n} persists correctly - GET returns rows[].contribution, cash_return_pct (= annual_cashflow / contribution * 100), profit_return_pct, figures.total_contributed, has_contributions=true; (b) unknown key in contributions -> 400 'can only be recorded for people with access'; (c) negative contribution -> 400 'between 0 and 1,000,000,000'; (d) omitting contributions key keeps existing contributions intact; (e) GET /api/project/statements?tax_year=2025 returns label '6 Apr 2025 – 5 Apr 2026', per-row shares scale rent/expenses/net by pct; (f) POST /api/project/statements owner sends to delivered@resend.dev (either sent or failed depending on Resend rate limit) and GET afterwards shows last_sent_at timestamp; messages log contains kind=coowner_statement filtered by co-owner email; (g) POST /api/project/statements with no shares -> 400 'Set ownership shares first'; (h) POST as acting co_owner (user.real_id!=None via acting_owner_id wired in db) -> 403 'Only the project owner can send statements'; (i) run_auto_statements() returns 0 because container date is 17 Oct 2026, more than 60 days after 6 Apr 2026; tax_year_now(date(2026,10,17))=2025, tax_year_now(date(2026,4,5))=2024, tax_year_now(date(2026,4,6))=2025; (j) GET /api/repairs/history returns items[] with days, status, fixed_by, fix_cost, source(tenant|snag) and totals {count, open, fixed, avg_days_to_fix, total_cost, tenant_reported}; totals.open+totals.fixed==totals.count verified; (k) a tasks-only manager (co_owners doc with role=manager, project_ids=[pid], money_access=false and user.acting_owner_id wired) gets fix_cost=None on every item and totals.total_cost=None. Frontend (390x844 preview, demo@mybuilder.app): home scroll reveals split-card with contrib lines split-contrib-owner='Put in £60,000 · cash return 6.6%/yr · profit 39.4% of cash in' and split-contrib-{coid}='Put in £20,000 · cash return 6.6%/yr · profit 39.4% of cash in' - formula matches backend; Edit opens split-put-owner (pre-filled with 60000) and split-put-{coid} (pre-filled with 20000) plus split-input-{coid}; statements-panel visible with three year chips statements-year-2026 (2026/27 so far), statements-year-2025 (2025/26, default), statements-year-2024; statements-preview shows '6 Apr 2025 – 5 Apr 2026 · rent £0 · expenses £0 · net £0' and 'iter46ui (25%): net £0'; clicking statements-send toasts and the preview updates 'Last sent 2026-10-17'. /snags header snags-history-button navigates to /repair-history where repair-history-screen+repair-history-totals (5 repairs / 3 open / <1 avg / £86 spent) + repair-history-pdf render; four filter chips repair-filter-all/open/fixed/tenant work (5/3/2/5 cards); each fixed card renders repair-fixed-{id} text 'Fixed 2026-10-17 by Test Plumber · took under a day · £85.50' and 'Fixed 2026-10-17 by Dave Miller · took under a day' matching 'Fixed ... took ...' pattern. Cleanup: all iter46* co_owners (delivered@resend.dev, iter46mgr@example.com, iter46ui@example.com) and demo project's ownership_shares + coowner_statements removed via test teardown and manual cleanup script.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration46.py",
+    "/app/test_reports/pytest/pytest_iteration46.xml",
+    "/app/test_reports/iteration_46.json"
+  ],
+  "action_items": [
+    "No code changes required. Co-owner statements, capital contributions and repair history work end-to-end on preview backend + Expo web frontend."
+  ],
+  "critical_code_review_comments": [
+    "routes/ownership.py:60-62 SplitIn uses Optional contributions - when None, upd['contributions'] is NOT set so previous contributions remain (verified).",
+    "routes/ownership.py:52-54 cash_return_pct=annual_cashflow/contribution*100 and profit_return_pct=profit/contribution*100 both guard against zero contribution (returns None) - verified against UI 6.6%/yr display.",
+    "routes/ownership.py:80-83 contributions validation: unknown key -> 400, v<0 or v>1e9 -> 400 - verified.",
+    "routes/ownership.py:91-94 tax_year_now returns t.year-1 when (month,day)>=(4,6) else t.year-2; verified for 2026-04-05 -> 2024, 2026-04-06 -> 2025, 2026-10-17 -> 2025.",
+    "routes/ownership.py:100 statement_figures combines Apr-Dec of year ty and Jan-Mar of year ty+1 using compute_rentals (UK tax year).",
+    "routes/ownership.py:130-131 send_statements raises 400 'Set ownership shares first' when prev['has_split'] is False - verified.",
+    "routes/ownership.py:168-170 post_statements raises 403 BEFORE touching data when user.real_id is not None - verified against real acting co-owner.",
+    "routes/ownership.py:174-176 run_auto_statements short-circuits returning 0 when (today - (ty+1, 4, 6)).days > 60; current container date 17 Oct 2026 gives 194 days past -> returns 0.",
+    "routes/snags.py:346 fix_cost=None when user.no_money else d.get('fix_cost'); totals.total_cost=None when user.no_money - verified via manager with money_access=false.",
+    "frontend/src/components/ownership-split-card.tsx:84-91 split-put-{k} and split-input-{k} inputs; split-contrib-{k} rendered when contribution>0 with pattern 'Put in £X · cash return Y%/yr · profit Z% of cash in' - matches spec.",
+    "frontend/src/components/coowner-statements.tsx:15-19 lastTaxYear() returns t.year-1 when past 6 Apr else t.year-2 - matches backend tax_year_now; three year chips (last+1,last,last-1) rendered with testID statements-year-{y}.",
+    "frontend/app/repair-history.tsx:38-50 repair-history-totals KPIs + 4 filter chips + repair-history-pdf + repair-{id} + repair-fixed-{id} 'Fixed {date} by {fixed_by} · took {dayText(days)} · {cost}' format matches spec.",
+    "frontend/src/report.ts:143-151 splitHtml correctly guards on has_split for progress PDF integration (iter45 code review carried over)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration46.py"
+  ],
+  "success_rate": {"backend": "100% (12/12 pytest)", "frontend": "100% - split-card contrib lines, statements-panel year chips + preview + send toast + last_sent_at update, repair-history totals + 4 filters + PDF button + 'Fixed ... took ...' pattern on fixed items all verified on preview with viewport 390x844"},
+  "seed_data_creation": "Backend pytest created delivered@resend.dev + iter46mgr@example.com users with wired acting_owner_id, 1 co_owners doc per invitee, 1 ownership_shares for Nottingham Victorian Refurb (6acf7cf334e1da0ef6b14f50) with shares 25% + contributions {owner:60000, coid:20000}, several coowner_statements send runs. All removed via test teardown + manual script. Frontend UI test re-created iter46ui@example.com + ownership_shares + 1 send run - also cleaned up at the end.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "To test ownership split or statements on home: ensure the active project has at least one co-owner (otherwise OwnershipSplitCard renders null due to rows.length<2 guard). Login flow on preview is landing -> sign-in-button -> auth-email-input/auth-password-input/auth-submit-button (NOT login-email-input). Backend login returns 'access_token' (not 'token'). Rentals /messages?name=&email= returns empty list when both params missing due to _match $in [] - pass ?email={co_email} to filter. The /api/repairs/history fix_cost=None path depends on user.no_money which is set via co_owners doc field money_access=false AND user.acting_owner_id pointing at the project owner.",
+  "rca_of_issue": "N/A - all features correct. Minor backend observation: GET /api/messages with empty name+email returns [] (filter uses $in on empty list) - working as designed but worth documenting."
+}
