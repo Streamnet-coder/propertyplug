@@ -218,3 +218,8 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Assign: GET /api/snag-assignees (co-owners/managers with access to the project + project trade contacts); POST /api/snags/{id}/assign {kind team|trade, id, origin_url} sets assignee + assigned_to + job_token, emails assignee job link /api/job/{token} (issue, photo, mark fixed with photo+note). Fixing notifies the reporter (reporter_email) or tenancy tenant.
 - Inbox: report-link snags count as repairs; items have mine flag (assigned to me, team kind), sorted first, "Assigned to me" chip.
 - UI: megaphone button on Snagging list -> ReportLinkSheet (WhatsApp/copy/share/turn off); Assign pill on open snag rows -> AssignSheet.
+
+## Reminders, tenant tracker, urgent alerts (Jun 2026)
+- Assignee reminders: reminder_scheduler (hourly) emails open assigned jobs: first after 2 days, then every 3 days (urgent: daily), max 3 (assigned_to.reminders, last_reminded_at); logged kind job_reminder. Reassign resets.
+- Tenant tracker: report-link snags get track_token; thank-you page + confirmation email link /api/track/{token} (Reported -> Assigned -> Fixed timeline, issue + fix photos); fixed email includes tracker link.
+- Urgent: high-priority reports email owner with URGENT subject; assigning an urgent job sends URGENT email. Optional Twilio SMS (backend/sms.py, env TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN/TWILIO_FROM_NUMBER, currently NOT set -> SMS off) texts owner's branding phone and assignee phone. GET /api/report-link returns sms_enabled + alert_phone.

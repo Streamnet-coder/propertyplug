@@ -21,10 +21,10 @@ export function AssignSheet({ snag, onClose }: { snag: Snag | null; onClose: () 
   const q = useQuery({ queryKey: ["snag-assignees"], queryFn: () => api<{ team: Person[]; trades: Person[] }>("/snag-assignees"), enabled: !!snag });
 
   const assign = useMutation({
-    mutationFn: (p: Person) => api<{ emailed: boolean; assignee: string }>(`/snags/${snag!.id}/assign`, { body: { kind: p.kind, id: p.id, origin_url: BACKEND_URL } }),
+    mutationFn: (p: Person) => api<{ emailed: boolean; texted: boolean; assignee: string }>(`/snags/${snag!.id}/assign`, { body: { kind: p.kind, id: p.id, origin_url: BACKEND_URL } }),
     onSuccess: (r) => {
       ["snags", "inbox"].forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
-      toast(r.emailed ? `Assigned to ${r.assignee} · job emailed` : `Assigned to ${r.assignee}`);
+      toast(r.emailed ? `Assigned to ${r.assignee} · job emailed${r.texted ? " & texted" : ""}` : `Assigned to ${r.assignee}`);
       onClose();
     },
     onError: (e) => toast((e as Error).message, "error"),
@@ -65,7 +65,7 @@ export function AssignSheet({ snag, onClose }: { snag: Snag | null; onClose: () 
               )}
             </ScrollView>
           )}
-          <Text style={s.muted}>They get an email with the issue, photo and a link to mark it fixed. The tenant is told when it's done.</Text>
+          <Text style={s.muted}>They get an email with the issue, photo and a link to mark it fixed, plus gentle reminders if it's still open after a few days. The tenant is told when it's done.</Text>
           <Button variant="outline" title="Close" onPress={onClose} testID="assign-close" />
         </View>
       </View>

@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 42 — Assignee Reminders + Tenant Progress View + Urgent Call-Out Alert. BACKEND: 17/17 pytest cases passed (test_iteration42.py, sequential). GET /api/report-link returns {sms_enabled:false, alert_phone:string} — correct because TWILIO env is not set. POST /api/r/{token} with priority=high returns 303 to ?sent=1&track={track_token}; snag persisted with track_token + track_origin; tenant_repair message logged (so the reporter confirmation email path runs without errors); thank-you GET /api/r/{token}?sent=1&track={t} renders #report-track-link anchor pointing at /api/track/{t}. GET /api/track/{t} shows #track-status REPORTED with #track-step-reported; after POST /api/snags/{id}/assign the page flips to IN PROGRESS and the assignee name appears inside #track-step-assigned; after POST /api/job/{token}/fix the page shows FIXED and the #track-fix card with fix note. Invalid /api/track/<bogus> renders the 'no longer active' page (HTML 200). /api/track/{t}/photo returns 404 when no photo and 200 image/* for the fix photo via kind=fix. Urgent assign returns {emailed:true, texted:false} (no Twilio -> send_sms early-returns false silently; sms_enabled()==False confirmed in /api/report-link response). Reminder matrix fully covered via routes.report_links.reminder_due (direct unit tests): normal priority first reminder at 2d gap, subsequent at 3d; urgent at 1d; MAX_REMINDERS=3 enforced; snags missing assigned_to.email are skipped; no assigned_to.at skipped. run_assignee_reminders() with backdated mongo rows correctly sends and increments .reminders / sets last_reminded_at on the two due snags, leaves the not-yet-due / fixed / no-email / capped snags untouched, and writes a kind='job_reminder' message with 'Reminder 1/3' summary. Reassigning via POST /snags/{id}/assign fully replaces the assigned_to document, resetting reminders back to 0. FRONTEND (390x844, demo@mybuilder.app on preview): /snags → megaphone opens #report-link-sheet, #report-link-urgent-info visible with text 'Urgent reports are emailed to you straight away. Text alerts switch on once SMS is set up.' — exact match for sms_enabled=false. #report-link-count and #report-link-url (or #report-link-none) render depending on state. Megaphone + assign flows unchanged on /snags (3 open rows, snag-assign-{id} pills, Sign-off by trade header for Dave Miller). No React Native red screens or JS errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration42.py",
+    "/app/test_reports/pytest/pytest_iteration42.xml",
+    "/app/test_reports/iteration_42.json"
+  ],
+  "action_items": [
+    "No code changes required. All three iteration-42 features (assignee reminders, tenant progress tracker, urgent call-out) are correct end-to-end on the preview environment."
+  ],
+  "critical_code_review_comments": [
+    "routes.report_links.reminder_due is tight: it keys off assigned_to.last_reminded_at (falls back to assigned_to.at) and skips when email is empty, reminders>=MAX_REMINDERS, or assigned_to.at missing. Gap selection (1 day urgent, 2 then 3 days normal) matches the spec exactly.",
+    "run_assignee_reminders filters mongo query to {status:'open', assigned_to.at:{$exists:true}, job_token:{$exists:true}} — correctly excludes fixed snags and unassigned ones at the DB layer, keeping the scheduler cheap. It uses $inc on assigned_to.reminders which is nicely atomic, and $set on last_reminded_at.",
+    "assign() replaces the whole assigned_to subdoc on every POST → `{..., 'at': now_iso()}` with no reminders key, so re-assigning naturally zeroes the counter — verified via test_reassign_resets_counter.",
+    "sms.sms_enabled() guards all three Twilio env vars; send_sms returns False early when disabled or when e164 normalisation fails. The urgent assign path and the urgent public-report path both call send_sms unconditionally and treat `False` as 'no SMS, carry on' — perfect silent-skip behaviour for the Twilio-not-set state.",
+    "track_token is generated with secrets.token_urlsafe(14) on every public submit (not reused). track_origin is captured from the report_link row so the tracker URL in the receipt email keeps the right host even if the owner later rotates the report-link origin.",
+    "track_page builds status via the ladder reported → assigned → fixed; the IN-PROGRESS detection uses `bool(s.get('assignee') or a)` — note this means a snag with only a free-text assignee (no assigned_to doc) also reports IN PROGRESS. Current behaviour is correct for the demo flow but worth being aware of if a landlord ever clears an assignment.",
+    "ReportLinkSheet reads sms_enabled + alert_phone directly from /api/report-link; copy switches between 'They're also texted to {phone}', 'Add your phone in Branding …', and 'Text alerts switch on once SMS is set up.' Confirmed last variant renders when sms_enabled=false — exactly matches the spec's 'silently skipped' SMS."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration42.py (new, 17 cases, all pass sequentially)",
+    "/app/test_reports/pytest/pytest_iteration42.xml (JUnit)",
+    "/app/test_reports/iteration_42.json (this report)"
+  ],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "100% — report-link-sheet renders urgent-info with correct SMS-off copy; /snags assign flow unaffected"},
+  "seed_data_creation": "Backend tests created one TEST trade contact and multiple backdated snags tagged 'iter42_*' plus one report_link on the preview origin for the demo project. test_zzz_cleanup drops all iter42-tagged snags, messages and the TEST contact; the demo report_link row remains intact so the demo owner's megaphone sheet continues to show the saved URL.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run with sequential dispatch: `pytest -o addopts='-n0 --dist no' backend/tests/test_iteration42.py` because the suite uses a module-level STATE dict (fine under -n0; would need a fixture if xdist loadscope is reinstated). Twilio env MUST remain unset to keep the sms_enabled=false branch verified. Reminder tests DO mutate mongo (backdated assigned_to.at/last_reminded_at) — cleanup is in test_zzz_cleanup. If adding more reminder cases, prefer run_assignee_reminders with narrowly-targeted inserts rather than scanning all open snags on the demo project (iter41 artefacts may still exist). Preview endpoints: /api/r/{token} POST → 303 to ?sent=1&track={track_token}; /api/track/{token} HTML; /api/track/{token}/photo?kind=fix returns image bytes.",
+  "rca_of_issue": "N/A — feature complete and correct. Only test-side fix made was replacing /auth/me response parsing from .json()['user']['...'] to .json()['...'] after an initial test run exposed the actual shape (user fields are returned at the top level, not nested under 'user')."
+}

@@ -86,6 +86,10 @@ async def startup():
     await db.rent_statements.create_index([("tenancy_id", 1), ("year", 1)])
     asyncio.create_task(digest.digest_scheduler())
     asyncio.create_task(tenant_portal.statement_scheduler())
+    asyncio.create_task(report_links.reminder_scheduler())
+    await db.snags.create_index("job_token", sparse=True)
+    await db.snags.create_index("track_token", sparse=True)
+    await db.report_links.create_index("token", unique=True)
     try:
         init_storage()
     except Exception as e:

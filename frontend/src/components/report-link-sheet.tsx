@@ -10,7 +10,7 @@ import { queryClient } from "@/src/query-client";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
-type Link = { url: string | null; reports: number };
+type Link = { url: string | null; reports: number; sms_enabled: boolean; alert_phone: string };
 
 /** One shareable "Report a problem" link per property: tenants report issues without a tenancy or app. */
 export function ReportLinkSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
@@ -62,6 +62,17 @@ export function ReportLinkSheet({ visible, onClose }: { visible: boolean; onClos
             <Text style={s.muted} testID="report-link-none">No link yet. Sharing creates one.</Text>
           )}
           {q.data ? <Text style={s.muted} testID="report-link-count">{q.data.reports} problem{q.data.reports === 1 ? "" : "s"} reported through this link</Text> : null}
+          {q.data ? (
+            <View style={s.alertBox} testID="report-link-urgent-info">
+              <Icon name="siren" size={16} color={colors.error} />
+              <Text style={[s.muted, { flex: 1 }]}>
+                Urgent reports are emailed to you straight away.{" "}
+                {q.data.sms_enabled
+                  ? q.data.alert_phone ? `They're also texted to ${q.data.alert_phone}.` : "Add your phone in Branding to get them by text too."
+                  : "Text alerts switch on once SMS is set up."}
+              </Text>
+            </View>
+          ) : null}
           <View style={s.row}>
             <View style={{ flex: 1 }}><Button icon="message-circle" title="WhatsApp" loading={create.isPending} onPress={() => share("whatsapp")} testID="report-link-whatsapp" /></View>
             <View style={{ flex: 1 }}><Button variant="outline" icon="copy" title="Copy" onPress={() => share("copy")} testID="report-link-copy" /></View>
@@ -89,5 +100,6 @@ const useStyles = makeStyles((c) => ({
   urlBox: { flexDirection: "row", alignItems: "center", gap: space.sm, padding: space.md, borderRadius: radius.md, backgroundColor: c.surfaceTertiary },
   url: { flex: 1, fontFamily: fonts.medium, fontSize: 13, color: c.onSurface },
   row: { flexDirection: "row", gap: space.sm },
+  alertBox: { flexDirection: "row", gap: space.sm, alignItems: "flex-start", padding: space.md, borderRadius: radius.md, backgroundColor: c.surfaceTertiary },
   revoke: { alignSelf: "center", paddingVertical: space.xs, minHeight: 44, justifyContent: "center" },
 }));

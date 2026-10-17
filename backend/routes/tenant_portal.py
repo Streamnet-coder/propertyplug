@@ -197,7 +197,8 @@ async def _notify_reporter_fixed(snag: dict):
                  f'<table width="100%" style="border-collapse:collapse;font-size:14px;margin:12px 0">{_row("Location", E(snag["room"]))}{_row("Issue", E(snag["description"]))}'
                  f'{_row("Reported", E(snag["created_at"][:10]))}{_row("Fixed", E((snag.get("fixed_at") or now_iso())[:10]))}'
                  + (_row("Note", E(note)) if note else "") + '</table><p style="line-height:1.5">If the problem comes back, just reply to this email.</p>'
-                 f'<p>Kind regards,<br/>{E(sender)}</p>')
+                 + (f'<p><a href="{E(snag["track_origin"].rstrip("/"))}/api/track/{E(snag["track_token"])}">See the repair tracker</a></p>' if snag.get("track_token") and snag.get("track_origin") else "")
+                 + f'<p>Kind regards,<br/>{E(sender)}</p>')
     subject = f"Repair fixed: {snag['room']} · {address}"
     try:
         await send_email(to=snag["reporter_email"], subject=subject, html=html, reply_to=await owner_reply_to(uid))

@@ -1,8 +1,10 @@
 """Property "Report a problem" links (no tenancy needed) and assigning reported issues to the team (co-owners, managers, trades)
 with an emailed job link where the assignee marks it fixed with a photo."""
+import asyncio
+import logging
 import secrets
 import uuid
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import Literal, Optional
 
 from bson import ObjectId
@@ -19,9 +21,11 @@ from models import Snag, User
 from routes.email_settings import owner_reply_to
 from routes.messages import log_message
 from routes.rentals import _ctx, _row, _wrap
+from sms import send_sms, sms_enabled
 from storage import get_object, put_object
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 DAILY_LIMIT = 20
 PRIO = {"high": "#ef4444", "medium": "#f97316", "low": "#64748b"}
 INPUT = "width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:10px;font:inherit"
@@ -58,7 +62,9 @@ async def get_report_link(user: User = Depends(current_user)):
     pid = await active_pid(user)
     d = await db.report_links.find_one({"user_id": user.id, "project_id": pid})
     reports = await db.snags.count_documents({"project_id": pid, "source": "report_link"})
-    return {"url": _url(d["origin"], f"/api/r/{d['token']}") if d else None, "reports": reports}
+    owner = await db.users.find_one({"_id": ObjectId(user.id)}, {"branding.phone": 1}) or {}
+    return {"url": _url(d["origin"], f"/api/r/{d['token']}") if d else None, "reports": reports,
+            "sms_enabled": sms_enabled(), "alert_phone": (owner.get("branding") or {}).get("phone", "")}
 
 
 @router.post("/report-link")
@@ -110,8 +116,9 @@ async def assign(sid: str, body: AssignIn, user: User = Depends(current_user)):
         c = await db.co_owners.find_one({"_id": oid(body.id), "owner_id": user.id, "$or": [{"project_ids": None}, {"project_ids": snag["project_id"]}]})
         if not c:
             raise HTTPException(404, "Team member not found")
-        u = await db.users.find_one({"email": c["email"]}, {"name": 1})
-        who = {"kind": "team", "id": body.id, "name": u["name"] if u else c["email"].split("@")[0], "email": c["email"], "user_id": str(u["_id"]) if u else None}
+        u = await db.users.find_one({"email": c["email"]}, {"name": 1, "branding.phone": 1})
+        who = {"kind": "team", "id": body.id, "name": u["name"] if u else c["email"].split("@")[0], "email": c["email"], "user_id": str(u["_id"]) if u else None,
+               "phone": ((u or {}).get("branding") or {}).get("phone", "")}
     else:
         c = await db.contacts.find_one({"_id": oid(body.id), "user_id": user.id, "project_id": snag["project_id"], "kind": "trade"})
         if not c:
@@ -120,26 +127,83 @@ async def assign(sid: str, body: AssignIn, user: User = Depends(current_user)):
     token = snag.get("job_token") or secrets.token_urlsafe(14)
     url = _url(body.origin_url, f"/api/job/{token}")
     await db.snags.update_one({"_id": snag["_id"]}, {"$set": {"assignee": who["name"], "assigned_to": {**who, "at": now_iso()}, "job_token": token, "job_origin": body.origin_url}})
-    emailed = False
-    if who["email"]:
-        address, sender, head = await _ctx(user.id, snag)
-        img = f'<p><img src="{E(url)}/photo" alt="Photo of the issue" style="max-width:100%;border-radius:8px"/></p>' if snag.get("storage_path") else ""
-        reporter = snag.get("reporter_name") or (snag.get("reported_by") or "").replace("Tenant: ", "")
-        html = _wrap(f'{head}<p style="font-size:12px;letter-spacing:1px;color:{PRIO.get(snag.get("priority", "medium"))};font-weight:bold;margin:0">NEW JOB · {E(snag.get("priority", "medium").upper())}</p>'
-                     f'<h1 style="font-size:20px;margin:8px 0 12px">{E(address)}</h1><p>Hi {E(who["name"])},</p><p>{E(sender)} has assigned you this issue:</p>'
-                     f'<table width="100%" style="border-collapse:collapse;font-size:14px;margin:12px 0">{_row("Location", E(snag["room"]))}{_row("Issue", E(snag["description"]))}'
-                     + (_row("Reported by", E(reporter)) if reporter else "") + (_row("Tenant phone", E(snag["reporter_phone"])) if snag.get("reporter_phone") else "")
-                     + f'{_row("Reported", E(snag["created_at"][:10]))}</table>{img}'
-                     f'<p><a href="{E(url)}" style="display:inline-block;background:#f97316;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:bold">Open job &amp; mark fixed</a></p>'
-                     f'<p style="font-size:12px;color:#888">When it&#39;s done, add a photo of the fix. The tenant is told automatically.</p>')
-        try:
-            await send_email(to=who["email"], subject=f"New job: {snag['room']} · {address}", html=html, reply_to=await owner_reply_to(user.id))
-            emailed = True
-        except EmailError:
-            emailed = False
+    emailed = await _job_email(user.id, snag, who, url)
+    texted = False
+    if snag.get("priority") == "high" and who.get("phone"):
+        address, sender, _ = await _ctx(user.id, snag)
+        texted = await send_sms(who["phone"], f"URGENT job from {sender}: {snag['description'][:140]} ({snag['room']}, {address}). Open & mark fixed: {url}")
+        if texted:
+            await log_message(user.id, snag["project_id"], name=who["name"], phone=who["phone"], channel="sms", kind="urgent_alert", summary=f"Urgent job texted: {snag['description'][:100]}")
     await log_message(user.id, snag["project_id"], name=who["name"], email=who["email"], channel="email" if who["email"] else "app", kind="snag_assigned",
                       summary=f"Assigned: {snag['description'][:120]} ({snag['room']})", status="sent" if emailed else ("failed" if who["email"] else "logged"))
-    return {"snag": Snag.from_mongo(await db.snags.find_one({"_id": snag["_id"]})).out(), "emailed": emailed, "url": url, "assignee": who["name"]}
+    return {"snag": Snag.from_mongo(await db.snags.find_one({"_id": snag["_id"]})).out(), "emailed": emailed, "texted": texted, "url": url, "assignee": who["name"]}
+
+
+async def _job_email(uid: str, snag: dict, who: dict, url: str, reminder: int = 0) -> bool:
+    """New-job email (or a gentle reminder) with the issue, photo and the mark-fixed link."""
+    if not who.get("email"):
+        return False
+    address, sender, head = await _ctx(uid, snag)
+    urgent = snag.get("priority") == "high"
+    img = f'<p><img src="{E(url)}/photo" alt="Photo of the issue" style="max-width:100%;border-radius:8px"/></p>' if snag.get("storage_path") else ""
+    reporter = snag.get("reporter_name") or (snag.get("reported_by") or "").replace("Tenant: ", "")
+    days = max(1, (datetime.now(timezone.utc) - datetime.fromisoformat(snag["created_at"])).days) if reminder else 0
+    label = ("FRIENDLY REMINDER" if reminder else "URGENT JOB" if urgent else "NEW JOB") + f' · {E(snag.get("priority", "medium").upper())}'
+    intro = (f"Just a gentle nudge: this job from {E(sender)} is still open ({days} day{'s' if days != 1 else ''} since it was reported). If it's already done, please mark it fixed with a photo."
+             if reminder else f"{E(sender)} has assigned you this issue{' and marked it URGENT' if urgent else ''}:")
+    html = _wrap(f'{head}<p style="font-size:12px;letter-spacing:1px;color:{PRIO.get(snag.get("priority", "medium"))};font-weight:bold;margin:0">{label}</p>'
+                 f'<h1 style="font-size:20px;margin:8px 0 12px">{E(address)}</h1><p>Hi {E(who["name"])},</p><p style="line-height:1.5">{intro}</p>'
+                 f'<table width="100%" style="border-collapse:collapse;font-size:14px;margin:12px 0">{_row("Location", E(snag["room"]))}{_row("Issue", E(snag["description"]))}'
+                 + (_row("Reported by", E(reporter)) if reporter else "") + (_row("Tenant phone", E(snag["reporter_phone"])) if snag.get("reporter_phone") else "")
+                 + f'{_row("Reported", E(snag["created_at"][:10]))}</table>{img}'
+                 f'<p><a href="{E(url)}" style="display:inline-block;background:#f97316;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:bold">Open job &amp; mark fixed</a></p>'
+                 f'<p style="font-size:12px;color:#888">When it&#39;s done, add a photo of the fix. The tenant is told automatically.</p>')
+    subject = (f"Reminder: {snag['room']} job still open · {address}" if reminder
+               else f"{'URGENT: ' if urgent else ''}New job: {snag['room']} · {address}")
+    try:
+        await send_email(to=who["email"], subject=subject, html=html, reply_to=await owner_reply_to(uid))
+        return True
+    except EmailError:
+        return False
+
+
+# ---------- Assignee reminders: 2 days after assigning, then every 3 days (urgent: daily), max 3 ----------
+
+MAX_REMINDERS = 3
+
+
+def reminder_due(snag: dict, now: datetime) -> bool:
+    a = snag.get("assigned_to") or {}
+    sent = a.get("reminders", 0)
+    if not a.get("at") or sent >= MAX_REMINDERS or not a.get("email"):
+        return False
+    last = datetime.fromisoformat(a.get("last_reminded_at") or a["at"])
+    gap = 1 if snag.get("priority") == "high" else (2 if sent == 0 else 3)
+    return now - last >= timedelta(days=gap)
+
+
+async def run_assignee_reminders() -> int:
+    now, n = datetime.now(timezone.utc), 0
+    async for s in db.snags.find({"status": "open", "assigned_to.at": {"$exists": True}, "job_token": {"$exists": True}}):
+        if not reminder_due(s, now):
+            continue
+        a = s["assigned_to"]
+        url = _url(s.get("job_origin") or "", f"/api/job/{s['job_token']}")
+        ok = await _job_email(s["user_id"], s, a, url, reminder=a.get("reminders", 0) + 1)
+        await db.snags.update_one({"_id": s["_id"]}, {"$inc": {"assigned_to.reminders": 1}, "$set": {"assigned_to.last_reminded_at": now.isoformat()}})
+        await log_message(s["user_id"], s["project_id"], name=a["name"], email=a["email"], channel="email", kind="job_reminder",
+                          summary=f"Reminder {a.get('reminders', 0) + 1}/{MAX_REMINDERS}: {s['description'][:100]} ({s['room']})", status="sent" if ok else "failed")
+        n += 1
+    return n
+
+
+async def reminder_scheduler():
+    while True:
+        try:
+            await run_assignee_reminders()
+        except Exception as e:
+            logger.error(f"Job reminder scheduler error: {e}")
+        await asyncio.sleep(3600)
 
 
 # ---------- Public: report a problem ----------
@@ -152,7 +216,7 @@ async def _link(token: str):
 
 
 @router.get("/r/{token}", response_class=HTMLResponse)
-async def report_page(token: str, sent: Optional[str] = None):
+async def report_page(token: str, sent: Optional[str] = None, track: Optional[str] = None):
     link = await _link(token)
     if not link:
         return page("Link expired", GONE)
@@ -162,8 +226,10 @@ async def report_page(token: str, sent: Optional[str] = None):
     body += (f"<div class='hdr'><div class='brand'><i>Property<b>Plug</b></i> · REPORT A PROBLEM</div><h1>{E(address)}</h1>"
              f"<div>Managed by {E(sender)}</div></div>")
     if sent:
+        trk = (f"<p><a href='/api/track/{E(track)}' id='report-track-link' style='display:inline-block;background:#0f766e;color:#fff;padding:12px 16px;border-radius:10px;text-decoration:none;font-weight:700'>"
+               f"Track your report</a></p><p class='cap'>Bookmark this link to check progress any time: reported → assigned → fixed.</p>") if track else ""
         body += ("<div class='card' id='report-sent-msg'><b class='under'>Thanks! Your report was sent.</b>"
-                 "<p class='cap'>Your landlord will arrange for someone to look at it. If you left an email, you'll hear when it's fixed.</p></div>")
+                 f"<p class='cap'>Your landlord will arrange for someone to look at it. If you left an email, you'll get the tracking link and hear when it's fixed.</p>{trk}</div>")
     body += (f"<form class='card' id='report-form' method='post' action='/api/r/{tk}' enctype='multipart/form-data'><h2>Tell us what's wrong</h2>"
              f"<label>Your name</label><input name='name' id='report-name' required maxlength='80' placeholder='Full name'/>"
              f"<label>Email (to get updates)</label><input name='email' id='report-email' type='email' maxlength='120' placeholder='you@example.com'/>"
@@ -194,22 +260,39 @@ async def submit_report(token: str, name: str = Form(...), room: str = Form(...)
     doc = {"user_id": link["user_id"], "project_id": link["project_id"], "room": room, "description": description,
            "priority": priority if priority in PRIO else "medium", "status": "open", "assignee": "", "reported_by": f"Tenant: {name}",
            "reporter_name": name, "reporter_email": email, "reporter_phone": phone.strip()[:30], "source": "report_link",
-           "report_link_id": str(link["_id"]), "created_at": now_iso(), "storage_path": await _save_photo(link["user_id"], photo)}
+           "report_link_id": str(link["_id"]), "created_at": now_iso(), "storage_path": await _save_photo(link["user_id"], photo),
+           "track_token": secrets.token_urlsafe(14), "track_origin": link.get("origin", "")}
     await db.snags.insert_one(doc)
     await log_message(link["user_id"], link["project_id"], name=name, email=email, phone=doc["reporter_phone"], channel="web", kind="tenant_repair",
                       direction="in", summary=f"Problem reported: {description[:120]} ({room})")
-    owner = await db.users.find_one({"_id": ObjectId(link["user_id"])}, {"email": 1}) or {}
+    urgent = doc["priority"] == "high"
+    address, sender, head = await _ctx(link["user_id"], link)
+    owner = await db.users.find_one({"_id": ObjectId(link["user_id"])}, {"email": 1, "branding.phone": 1}) or {}
     if owner.get("email"):
-        address, _, _ = await _ctx(link["user_id"], link)
-        html = _wrap(f'<p style="font-size:12px;letter-spacing:1px;color:{PRIO[doc["priority"]]};font-weight:bold;margin:0">PROBLEM REPORTED · {doc["priority"].upper()}</p>'
+        html = _wrap(f'<p style="font-size:12px;letter-spacing:1px;color:{PRIO[doc["priority"]]};font-weight:bold;margin:0">{"URGENT " if urgent else ""}PROBLEM REPORTED · {doc["priority"].upper()}</p>'
                      f'<h1 style="font-size:20px;margin:8px 0 12px">{E(address)}</h1><p><b>{E(name)}</b> reported a problem in <b>{E(room)}</b>:</p>'
                      f'<p style="background:#f1f5f9;padding:12px;border-radius:8px">{E(description)}</p>'
-                     f'<p>Open the snagging list in PropertyPlug to assign it to your team.</p>')
+                     + (f'<p>Tenant contact: {E(doc["reporter_phone"])}</p>' if doc["reporter_phone"] else "")
+                     + f'<p>{"The tenant marked this as urgent (leak, no heating or safety). " if urgent else ""}Open the snagging list in PropertyPlug to assign it to your team.</p>')
         try:
-            await send_email(to=owner["email"], subject=f"Problem reported by {name} · {address}", html=html, reply_to=email or None)
+            await send_email(to=owner["email"], subject=f"{'URGENT: ' if urgent else ''}Problem reported by {name} · {address}", html=html, reply_to=email or None)
         except EmailError:
             pass
-    return RedirectResponse(f"/api/r/{token}?sent=1", status_code=303)
+    alert_phone = (owner.get("branding") or {}).get("phone", "")
+    if urgent and alert_phone and await send_sms(alert_phone, f"URGENT repair at {address}: {description[:140]} ({room}). Reported by {name}{' ' + doc['reporter_phone'] if doc['reporter_phone'] else ''}. Assign it in PropertyPlug."):
+        await log_message(link["user_id"], link["project_id"], name="You", phone=alert_phone, channel="sms", kind="urgent_alert", summary=f"Urgent report texted to you: {description[:100]}")
+    if email:
+        turl = _url(doc["track_origin"], f"/api/track/{doc['track_token']}")
+        html = _wrap(f'{head}<p style="font-size:12px;letter-spacing:1px;color:#0f766e;font-weight:bold;margin:0">REPORT RECEIVED</p>'
+                     f'<h1 style="font-size:20px;margin:8px 0 12px">{E(address)}</h1><p>Hi {E(name)},</p>'
+                     f'<p style="line-height:1.5">Thanks, we&#39;ve received your report about <b>{E(room)}</b>: {E(description)}</p>'
+                     f'<p><a href="{E(turl)}" style="display:inline-block;background:#0f766e;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:bold">Track your report</a></p>'
+                     f'<p style="font-size:12px;color:#888">You can check whether it&#39;s been assigned or fixed any time. We&#39;ll also email you once it&#39;s fixed.</p><p>Kind regards,<br/>{E(sender)}</p>')
+        try:
+            await send_email(to=email, subject=f"We've received your report · {address}", html=html, reply_to=await owner_reply_to(link["user_id"]))
+        except EmailError:
+            pass
+    return RedirectResponse(f"/api/r/{token}?sent=1&track={doc['track_token']}", status_code=303)
 
 
 @router.get("/r/{token}/logo")
@@ -218,6 +301,56 @@ async def report_logo(token: str):
     if not link:
         raise HTTPException(404, "Not found")
     return await serve_logo(link["user_id"])
+
+
+# ---------- Public: tenant progress tracking ----------
+
+@router.get("/track/{token}", response_class=HTMLResponse)
+async def track_page(token: str):
+    s = await db.snags.find_one({"track_token": token}) if token else None
+    if not s:
+        return page("Not found", "<div class='card'><h2>This tracking link is no longer active</h2><p>Please contact your landlord.</p></div>")
+    address, sender, _ = await _ctx(s["user_id"], s)
+    tk = E(token)
+    fmt = lambda iso: datetime.fromisoformat(iso).strftime("%d %b %Y") if iso else ""
+    a = s.get("assigned_to") or {}
+    assigned = bool(s.get("assignee") or a)
+    fixed = s["status"] == "fixed"
+    stage = "fixed" if fixed else "assigned" if assigned else "reported"
+    steps = [("reported", "Reported", f"on {fmt(s['created_at'])}", True),
+             ("assigned", "Assigned", (f"to {E(a.get('name') or s.get('assignee'))}" + (f" on {fmt(a['at'])}" if a.get("at") else "")) if assigned else "Waiting for your landlord to arrange someone", assigned or fixed),
+             ("fixed", "Fixed", f"on {fmt(s.get('fixed_at'))}" if fixed else "Not fixed yet", fixed)]
+    line = "".join(f"<div class='ms' id='track-step-{k}'><span class='dot {'done' if on else ''}'></span><div><b>{lbl}</b><div class='cap'>{sub}</div></div></div>" for k, lbl, sub, on in steps)
+    status = {"reported": ("REPORTED", "#64748b"), "assigned": ("IN PROGRESS", "#f97316"), "fixed": ("FIXED", "#10b981")}[stage]
+    img = f"<img src='/api/track/{tk}/photo' style='width:100%;max-height:220px;object-fit:cover;border-radius:10px;margin-top:8px'/>" if s.get("storage_path") else ""
+    body = brand_block(await owner_branding(s["user_id"]), f"/api/track/{tk}/logo")
+    body += (f"<div class='hdr'><div class='brand'><i>Property<b>Plug</b></i> · REPAIR TRACKER</div><h1>{E(address)}</h1><div>Managed by {E(sender)}</div></div>"
+             f"<div class='card' id='track-issue'><div style='display:flex;justify-content:space-between;gap:8px'><b>{E(s['description'])}</b>"
+             f"<span class='tag' id='track-status' style='color:{status[1]}'>{status[0]}</span></div><div class='cap'>{E(s['room'])}</div>{img}</div>"
+             f"<div class='card' id='track-timeline'><h2>Progress</h2>{line}</div>")
+    if fixed:
+        fix = f"<img src='/api/track/{tk}/photo?kind=fix' style='width:100%;max-height:220px;object-fit:cover;border-radius:10px;margin-top:8px'/>" if s.get("fix_photo_path") else ""
+        note = f"<p>{E(s['fix_note'])}</p>" if s.get("fix_note") else ""
+        body += f"<div class='card' id='track-fix'><h2>The fix</h2>{note}{fix}<p class='cap'>Problem back? Report it again from the link your landlord shared.</p></div>"
+    return page(f"Repair tracker · {address}", body)
+
+
+@router.get("/track/{token}/photo")
+async def track_photo(token: str, kind: str = "issue"):
+    s = await db.snags.find_one({"track_token": token}) if token else None
+    path = (s or {}).get("fix_photo_path" if kind == "fix" else "storage_path")
+    if not path:
+        raise HTTPException(404, "Not found")
+    data, ctype = await run_in_threadpool(get_object, path)
+    return Response(content=data, media_type=ctype, headers={"Cache-Control": "private, max-age=3600"})
+
+
+@router.get("/track/{token}/logo")
+async def track_logo(token: str):
+    s = await db.snags.find_one({"track_token": token}) if token else None
+    if not s:
+        raise HTTPException(404, "Not found")
+    return await serve_logo(s["user_id"])
 
 
 # ---------- Public: assignee job page ----------
