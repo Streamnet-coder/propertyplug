@@ -52,9 +52,14 @@ export default function Projects() {
           <Icon name="arrow-left" size={22} />
         </Pressable>
         <Text style={s.headerTitle}>My projects</Text>
-        <Pressable testID="portfolio-map-button" onPress={() => { tap(); router.push("/portfolio-map"); }} style={s.back} hitSlop={10}>
-          <Icon name="map" size={20} />
-        </Pressable>
+        <View style={{ flexDirection: "row", gap: space.sm }}>
+          <Pressable testID="rent-roll-button" onPress={() => { tap(); router.push("/rent-roll"); }} style={s.back} hitSlop={6} accessibilityLabel="Rent roll">
+            <Icon name="key-round" size={20} />
+          </Pressable>
+          <Pressable testID="portfolio-map-button" onPress={() => { tap(); router.push("/portfolio-map"); }} style={s.back} hitSlop={6}>
+            <Icon name="map" size={20} />
+          </Pressable>
+        </View>
       </View>
       {q.isLoading ? (
         <View style={s.center}><ActivityIndicator color={colors.brand} /></View>

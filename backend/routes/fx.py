@@ -1,7 +1,7 @@
 """Live FX rates (Frankfurter, no key) cached in Mongo, and a portfolio overview converted to the user's home currency."""
 import asyncio
-from datetime import datetime, timedelta, timezone
-from typing import get_args
+from datetime import date, datetime, timedelta, timezone
+from typing import Optional, get_args
 
 import httpx
 from bson import ObjectId
@@ -116,3 +116,36 @@ async def portfolio(user: User = Depends(real_user)):
     return {"home_currency": home, "rate_date": fx["rate_date"], "stale": fx.get("stale", False), "projects": len(summaries),
             "land_count": sum(1 for s in summaries if s.get("property_type") == "land"),
             "totals": {k: round(v, 2) for k, v in totals.items()}, "by_currency": list(by_currency.values())}
+
+
+@router.get("/portfolio/rent-roll")
+async def rent_roll(year: Optional[int] = None, user: User = Depends(real_user)):
+    """Rent received, arrears, letting costs and net cashflow per property, totalled in the user's home currency."""
+    from routes.rentals import compute_rentals
+    year = year or date.today().year
+    home = (await db.users.find_one({"_id": ObjectId(user.id)}, {"home_currency": 1}) or {}).get("home_currency") or "GBP"
+    fx = await get_rates()
+    rates = fx["rates"]
+    keys = ("rent_due", "received", "arrears", "expenses", "net", "active_rent")
+    totals = {k: 0.0 for k in keys}
+    rows = []
+    for s in await accessible_projects(user):
+        if s.get("property_type") == "land":
+            continue
+        r = await compute_rentals({"project_id": s["id"]}, year)
+        if not r["tenancies"] and not r["expenses"]:
+            continue
+        cur = s.get("currency") or "GBP"
+        factor = rates[home] / rates[cur]
+        sm = r["summary"]
+        for k in keys:
+            totals[k] += sm[k] * factor
+        rows.append({"id": s["id"], "name": s["name"], "address": s["address"], "currency": cur, "rate_to_home": round(factor, 6),
+                     "shared": s.get("shared", False), "tenancies": len(r["tenancies"]), "active_tenancies": sm["active_tenancies"], "late_months": sm["late_months"],
+                     **{k: sm[k] for k in keys}, "home": {k: round(sm[k] * factor, 2) for k in keys},
+                     "tenants": [{"name": t["tenant_name"], "status": t["status"], "rent": t["current_rent"], "arrears": t["arrears"], "end_date": t["end_date"]} for t in r["tenancies"]]})
+    rows.sort(key=lambda x: -x["home"]["arrears"])
+    return {"year": year, "home_currency": home, "rate_date": fx["rate_date"], "stale": fx.get("stale", False), "properties": rows,
+            "totals": {k: round(v, 2) for k, v in totals.items()},
+            "counts": {"properties": len(rows), "tenancies": sum(x["tenancies"] for x in rows), "active": sum(x["active_tenancies"] for x in rows),
+                       "in_arrears": sum(1 for x in rows if x["arrears"] > 0)}}

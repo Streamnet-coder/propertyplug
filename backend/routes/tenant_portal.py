@@ -9,7 +9,7 @@ from typing import Optional
 from bson import ObjectId
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
 from core import APP_NAME, E, db, money, now_iso, oid
@@ -20,7 +20,8 @@ from models import User
 from routes.email_settings import owner_reply_to
 from routes.messages import log_message
 from routes.rentals import _ctx, _row, _tenancy_status, _wrap, build_schedule, rent_for
-from storage import put_object
+from routes.documents import _attachment, expiry_state
+from storage import get_object, put_object
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -138,6 +139,51 @@ async def create_portal(tid: str, body: PortalIn, user: User = Depends(current_u
     return {"url": f"{body.origin_url.rstrip('/')}/api/t/{token}"}
 
 
+class DocsIn(BaseModel):
+    doc_ids: list[str] = Field(max_length=100)
+
+
+@router.put("/rentals/tenancies/{tid}/documents")
+async def share_docs(tid: str, body: DocsIn, user: User = Depends(current_user)):
+    t = await db.tenancies.find_one({"_id": oid(tid), "user_id": user.id})
+    if not t:
+        raise HTTPException(404, "Tenancy not found")
+    ids = list(dict.fromkeys(body.doc_ids))
+    found = {str(d["_id"]) async for d in db.documents.find({"_id": {"$in": [oid(i) for i in ids]}, "project_id": t["project_id"]}, {"_id": 1})}
+    if len(found) != len(ids):
+        raise HTTPException(404, "Document not found")
+    await db.tenancies.update_one({"_id": t["_id"]}, {"$set": {"shared_doc_ids": ids}})
+    return {"shared_doc_ids": ids}
+
+
+async def notify_tenant_repair_fixed(snag: dict):
+    """Email the tenant who reported a repair once it's marked fixed (owner app or trade snag link)."""
+    if not snag.get("tenancy_id"):
+        return
+    t = await db.tenancies.find_one({"_id": oid(snag["tenancy_id"])})
+    if not t or not t.get("tenant_email"):
+        return
+    address, sender, head = await _ctx(t["user_id"], t)
+    note = snag.get("fix_note") or ""
+    link = f"<p><a href='{E(t['portal_origin'].rstrip('/'))}/api/t/{E(t['portal_token'])}'>View your tenant portal</a></p>" if t.get("portal_token") and t.get("portal_origin", "").startswith("https://") else ""
+    html = _wrap(f'{head}<p style="font-size:12px;letter-spacing:1px;color:#10b981;font-weight:bold;margin:0">REPAIR COMPLETED</p>'
+                 f'<h1 style="font-size:20px;margin:8px 0 12px">{E(address)}</h1><p>Hi {E(t["tenant_name"])},</p>'
+                 f'<p style="line-height:1.5">Good news: the repair you reported has been marked as fixed.</p>'
+                 f'<table width="100%" style="border-collapse:collapse;font-size:14px;margin:12px 0">{_row("Location", E(snag["room"]))}{_row("Issue", E(snag["description"]))}'
+                 f'{_row("Reported", E(snag["created_at"][:10]))}{_row("Fixed", E((snag.get("fixed_at") or now_iso())[:10]))}'
+                 + (_row("Note", E(note)) if note else "") + f'</table><p style="line-height:1.5">If the problem comes back or isn&#39;t fully resolved, just reply to this email or report it again from your portal.</p>{link}'
+                 f'<p>Kind regards,<br/>{E(sender)}</p>')
+    subject = f"Repair fixed: {snag['room']} · {address}"
+    try:
+        await send_email(to=t["tenant_email"], subject=subject, html=html, reply_to=await owner_reply_to(t["user_id"]))
+        status = "sent"
+    except Exception as e:  # never block marking a snag fixed on email problems
+        logger.warning(f"Repair-fixed email failed: {e}")
+        status = "failed"
+    await log_message(t["user_id"], t["project_id"], name=t["tenant_name"], email=t["tenant_email"], channel="email", kind="repair_fixed", summary=subject, status=status)
+    await db.snags.update_one({"_id": snag["_id"]}, {"$set": {"tenant_notified_at": now_iso()}})
+
+
 @router.delete("/rentals/tenancies/{tid}/portal")
 async def revoke_portal(tid: str, user: User = Depends(current_user)):
     await db.tenancies.update_one({"_id": oid(tid), "user_id": user.id}, {"$unset": {"portal_token": "", "portal_origin": ""}})
@@ -192,6 +238,22 @@ async def tenant_portal(token: str, year: Optional[int] = None, reported: Option
     body += (f"<div class='card' id='rent-schedule'>{nav}" + (f"<table style='margin-top:8px'><tr><th>Month</th><th class='n'>Due</th><th class='n'>Paid</th><th class='n'>Status</th></tr>{lines}</table>"
              f"<p class='cap' id='rent-summary'>Paid {money(sum(r['paid'] for r in rows), 2)} of {money(sum(r['due'] for r in rows), 2)} due"
              + (f" · <b style='color:#ef4444'>{money(arrears, 2)} overdue</b>" if arrears > 0 else "") + "</p>" if rows else f"<p class='cap'>No rent due in {year}.</p>") + "</div>")
+    docs = await db.documents.find({"_id": {"$in": [oid(i) for i in (t.get("shared_doc_ids") or [])]}, "project_id": t["project_id"]}).sort("doc_type", 1).to_list(100)
+    if docs:
+        items = ""
+        for d in docs:
+            ex = expiry_state(d.get("expires_on"))
+            exp = (f"<span class='tag' style='color:{'#ef4444' if ex['expiry_status'] == 'expired' else '#f97316' if ex['expiry_status'] == 'soon' else '#10b981'}'>"
+                   f"{'EXPIRED' if ex['expiry_status'] == 'expired' else 'VALID UNTIL'} {fmt(d['expires_on'])}</span>") if d.get("expires_on") else ""
+            items += (f"<tr><td><a href='/api/t/{tk}/doc/{d['_id']}' id='tdoc-{d['_id']}'>{E(d['title'])}</a><div class='cap'>{E(d['doc_type'])} · {E(d['ext'].upper())}</div></td>"
+                      f"<td class='n'>{exp}</td></tr>")
+        body += f"<div class='card' id='tenant-docs'><h2>Your documents</h2><table>{items}</table></div>"
+    reps = await db.snags.find({"tenancy_id": str(t["_id"])}).sort("created_at", -1).to_list(20)
+    if reps:
+        body += "<div class='card' id='repair-list'><h2>Your repair reports</h2><table>" + "".join(
+            f"<tr><td>{E(r['description'][:80])}<div class='cap'>{E(r['room'])} · reported {E(r['created_at'][:10])}</div></td>"
+            f"<td class='n'><span class='tag' style='color:{'#10b981' if r['status'] == 'fixed' else '#f97316'}'>{'FIXED ' + E((r.get('fixed_at') or '')[:10]) if r['status'] == 'fixed' else 'OPEN'}</span></td></tr>"
+            for r in reps) + "</table></div>"
     body += (f"<form class='card' id='repair-form' method='post' action='/api/t/{tk}/repair' enctype='multipart/form-data'><h2>Report a repair</h2>"
              f"<label>Where is it?</label><input name='room' required maxlength='60' placeholder='e.g. Kitchen'/>"
              f"<label>What's the problem?</label><textarea name='description' required maxlength='600' rows='3' placeholder='Describe the issue' style='width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:10px;font:inherit'></textarea>"
@@ -263,6 +325,18 @@ async def tenant_repair(token: str, room: str = Form(...), description: str = Fo
         except EmailError:
             pass
     return RedirectResponse(f"/api/t/{token}?reported=1", status_code=303)
+
+
+@router.get("/t/{token}/doc/{did}")
+async def tenant_doc(token: str, did: str):
+    t = await _tenancy_by_token(token)
+    if not t or did not in (t.get("shared_doc_ids") or []):
+        raise HTTPException(404, "Not found")
+    d = await db.documents.find_one({"_id": oid(did), "project_id": t["project_id"]})
+    if not d:
+        raise HTTPException(404, "Not found")
+    data, _ = await run_in_threadpool(get_object, d["storage_path"])
+    return _attachment(d, data)
 
 
 @router.get("/t/{token}/logo")

@@ -116,9 +116,11 @@ async def _scoped(user: User):
 
 @router.get("/rentals")
 async def rentals(year: Optional[int] = None, user: User = Depends(current_user)):
+    return await compute_rentals(await _scoped(user), year or date.today().year)
+
+
+async def compute_rentals(q: dict, year: int) -> dict:
     today = date.today()
-    year = year or today.year
-    q = await _scoped(user)
     tenancies = await db.tenancies.find(q).sort("start_date", -1).to_list(100)
     pays = {(p["tenancy_id"], p["month"]): p for p in await db.rent_payments.find({**q, "month": {"$regex": f"^{year}-"}}).to_list(2000)}
     reminded = {(r["tenancy_id"], r["month"]): r["sent_at"] for r in await db.rent_reminders.find({**q, "month": {"$regex": f"^{year}-"}}).sort("sent_at", 1).to_list(2000)}
@@ -136,7 +138,7 @@ async def rentals(year: Optional[int] = None, user: User = Depends(current_user)
         st = _tenancy_status(t, today)
         end = t.get("end_date")
         t_out.append({**{k: v for k, v in t.items() if k not in ("_id", "user_id", "portal_token", "portal_origin")}, "id": tid, "status": st,
-                      "deposit_protected": bool(t.get("deposit_protected")), "receipts_auto": t.get("receipts_auto", True), "statements_auto": t.get("statements_auto", True),
+                      "deposit_protected": bool(t.get("deposit_protected")), "shared_doc_ids": t.get("shared_doc_ids") or [], "receipts_auto": t.get("receipts_auto", True), "statements_auto": t.get("statements_auto", True),
                       "portal_url": f"{t['portal_origin'].rstrip('/')}/api/t/{t['portal_token']}" if t.get("portal_token") else None,
                       "current_rent": rent_for(t, today.isoformat()[:7]), "rent_changes": t.get("rent_changes") or [], "renewals": t.get("renewals") or [],
                       "days_to_end": (date.fromisoformat(end) - today).days if end and st != "ended" else None,
@@ -161,6 +163,8 @@ async def rentals(year: Optional[int] = None, user: User = Depends(current_user)
             "by_category": {k: round(v, 2) for k, v in by_cat.items() if v},
             "monthly": [{**m, "net": round(m["received"] - m["expenses"], 2)} for m in monthly.values()],
             "active_rent": sum(t["current_rent"] for t in t_out if t["status"] == "active"),
+            "active_tenancies": sum(t["status"] == "active" for t in t_out),
+            "late_months": sum(t["late_count"] for t in t_out),
         },
     }
 

@@ -62,9 +62,13 @@ async def update_snag(sid: str, body: SnagUpdate, user: User = Depends(current_u
     r = await db.snags.update_one({"_id": oid(sid), "user_id": user.id}, {"$set": upd})
     if not r.matched_count:
         raise HTTPException(404, "Snag not found")
-    s = Snag.from_mongo(await db.snags.find_one({"_id": oid(sid)}))
+    raw = await db.snags.find_one({"_id": oid(sid)})
+    s = Snag.from_mongo(raw)
     if s.status == "open":
         await clear_signoff(s.project_id, s.assignee)
+    elif upd.get("status") == "fixed":
+        from routes.tenant_portal import notify_tenant_repair_fixed
+        await notify_tenant_repair_fixed(raw)
     return s.out()
 
 
@@ -291,6 +295,8 @@ async def public_fix_snag(token: str, sid: str, photo: Optional[UploadFile] = Fi
                                    "original_filename": photo.filename, "is_deleted": False, "created_at": now_iso()})
         upd["fix_photo_path"] = res["path"]
     await db.snags.update_one({"_id": snag["_id"]}, {"$set": upd})
+    from routes.tenant_portal import notify_tenant_repair_fixed
+    await notify_tenant_repair_fixed({**snag, **upd})
     await log_message(link["user_id"], link["project_id"], name=link["assignee"], channel="web", kind="snag_fixed", direction="in",
                       summary=f"Marked fixed: {snag['description'][:120]} ({snag['room']})" + (" · photo added" if upd.get("fix_photo_path") else ""))
     return RedirectResponse(f"/api/s/{token}?done=1", status_code=303)

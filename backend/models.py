@@ -215,4 +215,6 @@ class Snag(BaseDocument):
     fixed_by: Optional[str] = None
     fix_note: str = ""
     reported_by: str = ""
+    tenancy_id: Optional[str] = None
+    tenant_notified_at: Optional[str] = None
     created_at: str = Field(default_factory=now_iso)

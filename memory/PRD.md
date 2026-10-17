@@ -187,3 +187,8 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Annual rent statements: POST /api/rentals/tenancies/{id}/statement, POST /api/rentals/statements (all), auto every January for previous year (statements_auto per tenancy, rent_statements dedup, statement_scheduler hourly).
 - Tenant portal: POST/DELETE /api/rentals/tenancies/{id}/portal; public /api/t/{token} (terms, deposit, rent schedule with year nav, printable receipts /receipt/{YYYY-MM}, repair form -> snag with reported_by + owner email, 10/day limit).
 - Overpayment planner (client-side) with monthly slider (@react-native-community/slider) + lump sum on personal-home dashboard.
+
+## Iteration 34 (Jun 2026)
+- Repair updates: tenant emailed when a portal-reported repair is marked fixed (owner app or trade link); portal lists repair reports with status.
+- Tenant documents: PUT /api/rentals/tenancies/{id}/documents shares Document Library files on the tenant portal (with expiry), download /api/t/{token}/doc/{did}; picker in tenant portal sheet.
+- Portfolio rent roll: GET /api/portfolio/rent-roll?year (home-currency totals, per-property + tenants); /rent-roll screen from Projects header.

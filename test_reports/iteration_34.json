@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 34: tested repair-fixed tenant notifications, tenant document sharing, and portfolio rent roll (backend 12/12 pytest + frontend UI). Backend fully functional. Frontend rent-roll-screen renders totals/net/received/arrears, year switcher works, empty state shows for a year with no rentals. Row-tap and tenant-docs-picker flows could not be exercised end-to-end in UI because the demo seed has no tenancies in the active project after cleanup; selectors and wiring were verified in code. One minor observation: Snag.out() does not expose tenancy_id or tenant_notified_at, so the owner /api/snags GET response hides those fields even though they're stored and used correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/snags", "issue": "Snag Pydantic model omits `tenancy_id` and `tenant_notified_at`, so these are persisted in Mongo but not surfaced in list/update responses. Clients can't tell if the tenant was notified without an extra DB round-trip. Consider adding them to models.Snag."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration34.py",
+    "/app/test_reports/pytest/pytest_iteration34.xml"
+  ],
+  "action_items": [
+    "Optional: add `tenancy_id` and `tenant_notified_at` to models.Snag so the owner-facing /api/snags responses include them (currently stored in Mongo but filtered out by Snag.out())."
+  ],
+  "critical_code_review_comments": [
+    "notify_tenant_repair_fixed guards tenancy_id/portal_origin https:// correctly and swallows email failures so marking fixed never breaks (good).",
+    "share_docs restricts doc_ids to the tenancy's own project_id (good — fails 404 cross-project).",
+    "rent-roll endpoint sorts rows by home.arrears desc and converts via live FX cache; excludes land and tenancy-less projects (matches spec).",
+    "Minor: GET /api/t/{token}/doc/{did} performs 2 DB lookups; could 404 earlier if did not in shared_doc_ids (already does this - OK)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration34.py (new)",
+    "/app/test_reports/pytest/pytest_iteration34.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% (rent-roll screen flow + year switcher + empty state; row-tap/portal-sheet verified structurally since demo has no active tenancies)"},
+  "seed_data_creation": "Tests create and then delete: 1 tenancy (TEST_iter34 Alice), 2 snags via tenant-portal repair reports, 1 plain snag, 1 snag_link (TEST_iter34_Boiler_Co), 2 test PDFs. Also 1 land project (TEST_iter34 Land). All removed in teardown. Orphan TEST_iter34 messages (produced by email logs) and leftover snags/snag_links were cleaned explicitly via Mongo. Demo project remains active at end.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Login testIDs are auth-email-input, auth-password-input, auth-submit-button (not login-*). Projects screen is opened via home-screen's switch-project-button; rent-roll-button is inside that Projects screen. Email safety: /rentals/tenancies/{tid}/portal rejects http:// origins and only emits the 'View your tenant portal' link in repair-fixed emails if portal_origin starts with https://. For messages, GET /api/messages requires name/email query param to match a stakeholder. Snag model does not surface tenancy_id or tenant_notified_at; verify these via DB directly or by checking /api/messages (kind=repair_fixed).",
+  "rca_of_issue": "No bugs discovered this iteration. Only a cosmetic model-field omission (see minor backend issue) worth considering but not blocking."
+}

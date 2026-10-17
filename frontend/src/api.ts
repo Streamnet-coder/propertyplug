@@ -211,7 +211,7 @@ export type RentStatus = "paid" | "partial" | "late" | "due";
 export type RentMonth = { month: string; due_on: string; due: number; paid: number; paid_on: string | null; status: RentStatus; reminded_at: string | null };
 export type Tenancy = { id: string; tenant_name: string; tenant_email: string; tenant_phone: string; rent: number; deposit: number; deposit_scheme: string; deposit_protected: boolean; start_date: string; end_date: string | null; rent_day: number; notes: string;
   status: "active" | "upcoming" | "ended"; schedule: RentMonth[]; arrears: number; late_count: number; days_to_end: number | null;
-  receipts_auto: boolean; statements_auto: boolean; portal_url: string | null; current_rent: number; rent_changes: { from_month: string; rent: number }[]; renewals: { at: string; end_date: string | null; new_rent: number | null; rent_from: string | null }[] };
+  receipts_auto: boolean; statements_auto: boolean; portal_url: string | null; shared_doc_ids: string[]; current_rent: number; rent_changes: { from_month: string; rent: number }[]; renewals: { at: string; end_date: string | null; new_rent: number | null; rent_from: string | null }[] };
 export type RentalExpense = { id: string; category: string; amount: number; date: string; description: string };
 export type Rentals = { year: number; tenancies: Tenancy[]; expenses: RentalExpense[];
   summary: { rent_due: number; received: number; arrears: number; expenses: number; net: number; active_rent: number; by_category: Record<string, number>; monthly: { month: string; due: number; received: number; expenses: number; net: number }[] } };
@@ -219,3 +219,8 @@ export type CompareLink = { id: string; token: string; url: string; before_id: s
 export type RemortgageScenario = { label: string; rate: number; fee: number; monthly_payment: number; vs_current: number; two_year_cost: number; best_monthly: boolean; best_two_year: boolean };
 export type HomeFinance = { fixed_rate_end: string | null; fixed_days_left: number | null; scenarios: RemortgageScenario[]; loan: number; ltv_now: number; ltv_after: number; monthly_payment: number; total_interest: number; equity_now: number; equity_after: number; value_added: number; net_value_added: number;
   remortgage: { max_loan: number; headroom: number; borrow_for_refurb: number; covers_refurb: boolean; shortfall: number; new_loan: number; new_payment: number; payment_increase: number; new_ltv: number; equity_after: number } };
+export type RentRollRow = { id: string; name: string; address: string; currency: CurrencyCode; rate_to_home: number; shared: boolean; tenancies: number; active_tenancies: number; late_months: number;
+  rent_due: number; received: number; arrears: number; expenses: number; net: number; active_rent: number; home: Record<"rent_due" | "received" | "arrears" | "expenses" | "net" | "active_rent", number>;
+  tenants: { name: string; status: string; rent: number; arrears: number; end_date: string | null }[] };
+export type RentRoll = { year: number; home_currency: CurrencyCode; rate_date: string; stale: boolean; properties: RentRollRow[];
+  totals: Record<"rent_due" | "received" | "arrears" | "expenses" | "net" | "active_rent", number>; counts: { properties: number; tenancies: number; active: number; in_arrears: number } };
