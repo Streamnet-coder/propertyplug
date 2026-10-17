@@ -17,6 +17,7 @@ export function TeamInviteCard() {
   const { data: project } = useProject();
   const [role, setRole] = useState<"co_owner" | "manager">("co_owner");
   const [money, setMoney] = useState(true);
+  const [coAll, setCoAll] = useState(true);
   if (user?.acting_as || !project) return null; // only the owner can bring people in
 
   return (
@@ -33,13 +34,22 @@ export function TeamInviteCard() {
         <Chip label="Assign manager" icon="briefcase" selected={role === "manager"} onPress={() => setRole("manager")} testID="share-team-role-manager" />
       </View>
       <Text style={s.muted} testID="share-team-role-hint">
-        {role === "co_owner" ? "Co-owners can see and edit all your projects." : `Managers only get access to ${project.name}.`}
+        {role === "co_owner"
+          ? coAll ? "Co-owners get full access, incl. money, to all your projects." : `Co-owner with full access, incl. money, to ${project.name} only.`
+          : `Managers only get access to ${project.name}.`}
       </Text>
-      <View style={s.row}>
-        <Chip label="Full access incl. money" icon="wallet" selected={money} onPress={() => setMoney(true)} testID="share-team-money-full" />
-        <Chip label="Tasks only" icon="list-checks" selected={!money} onPress={() => setMoney(false)} testID="share-team-money-tasks" />
-      </View>
-      <InviteLinks projectIds={role === "manager" ? [project.id] : null} moneyAccess={money} disabled={false} />
+      {role === "co_owner" ? (
+        <View style={s.row}>
+          <Chip label="All projects" icon="layers" selected={coAll} onPress={() => setCoAll(true)} testID="share-team-scope-all" />
+          <Chip label="This project only" icon="home" selected={!coAll} onPress={() => setCoAll(false)} testID="share-team-scope-this" />
+        </View>
+      ) : (
+        <View style={s.row}>
+          <Chip label="Full access incl. money" icon="wallet" selected={money} onPress={() => setMoney(true)} testID="share-team-money-full" />
+          <Chip label="Tasks only" icon="list-checks" selected={!money} onPress={() => setMoney(false)} testID="share-team-money-tasks" />
+        </View>
+      )}
+      <InviteLinks role={role} projectIds={role === "co_owner" && coAll ? null : [project.id]} moneyAccess={money} disabled={false} />
       <Button small variant="ghost" icon="mail" title="Invite by email or manage team" onPress={() => router.push("/co-owners")} testID="share-team-manage" />
     </Card>
   );

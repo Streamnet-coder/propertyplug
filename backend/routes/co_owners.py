@@ -1,9 +1,10 @@
-"""Co-owners: another PropertyPlug account with full edit access to all of an owner's current and future projects.
+"""Co-owners: another PropertyPlug account with full edit access (incl. money) to all of an owner's projects or the ones chosen.
+Managers: chosen projects only, optionally without money.
 Co-owners can't delete projects, manage the owner's billing, or remove the owner. Matching is by email, so an invite
 works whether or not the person already has an account."""
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -16,15 +17,36 @@ router = APIRouter()
 MAX_CO_OWNERS = 10
 
 
-class CoOwnerIn(BaseModel):
-    email: EmailStr
-    project_ids: Optional[List[str]] = Field(None, max_length=200)  # None = co-owner of everything; list = manager of those projects
-    money_access: bool = True
+Role = Literal["co_owner", "manager"]
 
 
 class ScopeIn(BaseModel):
+    # Co-owner: full access (incl. money) to all projects (None) or the chosen ones. Manager: chosen projects, money optional.
     project_ids: Optional[List[str]] = Field(None, max_length=200)
     money_access: bool = True
+    role: Optional[Role] = None
+
+
+class CoOwnerIn(ScopeIn):
+    email: EmailStr
+
+
+def _role(c: dict) -> str:
+    return c.get("role") or ("co_owner" if c.get("project_ids") is None else "manager")
+
+
+async def _access(owner_id: str, body: ScopeIn) -> dict:
+    """Validated {role, project_ids, money_access}; co-owners always see money."""
+    role = body.role or ("co_owner" if body.project_ids is None else "manager")
+    if role == "manager" and body.project_ids is None:
+        raise HTTPException(400, "Pick at least one project for the manager")
+    return {"role": role, "project_ids": await _check_pids(owner_id, body.project_ids), "money_access": True if role == "co_owner" else body.money_access}
+
+
+def _what(c: dict, names: Optional[List[str]]) -> str:
+    """Plain-English access summary for emails."""
+    where = "all their projects" if c.get("project_ids") is None else ("the project " if len(names or []) == 1 else "these projects ") + f"<b>{E(', '.join(names or []))}</b>"
+    return f"{'a co-owner' if _role(c) == 'co_owner' else 'manager'} of {where}"
 
 
 async def _check_pids(owner_id: str, pids: Optional[List[str]]) -> Optional[List[str]]:
@@ -32,7 +54,7 @@ async def _check_pids(owner_id: str, pids: Optional[List[str]]) -> Optional[List
         return None
     pids = list(dict.fromkeys(pids))
     if not pids:
-        raise HTTPException(400, "Pick at least one project for the manager")
+        raise HTTPException(400, "Pick at least one project")
     n = await db.projects.count_documents({"_id": {"$in": [oid(p) for p in pids]}, "user_id": owner_id})
     if n != len(pids):
         raise HTTPException(404, "Project not found")
@@ -44,7 +66,7 @@ async def _out(c: dict) -> dict:
     pids = c.get("project_ids")
     names = [p["name"] async for p in db.projects.find({"_id": {"$in": [oid(i) for i in pids]}}, {"name": 1})] if pids is not None else None
     return {"id": str(c["_id"]), "email": c["email"], "name": u["name"] if u else None, "has_account": bool(u), "invited_at": c["invited_at"],
-            "role": "co_owner" if pids is None else "manager", "project_ids": pids, "project_names": names,
+            "role": _role(c), "project_ids": pids, "project_names": names,
             "money_access": c.get("money_access", True) is not False}
 
 
@@ -62,23 +84,22 @@ async def invite_co_owner(body: CoOwnerIn, user: User = Depends(real_user)):
         raise HTTPException(400, "This person already has access. Change their projects instead")
     if await db.co_owners.count_documents({"owner_id": user.id}) >= MAX_CO_OWNERS:
         raise HTTPException(400, f"Up to {MAX_CO_OWNERS} co-owners and managers")
-    pids = await _check_pids(user.id, body.project_ids)
-    c = {"owner_id": user.id, "email": email, "invited_at": now_iso(), "project_ids": pids, "money_access": body.money_access}
+    c = {"owner_id": user.id, "email": email, "invited_at": now_iso(), **await _access(user.id, body)}
     c["_id"] = (await db.co_owners.insert_one(c)).inserted_id
     has_account = bool(await db.users.find_one({"email": email}, {"_id": 1}))
     step = ("Open PropertyPlug and sign in. The shared projects appear in <b>My projects</b>, marked with the owner's name."
             if has_account else f"Download PropertyPlug and create an account with <b>{E(email)}</b>. The shared projects appear in <b>My projects</b>.")
     out = await _out(c)
-    what = (f"a co-owner of all their {E(EMAIL_FROM_NAME)} projects" if pids is None
-            else f"manager of {'the project' if len(pids) == 1 else 'these projects'} <b>{E(', '.join(out['project_names']))}</b> on {E(EMAIL_FROM_NAME)}")
-    title = "You're now a co-owner" if pids is None else "You're now a project manager"
+    co = c["role"] == "co_owner"
+    what = f"{_what(c, out['project_names'])} on {E(EMAIL_FROM_NAME)}"
+    title = "You're now a co-owner" if co else "You're now a project manager"
     html = (f'<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0f172a">'
             f'<h2 style="margin:0 0 12px">{title}</h2><p>{E(user.name)} has made you {what}. '
-            + ('You can view and edit budgets, snags, quotes, documents, tenancies and everything else.' if body.money_access else
+            + ('You can view and edit budgets, snags, quotes, documents, tenancies and everything else.' if c["money_access"] else
                'You can manage day-to-day work: timeline, snags, photos, documents, team and messages. Budgets, rent and other money figures are kept private.')
             + f'</p><p>{step}</p></td></tr></table>')
     try:
-        await send_email(to=email, subject=f"{user.name} made you a {'co-owner' if pids is None else 'project manager'} on {EMAIL_FROM_NAME}", html=html, reply_to=user.email)
+        await send_email(to=email, subject=f"{user.name} made you a {'co-owner' if co else 'project manager'} on {EMAIL_FROM_NAME}", html=html, reply_to=user.email)
         sent = True
     except EmailError as e:
         logger.warning(f"Co-owner invite email failed: {e}")
@@ -88,8 +109,7 @@ async def invite_co_owner(body: CoOwnerIn, user: User = Depends(real_user)):
 
 @router.put("/co-owners/{cid}")
 async def change_scope(cid: str, body: ScopeIn, user: User = Depends(real_user)):
-    pids = await _check_pids(user.id, body.project_ids)
-    r = await db.co_owners.update_one({"_id": oid(cid), "owner_id": user.id}, {"$set": {"project_ids": pids, "money_access": body.money_access}})
+    r = await db.co_owners.update_one({"_id": oid(cid), "owner_id": user.id}, {"$set": await _access(user.id, body)})
     if not r.matched_count:
         raise HTTPException(404, "Not found")
     return await _out(await db.co_owners.find_one({"_id": oid(cid)}))
@@ -112,7 +132,7 @@ async def shared_with_me(user: User = Depends(real_user)):
             pids = c.get("project_ids")
             q = {"user_id": c["owner_id"]} if pids is None else {"user_id": c["owner_id"], "_id": {"$in": [oid(i) for i in pids]}}
             out.append({"owner_id": c["owner_id"], "owner_name": o["name"], "owner_email": o["email"], "since": c["invited_at"],
-                        "role": "co_owner" if pids is None else "manager", "projects": await db.projects.count_documents(q),
+                        "role": _role(c), "projects": await db.projects.count_documents(q),
                         "money_access": c.get("money_access", True) is not False})
     return out
 
@@ -134,15 +154,13 @@ from datetime import datetime, timedelta, timezone  # noqa: E402
 LINK_DAYS = 7
 
 
-class LinkIn(BaseModel):
-    project_ids: Optional[List[str]] = Field(None, max_length=200)
-    money_access: bool = True
+LinkIn = ScopeIn
 
 
 async def _link_out(d: dict) -> dict:
     pids = d.get("project_ids")
     names = [p["name"] async for p in db.projects.find({"_id": {"$in": [oid(i) for i in pids]}}, {"name": 1})] if pids is not None else None
-    return {"id": str(d["_id"]), "token": d["token"], "role": "co_owner" if pids is None else "manager", "project_ids": pids, "project_names": names,
+    return {"id": str(d["_id"]), "token": d["token"], "role": _role(d), "project_ids": pids, "project_names": names,
             "money_access": d.get("money_access", True), "expires_at": d["expires_at"], "created_at": d["created_at"]}
 
 
@@ -161,8 +179,7 @@ async def create_link(body: LinkIn, user: User = Depends(real_user)):
         raise HTTPException(400, f"Up to {MAX_CO_OWNERS} co-owners and managers")
     if await db.co_owner_links.count_documents({"owner_id": user.id, **_active_link_q()}) >= 20:
         raise HTTPException(400, "Too many open invite links. Cancel some first")
-    pids = await _check_pids(user.id, body.project_ids)
-    d = {"owner_id": user.id, "token": secrets.token_urlsafe(18), "project_ids": pids, "money_access": body.money_access, "used_at": None,
+    d = {"owner_id": user.id, "token": secrets.token_urlsafe(18), **await _access(user.id, body), "used_at": None,
          "expires_at": (datetime.now(timezone.utc) + timedelta(days=LINK_DAYS)).isoformat(), "created_at": now_iso()}
     d["_id"] = (await db.co_owner_links.insert_one(d)).inserted_id
     return await _link_out(d)
@@ -207,14 +224,14 @@ async def accept_link(token: str, user: User = Depends(real_user)):
     if not claimed.modified_count:
         raise HTTPException(410, "This invite link has already been used. Ask for a new one")
     await db.co_owners.insert_one({"owner_id": d["owner_id"], "email": user.email, "invited_at": now_iso(), "project_ids": d.get("project_ids"),
-                                   "money_access": d.get("money_access", True), "via_link": True})
+                                   "role": _role(d), "money_access": d.get("money_access", True), "via_link": True})
     owner = await db.users.find_one({"_id": ObjectId(d["owner_id"])}, {"name": 1, "email": 1}) or {}
     if owner.get("email"):
         try:
             await send_email(to=owner["email"], subject=f"{user.name} joined your projects on {EMAIL_FROM_NAME}",
                              html=f'<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0f172a">'
                                   f'<p><b>{E(user.name)}</b> ({E(user.email)}) used your invite link and now has '
-                                  f'{"co-owner access to all your projects" if d.get("project_ids") is None else "manager access to the projects you chose"}'
+                                  f'{"co-owner" if _role(d) == "co_owner" else "manager"} access to {"all your projects" if d.get("project_ids") is None else "the projects you chose"}'
                                   f'{"" if d.get("money_access", True) else " (tasks only, no money)"}.</p><p>You can change or remove their access any time in Profile → Co-owners &amp; managers.</p></td></tr></table>',
                              reply_to=user.email)
         except Exception as e:

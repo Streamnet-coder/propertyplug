@@ -227,3 +227,7 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 ## Repair cost logging (Jun 2026)
 - Job page (/api/job/{token}) fix form has optional cost (#job-cost); POST /fix validates 0..1,000,000 (400 if not numeric), sets snag.fix_cost and inserts rental_expenses {category repairs, snag_id, source job_link}. Done page shows "Cost logged". Snags list shows "· £X logged to repairs" (hidden for no-money managers; API nulls fix_cost).
 - SMS: waiting for user's Twilio keys (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER in backend/.env).
+
+## Co-owner project scoping (Jun 2026)
+- co_owners / co_owner_links now store explicit role (co_owner|manager). Co-owner: project_ids None (all, incl. future) or chosen list; always money_access True. Manager: chosen list (required), money optional. Legacy docs without role derive it from project_ids. POST/PUT /api/co-owners and POST /api/co-owner-links accept {role, project_ids, money_access}.
+- UI: co-owners.tsx AccessPicker (role chips, co-owner All/Chosen scope, project picker, money toggle for managers only) for invite + Change access; TeamInviteCard co-owner All projects / This project only.

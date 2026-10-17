@@ -51,7 +51,9 @@ export default function JoinScreen() {
         <Card style={{ gap: space.md }} testID="join-card">
           <Text style={s.title}>{i.owner_name} invited you</Text>
           <Text style={s.body} testID="join-scope">
-            {i.role === "co_owner" ? "Become a co-owner of all their current and future projects." : `Become manager of: ${(i.project_names ?? []).join(", ")}.`}
+            {i.role === "co_owner"
+              ? i.project_names ? `Become a co-owner with full access to: ${i.project_names.join(", ")}.` : "Become a co-owner of all their current and future projects."
+              : `Become manager of: ${(i.project_names ?? []).join(", ")}.`}
           </Text>
           <Text style={s.muted} testID="join-money">
             {i.money_access ? "Full access including budgets, rent and reports." : "Day-to-day tasks only: timeline, snags, photos, documents and team. Money figures stay private."}

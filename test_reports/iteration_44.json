@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 44 — Full backend + frontend validation of scoped co-owner access. Backend: 14/14 pytest cases passed (POST /api/co-owners with role=co_owner + project_ids returns role=co_owner + project_names + money_access forced True; manager with null project_ids -> 400; co_owner empty list -> 400; legacy no-role maps null->co_owner / list->manager; PUT /co-owners/{id} switches co_owner all <-> co_owner chosen <-> manager correctly and forces money_access=True whenever role==co_owner; POST /co-owner-links with role=co_owner + project_ids returns scoped link; GET /join/{token} returns role=co_owner with project_names; a freshly registered second user accepts via POST /join/{token}, co_owners doc is persisted with role=co_owner and project_ids=[pid], joiner's GET /api/projects shows ONLY that scoped project of the owner and GET /co-owners/shared-with-me returns role=co_owner, money_access=true, projects=1). Frontend (390x844, demo@mybuilder.app on preview): /co-owners renders invite-role-co-owner / invite-role-manager chips; co-owner shows invite-scope-all / invite-scope-chosen (money chips hidden); choosing 'Chosen projects' reveals invite-project-picker and co-owner-invite-button stays disabled (aria-disabled=true) until a project is ticked; switching to manager hides scope chips and shows invite-money-full / invite-money-tasks; after inviting a scoped co-owner the list card shows testID co-owner-role-{id} with label 'Co-owner · Nottingham Victorian Refurb · full access'; 'Change access' (co-owner-scope-{id}) reveals edit-{id}-role-*, edit-{id}-scope-*, edit-{id}-project-picker and co-owner-scope-save-{id}; saving with scope=all updates the label to 'Co-owner · all projects · full access'. /share-report share-team-card: co-owner default shows share-team-scope-all / share-team-scope-this with money chips hidden; switching to manager hides scope chips and shows share-team-money-full / share-team-money-tasks; invite-link-create produced three cards with EXACT labels 'Co-owner · all projects', 'Co-owner · Nottingham Victorian Refurb' and 'Manager · Nottingham Victorian Refurb'. /join/{token} for a scoped co-owner link renders 'Become a co-owner with full access to: Nottingham Victorian Refurb.' and 'Full access including budgets, rent and reports.' Cleanup: all 3 UI-created invite links were cancelled, the UI-invited co-owner was removed, the second test user and their data were deleted by backend test, and all iter44_* mongo rows were wiped.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration44.py",
+    "/app/test_reports/pytest/pytest_iteration44.xml",
+    "/app/test_reports/iteration_44.json"
+  ],
+  "action_items": [
+    "No code changes required. Feature is correct end-to-end on preview."
+  ],
+  "critical_code_review_comments": [
+    "routes/co_owners.py:38-43 _access() correctly: (a) defaults role from legacy project_ids presence, (b) rejects manager with null project_ids (400 'Pick at least one project for the manager'), (c) forces money_access=True whenever role=='co_owner' — exercised and verified in tests.",
+    "routes/co_owners.py:52-61 _check_pids() de-duplicates with dict.fromkeys and rejects empty list, mapping any invalid pid to 404 scoped to the owner's own projects — safe and tested.",
+    "deps.py:52-61 effective() respects share.project_ids for both managers AND scoped co-owners (any share with project_ids != None). Correctly rotates active_project_id to the first allowed project if the open one is no longer in scope. The 'Manager:' comment on line 54 is slightly misleading now that co_owners can also be scoped — purely cosmetic.",
+    "frontend/app/co-owners.tsx:39 invite body sends role, project_ids=invitePids (null when co_owner+allProjects, [] otherwise) and money_access forced true for co_owner. Matches backend contract.",
+    "frontend/app/co-owners.tsx:109 Save button disabled unless (co_owner && all) OR editing.pids.length>0 — exactly matches needsPick semantics server-side.",
+    "team-invite-card.tsx:21 early-returns null when user.acting_as is set OR project is null — hides card on shared projects. Correct.",
+    "team-invite-card.tsx:36-45 role==='co_owner' hides money chips (correct, since co-owners always have money access) and shows share-team-scope-all / share-team-scope-this; manager hides scope chips and shows money chips. Perfect symmetry with /co-owners picker.",
+    "invite-links.tsx:15-16 accessLabel always prints '<Role> · <project list or \\'all projects\\'>', and :44 appends ' · tasks only' when !money_access — exactly reproduces the specified labels in production preview.",
+    "join/[token].tsx:54-57 branches on role AND project_names: scoped co-owner -> 'Become a co-owner with full access to: <names>.', all -> 'Become a co-owner of all their current and future projects.', manager -> 'Become manager of: <names>.' — observed verbatim."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (14/14 pytest)", "frontend": "100% — co-owners picker, invite flow with disabled logic, change-access edit flow, label update, share-team-card role+scope symmetry, three invite-link labels, join/{token} scoped text all verified on preview"},
+  "seed_data_creation": "Backend tests created 3-5 co_owners rows (iter44_* emails), 1 co_owner_link, and 1 second-user account; test_zzz_cleanup deleted all of them, their projects, co_owner docs, and the invite link. Frontend tests created 1 UI co-owner invite and 3 shareable invite links on demo — all removed by test teardown (co-owner-remove-confirm and invite-link-cancel). Demo account is clean.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Scoped-co-owner feature is live on preview. On /co-owners: invite-scope-all / invite-scope-chosen only exist while role=co_owner; invite-money-full / invite-money-tasks only exist while role=manager. The invite button co-owner-invite-button is aria-disabled until a project is picked when co_owner+chosen or when role=manager. The 'All projects' chip is also wired on edit mode as edit-{cid}-scope-all; backend accepts money_access=false on PUT but will ignore it and persist True whenever role==co_owner (verified). GET /join/{token} is public (no auth); POST /join/{token} requires a bearer. Preview has valid testIDs; use data-testid='invite-project-{pid}' for individual rows, 'invite-project-picker' for the container.",
+  "rca_of_issue": "N/A — all features working as designed. No bugs found."
+}

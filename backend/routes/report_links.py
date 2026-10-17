@@ -95,7 +95,7 @@ async def assignees(user: User = Depends(current_user)):
     async for c in db.co_owners.find({"owner_id": user.id, "$or": [{"project_ids": None}, {"project_ids": pid}]}):
         u = await db.users.find_one({"email": c["email"]}, {"name": 1})
         team.append({"kind": "team", "id": str(c["_id"]), "name": u["name"] if u else c["email"].split("@")[0], "email": c["email"],
-                     "role": "Co-owner" if c.get("project_ids") is None else "Manager", "has_account": bool(u)})
+                     "role": "Co-owner" if (c.get("role") or ("co_owner" if c.get("project_ids") is None else "manager")) == "co_owner" else "Manager", "has_account": bool(u)})
     trades = [{"kind": "trade", "id": str(c["_id"]), "name": c["name"], "email": c.get("email", ""), "role": c.get("role") or "Trade", "phone": c.get("phone", "")}
               async for c in db.contacts.find({"user_id": user.id, "project_id": pid, "kind": "trade"}).sort("created_at", 1)]
     return {"team": team, "trades": trades}
