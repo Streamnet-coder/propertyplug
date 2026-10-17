@@ -11,6 +11,7 @@ import { queryClient } from "@/src/query-client";
 import { useBranding, useProject, useReferrals } from "@/src/queries";
 import { useAuth } from "@/src/auth";
 import { shareLenderPack, shareProgressReport } from "@/src/report";
+import { TeamInviteCard } from "@/src/components/team-invite-card";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
@@ -89,6 +90,7 @@ export default function ShareReport() {
           </Text>
         </View>
       </View>
+      <TeamInviteCard />
       <Card style={{ gap: space.md }}>
         <View style={s.row}>
           <View style={[s.icon, { backgroundColor: colors.surfaceTertiary }]}><Icon name="building-2" size={20} color={colors.onSurfaceSecondary} /></View>

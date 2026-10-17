@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 43 — Frontend-only validation of the 'Bring in your team' card added to /share-report. On preview (390x844, demo@mybuilder.app), Home 'Share' quick action navigates to /share-report where share-team-card renders near the top (just below the referral prompt, above the branding and live-link cards). Role chips share-team-role-co-owner / share-team-role-manager toggle correctly: hint text reads 'Co-owners can see and edit all your projects.' for co-owner and 'Managers only get access to Nottingham Victorian Refurb.' for manager (project name correctly interpolated from useProject()). Money chips share-team-money-full / share-team-money-tasks render and toggle. Tapping invite-link-create with role=co_owner / money=full posts to /api/co-owner-links and a new link card appears labelled exactly 'Co-owner · all projects' with a /join/<token> URL and 7-day expiry; tapping again with role=manager / tasks-only produces a second card labelled 'Manager · Nottingham Victorian Refurb · tasks only'. Copy button (invite-link-copy-{id}) and Cancel button (invite-link-cancel-{id}) work without crash; cancelling removes the card from the list. share-team-manage navigates to /co-owners. Regression on /share-report: share-report-screen, referral-prompt, share-branding-button, share-link-create-button, lender-pack-card, lender-pack-button, share-pdf-button all still render (share-link-url only hidden because no live link exists for demo project — expected). No React Native red screens, no page errors, only a benign 'shadow* style props deprecated' warning. All invite links I created were cancelled at the end — no residual data.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_43.json"
+  ],
+  "action_items": [
+    "No code changes required. Feature is correct end-to-end on preview."
+  ],
+  "critical_code_review_comments": [
+    "team-invite-card.tsx:20 correctly early-returns null when user.acting_as is set OR project is null, so the card is hidden for co-owner/manager sessions on someone else's project (matches spec).",
+    "team-invite-card.tsx:42 passes project_ids=[project.id] only for manager role and null for co_owner — matches the POST /api/co-owner-links contract validated in prior backend iterations.",
+    "invite-links.tsx:40 label template renders exactly 'Co-owner · all projects' for role==='co_owner' and 'Manager · <project list>' + ' · tasks only' when money_access=false — observed values match verbatim.",
+    "invite-links.tsx:19 Share.share wraps in .catch(() => undefined) — safe on web where native Share rejects; create.onSuccess still invalidates the query first so the new link card renders regardless of share outcome.",
+    "cancel.onSuccess invalidates ['co-owner-links'] which triggers a GET /co-owner-links refetch — after cancel the removed card disappears as expected."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only run)", "frontend": "100% — share-team-card, role/money toggles, co-owner link create, manager+tasks-only link create, copy, cancel, manage navigation and regression all pass"},
+  "seed_data_creation": "Created 2 invite links during the test (one co-owner, one manager); both were cancelled via invite-link-cancel-{id} at the end so no residual data remains on the demo account.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Home 'Share' quick action is reachable via page.get_by_text('Share', exact=True).first on the home screen (no dedicated testID on the home tile). Login flow uses testIDs: sign-in-button → auth-email-input / auth-password-input / auth-submit-button. Demo project is 'Nottingham Victorian Refurb' and the share-link-url card is empty by default on demo (share-link-create-button is shown instead) — this is normal and should not be treated as a regression. Invite link cards use testID='invite-link-{id}' where id is the mongo ObjectId; sub-buttons are invite-link-copy-{id}, invite-link-share-{id}, invite-link-cancel-{id}. Clean up any links created via the Cancel button to keep demo state tidy.",
+  "rca_of_issue": "N/A — feature working as designed."
+}
