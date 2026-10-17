@@ -9,11 +9,13 @@ import { Button, Card, fonts, Icon, IconName, radius, space } from "@/src/compon
 import { makeStyles, useTheme } from "@/src/theme";
 
 const FEATURES: { icon: IconName; title: string; body: string; pro?: boolean }[] = [
-  { icon: "wallet", title: "Refurb budgeting", body: "Hard, soft & contingency costs tracked against actuals." },
-  { icon: "sparkles", title: "AI cost estimates", body: "UK supplier price suggestions from B&Q, Wickes, Toolstation & more." },
-  { icon: "users", title: "Local trades finder", body: "Call or WhatsApp your trades in one tap." },
-  { icon: "calculator", title: "BRRR ROI calculator", body: "Refinance, money left in & cashflow with 1/4 mile comparables.", pro: true },
-  { icon: "building-2", title: "Stakeholder hub", body: "Lenders, agents & solicitors with fees in one place.", pro: true },
+  { icon: "key-round", title: "Rent & tenancy tracker", body: "Rent paid or late each month, deposits, renewals, plus auto receipts and annual statements." },
+  { icon: "house", title: "Tenant portal", body: "Tenants see their rent history, receipts and certificates, and can report repairs." },
+  { icon: "chart-column", title: "Portfolio rent roll", body: "Rent, arrears and net cashflow across every property in your home currency." },
+  { icon: "wallet", title: "Refurb budgeting", body: "Hard, soft & contingency costs tracked against actuals, with snags and milestones." },
+  { icon: "sparkles", title: "AI cost estimates", body: "UK supplier prices and a finished-room design with cost hotspots." },
+  { icon: "calculator", title: "BRRR & remortgage tools", body: "Refinance, money left in, overpayments and remortgage deals compared.", pro: true },
+  { icon: "file-check", title: "Lender-ready reports", body: "Progress, budget and rental income proof in one PDF pack.", pro: true },
 ];
 
 export default function Welcome() {
@@ -31,14 +33,14 @@ export default function Welcome() {
           <Animated.View entering={FadeInDown.duration(500)} style={{ marginTop: space.xxl, gap: space.lg }}>
             <View style={s.pill}>
               <Icon name="sparkles" size={14} color={colors.brandPrimary} />
-              <Text style={s.pillText}>TRUSTED UK PROPERTY & REFURB HUB</Text>
+              <Text style={s.pillText}>FOR UK LANDLORDS, INVESTORS & RENOVATORS</Text>
             </View>
             <Text style={s.h1} testID="welcome-headline">
-              MASTER YOUR DEVELOPMENTS:
-              <Text style={{ color: colors.brand }}> EFFORTLESS COST & MILESTONE MANAGEMENT</Text>
+              EVERY PROPERTY, ONE APP:
+              <Text style={{ color: colors.brand }}> RENT, TENANTS & REFURBS SORTED</Text>
             </Text>
             <Text style={s.lead}>
-              Document, track and manage from acquisition to exit. Control hard & soft costs and auto-calculate BRRR potential with one unified tool.
+              Collect rent, keep tenants informed and run refurbs on budget, from purchase to the day it lets. Built for landlords, BRRR investors and DIY renovators.
             </Text>
           </Animated.View>
 
@@ -48,7 +50,7 @@ export default function Welcome() {
           </Animated.View>
 
           <View style={s.checks}>
-            {["1-month free trial", "No card required", "UK supplier database"].map((t) => (
+            {["1-month free trial", "No card required", "Tenant portal included"].map((t) => (
               <View key={t} style={s.check}>
                 <Icon name="circle-check" size={14} color={colors.brand} />
                 <Text style={s.checkText}>{t}</Text>
@@ -56,7 +58,7 @@ export default function Welcome() {
             ))}
           </View>
 
-          <Text style={s.section}>Everything for DIYers & BRRR investors</Text>
+          <Text style={s.section}>Everything a landlord needs</Text>
           <View style={{ gap: space.md }}>
             {FEATURES.map((f, i) => (
               <Animated.View key={f.title} entering={FadeInDown.delay(250 + i * 70)}>

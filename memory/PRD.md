@@ -195,3 +195,5 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 
 ## Rebrand (Jun 2026)
 - App renamed Builder Assist -> PropertyPlug (app.json name, EMAIL_FROM_NAME, all share pages/emails/reports/Stripe product names). Wordmark "PropertyPlug" in Inter-ExtraBoldItalic (assets/fonts) with italic tagline "All landlord needs"; brand icon house-plug.
+- Welcome copy refreshed for landlords + renovators (headline, pill, lead, 7 features incl. rent tracker, tenant portal, rent roll).
+- New app icon (teal gradient + white house-plug), Android adaptive icon (bg #0f766e), favicon, splash (mark + italic PropertyPlug wordmark + tagline on white).
