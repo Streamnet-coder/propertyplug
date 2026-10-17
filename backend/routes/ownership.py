@@ -27,9 +27,24 @@ async def _people(owner_id: str, pid: str) -> list:
     return out
 
 
+async def _viewer_email(user: User) -> Optional[str]:
+    """Signed-in co-owner/manager's email when viewing someone else's project, else None (the owner)."""
+    if user.real_id is None:
+        return None
+    u = await db.users.find_one({"_id": oid(user.real_id)}, {"email": 1}) or {}
+    return u.get("email", "")
+
+
 @router.get("/project/split")
 async def get_split(user: User = Depends(current_user)):
-    return {**await compute_split(user, await get_project_doc(user)), "can_edit": user.real_id is None}
+    out = {**await compute_split(user, await get_project_doc(user)), "can_edit": user.real_id is None}
+    me = await _viewer_email(user)
+    if me is not None:  # co-owners only ever see their own share; other people's stay private
+        out["rows"] = [r for r in out["rows"] if not r["is_owner"] and r["email"] == me]
+        out["has_split"] = any(r["pct"] for r in out["rows"])
+        out["has_contributions"] = any(r["contribution"] for r in out["rows"])
+        out["figures"]["total_contributed"] = sum(r["contribution"] for r in out["rows"])
+    return out
 
 
 async def compute_split(user: User, p) -> dict:
@@ -156,6 +171,8 @@ async def send_statements(owner: User, p, ty: int, auto: bool = False) -> dict:
 
 @router.get("/project/statements")
 async def get_statements(tax_year: Optional[int] = None, user: User = Depends(current_user)):
+    if user.real_id is not None:
+        raise HTTPException(403, "Only the project owner can view everyone's statements")
     return await statement_preview(user, await get_project_doc(user), tax_year or tax_year_now())
 
 
@@ -225,7 +242,12 @@ async def payout_ledger(owner: User, p) -> dict:
 
 @router.get("/project/payouts")
 async def get_payouts(user: User = Depends(current_user)):
-    return await payout_ledger(user, await get_project_doc(user))
+    out = await payout_ledger(user, await get_project_doc(user))
+    me = await _viewer_email(user)
+    if me is not None:  # only their own balance
+        out["people"] = [x for x in out["people"] if x["email"] == me]
+        out["total_owed"] = sum(x["balance"] for x in out["people"] if x["balance"] > 0)
+    return out
 
 
 class PayoutIn(BaseModel):

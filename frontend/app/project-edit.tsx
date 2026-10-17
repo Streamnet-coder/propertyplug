@@ -6,6 +6,7 @@ import { ScrollView, Text, View } from "react-native";
 import { api, CURRENCIES, CurrencyCode, Project, setCurrency, sym } from "@/src/api";
 import { Button, Chip, Field, fonts, FormScreen, space } from "@/src/components/ui";
 import { NewProjectTeamPicker } from "@/src/components/new-project-team-picker";
+import { CoverChoice, ProjectCoverField, saveCover } from "@/src/components/project-cover-field";
 import { invalidate, useProject } from "@/src/queries";
 import { queryClient } from "@/src/query-client";
 import { useTheme } from "@/src/theme";
@@ -32,6 +33,7 @@ export default function ProjectEdit() {
   const setScen = (i: number, k: "label" | "rate" | "fee") => (v: string) => setF((x) => ({ ...x, scen: x.scen.map((r, j) => (j === i ? { ...r, [k]: v } : r)) }));
   const set = (k: Exclude<keyof typeof f, "scen">) => (v: string) => setF((x) => ({ ...x, [k]: v }));
   const [teamIds, setTeamIds] = useState<string[] | null>(null);
+  const [cover, setCover] = useState<CoverChoice>({ asset: null, removed: false });
   const isLand = f.property_type === "land";
   const c = sym(f.currency);
 
@@ -108,6 +110,11 @@ export default function ProjectEdit() {
       }),
     onSuccess: async (res) => {
       setCurrency(res.currency);
+      try {
+        await saveCover(cover);
+      } catch (e) {
+        toast(`Project saved, but the photo didn't upload: ${(e as Error).message}`, "error");
+      }
       if (isNew) {
         await queryClient.invalidateQueries();
         toast("Project created and set as active");
@@ -135,6 +142,7 @@ export default function ProjectEdit() {
       footer={<Button title={isNew ? "Create project" : "Save project"} loading={save.isPending} onPress={() => (!f.name.trim() ? toast("Please enter a project name", "error") : pinError ? toast(pinError, "error") : f.fixed_rate_end.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(f.fixed_rate_end.trim()) ? toast("Fixed-rate end date must be YYYY-MM-DD", "error") : f.scen.some((r) => r.rate.trim() && !(Number(r.rate) > 0 && Number(r.rate) <= 30)) ? toast("Remortgage rates must be between 0 and 30%", "error") : save.mutate())} testID="project-save-button" />}
     >
       <Field label="Project name" value={f.name} onChangeText={set("name")} placeholder={isLand ? "e.g. Ashby paddock plot" : "e.g. Derby terrace flip"} testID="project-name-input" />
+      <ProjectCoverField current={isNew ? null : p?.cover_path} value={cover} onChange={setCover} />
       <Field label="Address" value={f.address} onChangeText={set("address")} placeholder="Street, town, postcode" testID="project-address-input" />
       <Text style={label}>Property type</Text>
       <View style={{ flexDirection: "row", gap: space.sm }}>

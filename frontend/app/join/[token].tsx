@@ -28,7 +28,7 @@ export default function JoinScreen() {
       await refresh();
       await queryClient.invalidateQueries();
       toast(`You now have access to ${r.owner_name}'s projects`);
-      router.replace("/projects");
+      router.replace("/(tabs)");
     },
     onError: (e: Error) => toast(e.message, "error"),
   });

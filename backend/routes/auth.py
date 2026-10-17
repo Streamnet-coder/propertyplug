@@ -16,6 +16,7 @@ class RegisterIn(BaseModel):
     name: str
     email: EmailStr
     password: str
+    invited: bool = False  # signing up from an invite link: skip the demo project
 
 
 class LoginIn(BaseModel):
@@ -25,7 +26,7 @@ class LoginIn(BaseModel):
 
 @router.post("/auth/register")
 async def register(body: RegisterIn):
-    u = await create_user(body.name, body.email, body.password)
+    u = await create_user(body.name, body.email, body.password, invited=body.invited)
     return {"access_token": make_token(u.id), "user": user_out(u, await effective(u))}
 
 

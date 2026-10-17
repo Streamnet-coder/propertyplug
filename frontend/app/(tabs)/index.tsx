@@ -87,8 +87,9 @@ export default function Home() {
         </View>
       ) : project.isError || !p ? (
         <View style={s.center}>
-          <Text style={s.muted}>Couldn&apos;t load your project.</Text>
+          <Text style={s.muted}>{(project.error as Error | null)?.message === "Project not found" ? "No projects yet. Create your own, or open one shared with you." : "Couldn't load your project."}</Text>
           <Button small title="Retry" onPress={() => project.refetch()} testID="home-retry-button" />
+          <Button small variant="outline" icon="plus" title="Create a project" onPress={() => router.push({ pathname: "/project-edit", params: { mode: "new" } })} testID="home-create-project-button" />
         </View>
       ) : (
         <ScrollView

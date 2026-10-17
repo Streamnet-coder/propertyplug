@@ -10,7 +10,7 @@ type AuthCtx = {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (name: string, email: string, password: string) => Promise<void>;
+  signUp: (name: string, email: string, password: string, invited?: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
   setUser: (u: User) => void;
@@ -49,8 +49,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await handle(await api("/auth/login", { body: { email: email.trim(), password } }));
   }, []);
 
-  const signUp = useCallback(async (name: string, email: string, password: string) => {
-    await handle(await api("/auth/register", { body: { name, email: email.trim(), password } }));
+  const signUp = useCallback(async (name: string, email: string, password: string, invited = false) => {
+    await handle(await api("/auth/register", { body: { name, email: email.trim(), password, invited } }));
   }, []);
 
   const signOut = useCallback(async () => {

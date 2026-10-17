@@ -246,7 +246,10 @@ async def accessible_projects(user: User) -> list:
 
 @router.get("/projects")
 async def list_projects(user: User = Depends(real_user)):
-    pid = await active_pid(await effective(user))
+    try:
+        pid = await active_pid(await effective(user))
+    except HTTPException:
+        pid = None  # no projects yet (e.g. just signed up from an invite)
     out = await accessible_projects(user)
     for s in out:
         s["active"] = s["id"] == pid
@@ -301,3 +304,17 @@ async def delete_project(pid: str, user: User = Depends(real_user)):
     if user.active_project_id == pid:
         await db.users.update_one({"_id": ObjectId(user.id)}, {"$set": {"active_project_id": None}})
     return {"ok": True}
+
+
+class CoverIn(BaseModel):
+    storage_path: Optional[str] = Field(None, max_length=400)
+
+
+@router.put("/project/cover")
+async def set_cover(body: CoverIn, user: User = Depends(current_user)):
+    """Preferred image for the active project, so projects are easy to tell apart."""
+    pid = await active_pid(user)
+    if body.storage_path and not await db.files.find_one({"storage_path": body.storage_path, "owner_id": {"$in": [user.id, user.real_id or user.id]}, "is_deleted": False}):
+        raise HTTPException(404, "Image not found")
+    await db.projects.update_one({"_id": oid(pid), "user_id": user.id}, {"$set": {"cover_path": body.storage_path or None}})
+    return {"cover_path": body.storage_path or None}

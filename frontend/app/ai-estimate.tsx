@@ -9,6 +9,8 @@ import { PhotoPicker, PickedAsset } from "@/src/components/photo-picker";
 import { uploadAsset } from "@/src/upload";
 import { Button, Card, Chip, Field, fonts, FormScreen, Icon, radius, space } from "@/src/components/ui";
 import { invalidate } from "@/src/queries";
+import { queryClient } from "@/src/query-client";
+import { useRouter } from "expo-router";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
@@ -19,6 +21,7 @@ export default function AiEstimate() {
   const s = useStyles();
   const { colors } = useTheme();
   const toast = useToast();
+  const router = useRouter();
   const [desc, setDesc] = useState("");
   const [finish, setFinish] = useState("Medium Finish");
   const [added, setAdded] = useState<Record<number, boolean>>({});
@@ -26,7 +29,7 @@ export default function AiEstimate() {
 
   const design = useMutation({
     mutationFn: (id: string) => api<{ image_path: string; pins: DesignPin[] }>(`/ai/estimate/${id}/design`, { method: "POST" }),
-    onSuccess: () => { invalidate("media"); toast("Design saved to your project photos"); },
+    onSuccess: () => { invalidate("media"); queryClient.invalidateQueries({ queryKey: ["ai-estimates"] }); toast("Design saved to your photos and Saved estimates"); },
   });
   const est = useMutation({
     mutationFn: async () => {
@@ -63,6 +66,7 @@ export default function AiEstimate() {
       testID="ai-estimate-screen"
       footer={<Button title="Generate estimate" icon="sparkles" loading={est.isPending} disabled={!desc.trim()} onPress={() => est.mutate()} testID="ai-estimate-generate-button" />}
     >
+      <Button small variant="outline" icon="bookmark" title="Saved estimates" onPress={() => router.push("/ai-estimates")} testID="ai-estimate-saved-link" />
       <Field label="Describe the work" value={desc} onChangeText={setDesc} multiline placeholder="e.g. New kitchen with 8 units, quartz worktop, tiling…" testID="ai-estimate-description-input" />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
         {EXAMPLES.map((e, i) => (

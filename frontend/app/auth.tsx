@@ -32,7 +32,7 @@ export default function AuthScreen() {
     }
     setBusy(true);
     try {
-      if (isReg) await signUp(name, email, password);
+      if (isReg) await signUp(name, email, password, !!params.next?.startsWith("/join/"));
       else await signIn(email, password);
       // Only follow in-app paths (e.g. an invite link) so `next` can't send people off-site.
       if (params.next?.startsWith("/join/")) router.replace(params.next as any);

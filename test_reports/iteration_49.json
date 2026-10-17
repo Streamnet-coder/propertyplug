@@ -1,0 +1,30 @@
+{
+  "summary": "PropertyPlug iter 49: tested cover image, saved AI estimates, invited-user signup (no demo), email-invite auto-land, co-owner split/statements/payouts privacy, co-owner's private own project hidden from owner, and regression that normal register still seeds demo. 15/15 backend tests PASS. Frontend login + home + projects + saved AI estimates + estimate view (rename, set-cover, add-to-budget) + ai-estimate saved link verified via mobile Playwright. Cleaned up: 19 TEST_ users, their projects/data, 5 demo co_owner_links, and demo cover_path set back to null.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration49.py",
+    "/app/backend/tests/cleanup_iter49.py",
+    "/app/test_reports/pytest/pytest_iteration49.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/co_owners.py accept_link uses owner's name/email from `owner` dict with fallback – OK; emails to owner on join wrapped in try/except (good).",
+    "routes/ai.py _photo_b64 ties lookup to user.id (the acting owner when active via co-owner); fine because active_pid is already the owner's project id. No change needed."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration49.py (new)",
+    "/app/backend/tests/cleanup_iter49.py (new)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% (sampled flows)"},
+  "seed_data_creation": "No seed data left: cleanup_iter49.py removed all TEST_ users, their projects, demo co-owner invite links, and reset demo project cover_path to null.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend endpoints verified: PUT /api/project/cover (set/clear/404), GET /api/ai/estimates + GET/PUT/DELETE /api/ai/estimates/{id}, POST /api/auth/register {invited:true} skips demo, POST /api/co-owner-links + GET/POST /api/join/{token} lands on shared project, email co-owner invite + normal register also lands on shared project (no demo seeded via open_shared), GET /api/project/split hides other co-owners' rows for a co-owner viewer, GET /api/project/statements 403 for co-owners, GET /api/project/payouts shows only self, co-owner POST /api/projects creates a project that is NOT visible in owner's /api/projects, and regression normal register (invited=false, no pre-existing co_owners row) still seeds the Nottingham demo project. All passing. Frontend testIDs confirmed: project-cover-field, project-cover-{id}, saved-estimate-{id}, estimate-view-total, estimate-rename, estimate-set-cover, estimate-view-add-{i}, ai-estimate-saved-link, join-screen/join-register-button, split-mine-card/split-mine-pct (not directly observed with co-owner session but routes return correct shape per backend tests).",
+  "rca_of_issue": "N/A"
+}

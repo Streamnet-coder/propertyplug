@@ -68,6 +68,7 @@ class Project(BaseDocument):
     refinance_ltv: float = 75
     refinance_rate: float = 5.5
     budget: Budget = Budget()
+    cover_path: Optional[str] = None  # preferred project photo (shown on project list / home)
     currency: Currency = "GBP"
     property_type: Literal["residential", "land"] = "residential"
     purpose: Literal["investment", "personal"] = "investment"

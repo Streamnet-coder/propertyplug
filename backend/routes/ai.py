@@ -56,7 +56,7 @@ async def ai_estimate(body: EstimateIn, user: User = Depends(current_user)):
         logger.exception("AI estimate failed")
         raise HTTPException(502, f"AI service error: {e}")
     data = _json(text)
-    res = await db.estimates.insert_one({"user_id": user.id, "description": body.description, "finish_type": body.finish_type,
+    res = await db.estimates.insert_one({"user_id": user.id, "project_id": await active_pid(user), "description": body.description, "finish_type": body.finish_type,
                                          "photo_path": body.photo_path, "result": data, "created_at": now_iso()})
     return {**data, "id": str(res.inserted_id)}
 
@@ -119,3 +119,45 @@ async def design_finished(eid: str, user: User = Depends(current_user)):
     await db.media.insert_one(m.to_mongo())
     await db.estimates.update_one({"_id": est["_id"]}, {"$set": {"design_path": result["path"], "pins": pins}})
     return {"image_path": result["path"], "pins": pins}
+
+
+# ---------- Saved estimates (with their AI design images) for later review ----------
+
+def _est_out(d: dict) -> dict:
+    r = d.get("result") or {}
+    return {"id": str(d["_id"]), "description": d["description"], "finish_type": d.get("finish_type", ""), "created_at": d["created_at"],
+            "photo_path": d.get("photo_path"), "design_path": d.get("design_path"), "pins": d.get("pins") or [], "title": d.get("title") or "",
+            "total_low": r.get("total_low", 0), "total_high": r.get("total_high", 0), "items": r.get("items", []), "notes": r.get("notes", "")}
+
+
+@router.get("/ai/estimates")
+async def list_estimates(user: User = Depends(current_user)):
+    pid = await active_pid(user)
+    q = {"user_id": user.id, "$or": [{"project_id": pid}, {"project_id": {"$exists": False}}]}
+    return [_est_out(d) async for d in db.estimates.find(q).sort("created_at", -1).limit(200)]
+
+
+@router.get("/ai/estimates/{eid}")
+async def get_estimate(eid: str, user: User = Depends(current_user)):
+    d = await db.estimates.find_one({"_id": oid(eid), "user_id": user.id})
+    if not d:
+        raise HTTPException(404, "Estimate not found")
+    return _est_out(d)
+
+
+class EstimateRename(BaseModel):
+    title: str = Field(max_length=80)
+
+
+@router.put("/ai/estimates/{eid}")
+async def rename_estimate(eid: str, body: EstimateRename, user: User = Depends(current_user)):
+    r = await db.estimates.update_one({"_id": oid(eid), "user_id": user.id}, {"$set": {"title": body.title.strip()}})
+    if not r.matched_count:
+        raise HTTPException(404, "Estimate not found")
+    return await get_estimate(eid, user)
+
+
+@router.delete("/ai/estimates/{eid}")
+async def delete_estimate(eid: str, user: User = Depends(current_user)):
+    await db.estimates.delete_one({"_id": oid(eid), "user_id": user.id})
+    return {"ok": True}

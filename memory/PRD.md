@@ -249,3 +249,9 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Payouts: db.coowner_payouts. GET/POST /api/project/payouts, DELETE /api/project/payouts/{id} (owner only). Earned = current share % x (all rent_payments paid_amount − all rental_expenses); balance = earned − paid. PayoutsPanel in OwnershipSplitCard. /api/my-ownership adds earned/paid/balance/payouts + totals paid/balance.
 - Repeat repairs: /api/repairs/history adds repeats[] (rooms with 2+ repairs in 12 months, common keywords, open count, cost) and item.repeat; repair-history shows "Keeps coming back" card, REPEAT tags, Repeats filter; PDF includes section.
 - Statement PDF: my-ownership statement detail "Download PDF" (report.ts shareCoownerStatement).
+
+## Project photo, saved AI estimates, co-owner privacy (Jun 2026)
+- Project.cover_path; PUT /api/project/cover {storage_path|null} (active project). ProjectCoverField in project-edit (new + edit); thumbnail in My projects list (project-cover-{id}).
+- Estimates store project_id. GET /api/ai/estimates (active project + legacy), GET/PUT(title)/DELETE /api/ai/estimates/{id}. Screens /ai-estimates (link "Saved estimates" on AI estimate screen) and /ai-estimate-view?id (design hotspots, items add-to-budget, rename, Use as project photo, delete).
+- Invite joiners: RegisterIn.invited (auth sends true when next=/join/...) or pending email invite -> no demo seed; open_shared() sets acting owner + first shared project on register/accept_link; join screen goes to home. /projects tolerates no projects. Co-owners keep their own projects private.
+- Share privacy: co-owner/manager viewing GET /project/split sees only their own row; GET /project/statements 403 for non-owner; GET /project/payouts filtered to self. UI: "Your ownership" card (split-mine-card) for co-owners.

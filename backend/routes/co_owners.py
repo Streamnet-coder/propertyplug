@@ -204,6 +204,20 @@ async def _usable(token: str) -> dict:
     return d
 
 
+async def open_shared(user_id: str, email: str, owner_id: Optional[str] = None) -> bool:
+    """Open the first project shared with this person (used right after joining) so they land straight in it."""
+    q = {"email": email, **({"owner_id": owner_id} if owner_id else {})}
+    async for c in db.co_owners.find(q).sort("invited_at", 1):
+        pq = {"user_id": c["owner_id"]}
+        if c.get("project_ids") is not None:
+            pq["_id"] = {"$in": [ObjectId(x) for x in c["project_ids"] if ObjectId.is_valid(x)]}
+        doc = await db.projects.find_one(pq, {"_id": 1}, sort=[("_id", 1)])
+        if doc:
+            await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": {"acting_owner_id": c["owner_id"], "active_project_id": str(doc["_id"])}})
+            return True
+    return False
+
+
 @router.get("/join/{token}")
 async def link_info(token: str):
     """Public preview of an invite link (no login) so the app can show who is inviting and to what."""
@@ -227,6 +241,7 @@ async def accept_link(token: str, user: User = Depends(real_user)):
         raise HTTPException(410, "This invite link has already been used. Ask for a new one")
     await db.co_owners.insert_one({"owner_id": d["owner_id"], "email": user.email, "invited_at": now_iso(), "project_ids": d.get("project_ids"),
                                    "role": _role(d), "money_access": d.get("money_access", True), "auto_add": bool(d.get("auto_add")), "via_link": True})
+    await open_shared(user.id, user.email, d["owner_id"])  # land straight in the shared project
     owner = await db.users.find_one({"_id": ObjectId(d["owner_id"])}, {"name": 1, "email": 1}) or {}
     if owner.get("email"):
         try:

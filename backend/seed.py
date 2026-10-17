@@ -71,7 +71,7 @@ async def seed_user_data(uid: str):
     await seed_milestones(uid, pid, demo=True)
 
 
-async def create_user(name: str, email: str, password: str, source: Optional[str] = None) -> User:
+async def create_user(name: str, email: str, password: str, source: Optional[str] = None, invited: bool = False) -> User:
     email = email.lower().strip()
     if len(password) < 6:
         raise HTTPException(400, "Password must be at least 6 characters")
@@ -82,5 +82,8 @@ async def create_user(name: str, email: str, password: str, source: Optional[str
              trial_ends=(datetime.now(timezone.utc) + timedelta(days=30)).isoformat())
     res = await db.users.insert_one(u.to_mongo())
     u.id = str(res.inserted_id)
-    await seed_user_data(u.id)
-    return u
+    # People joining from an invite (link or email) get no demo project: they open straight into what was shared.
+    from routes.co_owners import open_shared
+    if not (invited or await open_shared(u.id, email)):
+        await seed_user_data(u.id)
+    return User.from_mongo(await db.users.find_one({"_id": res.inserted_id}))

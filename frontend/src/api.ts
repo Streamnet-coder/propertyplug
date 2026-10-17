@@ -65,6 +65,7 @@ export type Category = "Hard Cost" | "Soft Cost" | "Contingency";
 export type Project = {
   id: string;
   name: string;
+  cover_path?: string | null;
   address: string;
   target_type: string;
   finish_type: string;

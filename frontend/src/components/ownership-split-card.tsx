@@ -35,6 +35,25 @@ export function OwnershipSplitCard() {
     onError: (e: Error) => toast(e.message, "error"),
   });
   const d = q.data;
+  if (d && !d.can_edit) {
+    const me = d.rows[0]; // co-owner view: only their own share is shared with them
+    if (!me || (!me.pct && !me.contribution)) return null;
+    return (
+      <View>
+        <SectionTitle title="Your ownership" />
+        <Card style={{ gap: space.sm }} testID="split-mine-card">
+          <View style={s.row}>
+            <Text style={[s.name, { flex: 1 }]}>Your share</Text>
+            <Text style={s.val} testID="split-mine-pct">{me.pct}%</Text>
+          </View>
+          {d.figures.profit !== null && <View style={s.row}><Text style={[s.muted, { flex: 1 }]}>Your profit share</Text><Text style={s.val}>{gbp(me.profit ?? 0)}</Text></View>}
+          <View style={s.row}><Text style={[s.muted, { flex: 1 }]}>Your cashflow / mo</Text><Text style={s.val}>{gbp(me.monthly_cashflow)}</Text></View>
+          {me.contribution > 0 && <View style={s.row}><Text style={[s.muted, { flex: 1 }]}>You put in</Text><Text style={s.val}>{gbp(me.contribution)}</Text></View>}
+          <Text style={s.muted}>Other owners&apos; shares are private.</Text>
+        </Card>
+      </View>
+    );
+  }
   if (!d || d.rows.length < 2) return null; // only you on this project
 
   const others = d.rows.filter((r) => !r.is_owner);

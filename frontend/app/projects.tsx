@@ -1,10 +1,11 @@
 import { useMutation } from "@tanstack/react-query";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { api, gbp, Project, setCurrency } from "@/src/api";
+import { api, fileUrl, gbp, Project, setCurrency } from "@/src/api";
 import { Button, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { PortfolioCard } from "@/src/components/portfolio-card";
 import { useAuth } from "@/src/auth";
@@ -81,9 +82,13 @@ export default function Projects() {
                 style={({ pressed }) => [s.card, p.active && { borderColor: colors.brand, borderWidth: 2 }, pressed && { opacity: 0.85 }]}
               >
                 <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-                  <View style={[s.icon, p.active && { backgroundColor: colors.brand }]}>
-                    <Icon name={p.property_type === "land" ? "land-plot" : "house"} size={20} color={p.active ? colors.onBrand : colors.brand} />
-                  </View>
+                  {p.cover_path ? (
+                    <Image source={{ uri: fileUrl(p.cover_path) }} style={[s.icon, p.active && { borderWidth: 2, borderColor: colors.brand }]} contentFit="cover" testID={`project-cover-${p.id}`} />
+                  ) : (
+                    <View style={[s.icon, p.active && { backgroundColor: colors.brand }]}>
+                      <Icon name={p.property_type === "land" ? "land-plot" : "house"} size={20} color={p.active ? colors.onBrand : colors.brand} />
+                    </View>
+                  )}
                   <View style={{ flex: 1 }}>
                     <Text style={s.name} numberOfLines={1}>{p.name}</Text>
                     <Text style={s.muted} numberOfLines={1}>{p.property_type === "land" ? `Land · ${p.plot_size ? `${p.plot_size} ${p.plot_unit} · ` : ""}` : ""}{p.address || "No address"}</Text>
