@@ -33,7 +33,35 @@ export function RentalsCard() {
   );
 }
 
+/** Dashboard heads-up: tenancies ending within 60 days or deposits not yet protected. */
+export function TenancyAlertsCard() {
+  const s = useStyles();
+  const { colors } = useTheme();
+  const router = useRouter();
+  const q = useRentals(new Date().getFullYear());
+  const live = (q.data?.tenancies ?? []).filter((t) => t.status !== "ended");
+  const ending = live.filter((t) => t.days_to_end != null && t.days_to_end <= 60);
+  const unprotected = live.filter((t) => t.deposit > 0 && !t.deposit_protected);
+  if (!ending.length && !unprotected.length) return null;
+  const lines = [
+    ...ending.map((t) => `${t.tenant_name}: tenancy ends ${t.days_to_end === 0 ? "today" : `in ${t.days_to_end} day${t.days_to_end === 1 ? "" : "s"}`}`),
+    ...unprotected.map((t) => `${t.tenant_name}: deposit of ${gbp(t.deposit)} not protected`),
+  ];
+  return (
+    <Pressable testID="tenancy-alert-card" onPress={() => { tap(); router.push("/rentals"); }} style={({ pressed }) => [s.alert, pressed && { opacity: 0.9 }]}>
+      <View style={[s.icon, { backgroundColor: colors.orangeTint }]}><Icon name="calendar-clock" size={18} color={colors.warning} /></View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={s.title}>Tenancy heads-up</Text>
+        {lines.slice(0, 3).map((l) => <Text key={l} style={s.muted} numberOfLines={1}>{l}</Text>)}
+        {lines.length > 3 && <Text style={s.muted}>+{lines.length - 3} more</Text>}
+      </View>
+      <Icon name="chevron-right" size={18} color={colors.muted} />
+    </Pressable>
+  );
+}
+
 const useStyles = makeStyles((c) => ({
+  alert: { flexDirection: "row", alignItems: "center", gap: space.md, backgroundColor: c.surface, borderRadius: radius.lg, borderWidth: 1.5, borderColor: c.brandPrimary, padding: space.lg },
   card: { flexDirection: "row", alignItems: "center", gap: space.md, backgroundColor: c.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: c.border, padding: space.lg, marginTop: space.md },
   icon: { width: 40, height: 40, borderRadius: 20, backgroundColor: c.brandTertiary, alignItems: "center", justifyContent: "center" },
   title: { fontFamily: fonts.bold, fontSize: 15, color: c.onSurface },

@@ -2,7 +2,7 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
 
-import { api, Branding, Comparable, fileUrl, gbp, LineItem, MediaItem, Milestone, Project, Receipt, Signature, Snag, SnagSignoff } from "@/src/api";
+import { api, Branding, Comparable, fileUrl, gbp, LineItem, MediaItem, Milestone, Project, Receipt, Rentals, Signature, Snag, SnagSignoff } from "@/src/api";
 import { colors } from "@/src/theme";
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
@@ -260,21 +260,55 @@ export function calcBrrr(i: BrrrInputs): BrrrFigures {
 }
 
 /** One combined PDF for refinance applications: cover + progress + budget estimate (+ BRRR analysis for Pro). */
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Rental income proof for lenders: tenancies, rent received vs due, letting costs and net cashflow (year to date). */
+function rentalBody(r: Rentals) {
+  const sm = r.summary;
+  const nowM = new Date().toISOString().slice(0, 7);
+  const months = sm.monthly.filter((m) => m.month <= nowM && (m.due || m.received || m.expenses));
+  const onTime = r.tenancies.flatMap((t) => t.schedule.filter((m) => m.month <= nowM));
+  const paidPct = onTime.length ? Math.round((onTime.filter((m) => m.status === "paid").length / onTime.length) * 100) : 0;
+  return `<h2>Rental income ${r.year} (year to date)</h2>
+${kpis([["Rent received", gbp(sm.received)], ["Letting costs", gbp(sm.expenses)], ["Net cashflow", gbp(sm.net)], ["Arrears", gbp(sm.arrears)]])}
+<p style="font-size:11px">${onTime.length ? `${paidPct}% of rent months paid in full` : "No rent due yet this year"} · current contracted rent ${gbp(sm.active_rent)} / month</p>
+<h2>Tenancies</h2><table><tr><th>Tenant</th><th>Term</th><th class="n">Rent / mo</th><th class="n">Deposit</th><th class="n">Arrears</th></tr>
+${r.tenancies.map((t) => `<tr><td>${esc(t.tenant_name)}<div class="bd">${t.status}</div></td><td>${t.start_date} – ${t.end_date ?? "rolling"}</td><td class="n">${gbp(t.rent)}</td><td class="n">${gbp(t.deposit)}${t.deposit ? `<div class="bd">${t.deposit_protected ? `Protected${t.deposit_scheme ? " · " + esc(t.deposit_scheme) : ""}` : "Not protected"}</div>` : ""}</td><td class="n">${gbp(t.arrears)}</td></tr>`).join("")}</table>
+${months.length ? `<h2>Monthly cashflow</h2><table><tr><th>Month</th><th class="n">Rent due</th><th class="n">Received</th><th class="n">Costs</th><th class="n">Net</th></tr>
+${months.map((m) => `<tr><td>${MON[Number(m.month.slice(5)) - 1]} ${m.month.slice(0, 4)}</td><td class="n">${gbp(m.due)}</td><td class="n">${gbp(m.received)}</td><td class="n">${gbp(m.expenses)}</td><td class="n">${gbp(m.net)}</td></tr>`).join("")}
+<tr><td><b>Total</b></td><td class="n"><b>${gbp(months.reduce((a, m) => a + m.due, 0))}</b></td><td class="n"><b>${gbp(sm.received)}</b></td><td class="n"><b>${gbp(sm.expenses)}</b></td><td class="n"><b>${gbp(sm.net)}</b></td></tr></table>` : ""}
+${Object.keys(sm.by_category).length ? `<h2>Letting costs by category</h2><table>${Object.entries(sm.by_category).map(([k, v]) => `<tr><td>${esc(k.replace(/_/g, " "))}</td><td class="n">${gbp(v)}</td></tr>`).join("")}</table>` : ""}`;
+}
+
+function homeKpis(p: Project) {
+  const h = p.home_finance;
+  const r = h.remortgage;
+  return `${kpis([["Purchase price", gbp(p.purchase_price)], ["Value after refurb", gbp(p.estimated_valuation)], ["Mortgage balance", gbp(h.loan)], ["Monthly payment", gbp(h.monthly_payment)]])}
+${kpis([["LTV now / after", `${h.ltv_now.toFixed(0)}% / ${h.ltv_after.toFixed(0)}%`], ["Equity after refurb", gbp(h.equity_after)], ["Refurb budget", gbp(p.total_budget)], ["Value added (net)", gbp(h.net_value_added)]])}
+<h2>Remortgage to fund the refurb</h2>
+${kpis([["Borrow for refurb", gbp(r.borrow_for_refurb)], ["New mortgage", gbp(r.new_loan)], ["New monthly payment", `${gbp(r.new_payment)} (+${gbp(r.payment_increase)})`], ["New LTV", `${r.new_ltv.toFixed(0)}%`]])}
+<p style="font-size:11px">${r.covers_refurb ? "Remortgaging covers the full refurb budget." : `Remortgage covers ${gbp(r.borrow_for_refurb)}; ${gbp(r.shortfall)} still to fund from savings.`}</p>`;
+}
+
 export async function shareLenderPack(includeBrrr: boolean) {
   const p = await api<Project>("/project");
   const f = calcBrrr({ purchase: p.purchase_price, fees: BRRR_DEFAULT_FEES, refurb: p.total_budget, valuation: p.estimated_valuation,
     ltv: p.refinance_ltv, rate: p.refinance_rate, rent: p.monthly_rent, costs: BRRR_DEFAULT_COSTS });
   const comps = includeBrrr ? await api<Comparable[]>("/project/comparables").catch(() => [] as Comparable[]) : [];
+  const rentals = await api<Rentals>(`/rentals?year=${new Date().getFullYear()}`).catch(() => null);
+  const hasRent = !!rentals?.tenancies.length;
   const [progress, budget, brrr] = await Promise.all([progressBody(), budgetBody(), includeBrrr ? brrrBody(p, f, comps) : Promise.resolve("")]);
-  const sections = [["1", "Progress report", "Milestones, budget usage, receipts and before & after photos"], ["2", "Budget estimate", "Itemised costs by category with variance"],
-    ...(includeBrrr ? [["3", "BRRR analysis", "Refinance, money left in, cashflow and local comparables"]] : [])];
+  const sections = [["Progress report", "Milestones, budget usage, receipts and before & after photos"], ["Budget estimate", "Itemised costs by category with variance"],
+    ...(hasRent ? [["Rental income", "Rent received, tenancies, letting costs and net cashflow"]] : []),
+    ...(includeBrrr ? [["BRRR analysis", "Refinance, money left in, cashflow and local comparables"]] : [])].map(([t, d], i) => [String(i + 1), t, d]);
   const cover = `${await brandHeader("LENDER REPORT PACK", p)}
-<p style="margin:18px 0 6px;font-size:13px">Prepared for refinance application · ${esc(p.target_type)} · ${esc(p.finish_type)}</p>
-${kpis([["Purchase price", gbp(p.purchase_price)], ["End valuation (GDV)", gbp(p.estimated_valuation)], [`Refinance at ${p.refinance_ltv}% LTV`, gbp(f.refi)], [f.leftIn > 0 ? "Money left in" : "Cash pulled out", gbp(Math.abs(f.leftIn))]])}
-${kpis([["Refurb budget", gbp(p.total_budget)], ["Spent to date", gbp(p.total_spent)], ["Monthly rent", gbp(p.monthly_rent)], ["Gross yield", `${f.yieldPct.toFixed(1)}%`]])}
+<p style="margin:18px 0 6px;font-size:13px">Prepared for ${p.purpose === "personal" ? "remortgage" : "refinance"} application · ${esc(p.target_type)} · ${esc(p.finish_type)}</p>
+${p.purpose === "personal" ? homeKpis(p) : `${kpis([["Purchase price", gbp(p.purchase_price)], ["End valuation (GDV)", gbp(p.estimated_valuation)], [`Refinance at ${p.refinance_ltv}% LTV`, gbp(f.refi)], [f.leftIn > 0 ? "Money left in" : "Cash pulled out", gbp(Math.abs(f.leftIn))]])}
+${kpis([["Refurb budget", gbp(p.total_budget)], ["Spent to date", gbp(p.total_spent)], ["Monthly rent", gbp(p.monthly_rent)], ["Gross yield", `${f.yieldPct.toFixed(1)}%`]])}`}
+${hasRent ? kpis([["Rent received (YTD)", gbp(rentals!.summary.received)], ["Letting costs (YTD)", gbp(rentals!.summary.expenses)], ["Net cashflow (YTD)", gbp(rentals!.summary.net)], ["Arrears", gbp(rentals!.summary.arrears)]]) : ""}
 <p style="font-size:11px">Stage: <b>${esc(p.current_stage ?? "Not started")}</b> · ${p.milestones_done}/${p.milestones_total} milestones complete</p>
 <h2>Contents</h2><table>${sections.map(([n, t, d]) => `<tr><td style="width:24px"><b>${n}</b></td><td><b>${t}</b><div class="bd">${d}</div></td></tr>`).join("")}</table>
-<p class="bd" style="margin-top:14px">Money left in assumes ${gbp(BRRR_DEFAULT_FEES)} purchase fees and the full refurb budget. Mortgage is interest-only at ${p.refinance_rate}%.</p>`;
+${p.purpose === "personal" ? `<p class="bd" style="margin-top:14px">Mortgage: ${p.mortgage_type === "repayment" ? "repayment" : "interest-only"} over ${p.mortgage_term} years at ${p.mortgage_rate}%. Remortgage assumes up to ${p.remortgage_ltv}% LTV on the end valuation.` : `<p class="bd" style="margin-top:14px">Money left in assumes ${gbp(BRRR_DEFAULT_FEES)} purchase fees and the full refurb budget. Mortgage is interest-only at ${p.refinance_rate}%.`}</p>`;
   const brk = (h: string) => `<div style="page-break-before:always"></div>${h}`;
-  await printPdf(doc(cover + brk(progress) + brk(budget) + (brrr ? brk(brrr) : "")), `${p.name} lender report pack`);
+  await printPdf(doc(cover + brk(progress) + brk(budget) + (hasRent ? brk(rentalBody(rentals!)) : "") + (brrr ? brk(brrr) : "")), `${p.name} lender report pack`);
 }

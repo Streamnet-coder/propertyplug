@@ -20,7 +20,8 @@ import { shareProgressReport } from "@/src/report";
 import { LandUplift, PlanningCard } from "@/src/components/land-cards";
 import { ExpiringAccessCard } from "@/src/components/expiring-access-card";
 import { OverdueRequestsCard } from "@/src/components/overdue-requests-card";
-import { RentalsCard } from "@/src/components/rentals-card";
+import { RentalsCard, TenancyAlertsCard } from "@/src/components/rentals-card";
+import { HomeFinanceCard } from "@/src/components/home-finance-card";
 import { makeStyles, useTheme } from "@/src/theme";
 
 const HERO = "https://images.unsplash.com/photo-1714259830228-893a69a2d45b?crop=entropy&cs=srgb&fm=jpg&ixlib=rb-4.1.0&q=85&w=1200";
@@ -63,7 +64,7 @@ export default function Home() {
     { id: "receipt", icon: "receipt", label: "Receipt", onPress: () => router.push("/receipt-form") },
     { id: "snags", icon: "list-checks", label: "Snags", onPress: () => router.push("/snags") },
   ];
-  const actions = allActions.filter((a) => !(a.id === "brrr" && p?.property_type === "land"));
+  const actions = allActions.filter((a) => !(a.id === "brrr" && (p?.property_type === "land" || p?.purpose === "personal")));
 
   return (
     <View style={s.root} testID="home-screen">
@@ -189,6 +190,7 @@ export default function Home() {
 
           <ExpiringAccessCard linkToPortal />
           <OverdueRequestsCard />
+          {p.property_type !== "land" && <TenancyAlertsCard />}
 
           {(expiring.data ?? []).length > 0 && (
             <Pressable testID="expiry-alert-card" onPress={() => { tap(); router.push("/documents"); }} style={[s.alertCard, { borderColor: expiring.data!.some((d) => d.expiry_status === "expired") ? colors.error : colors.brandPrimary }]}>
@@ -303,6 +305,7 @@ export default function Home() {
           </View>
           ) : (
           <View>
+            {p.purpose === "personal" ? <HomeFinanceCard p={p} /> : (<>
             <SectionTitle title="Rent & refinance" action="Edit" onAction={() => router.push("/project-edit")} testID="rent-yield-edit" />
             {p.monthly_rent > 0 ? (
               <Card style={{ gap: space.md }} testID="rent-yield-card">
@@ -330,6 +333,7 @@ export default function Home() {
                 <Icon name="chevron-right" size={18} color={colors.brandPrimary} />
               </Pressable>
             )}
+            </>)}
             <RentalsCard />
           </View>
           )}

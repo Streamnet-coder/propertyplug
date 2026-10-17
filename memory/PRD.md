@@ -170,3 +170,10 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Rent & tenancy tracker: /api/rentals?year (tenancies with monthly schedule paid/partial/late/due, arrears; expenses by category; yearly net cashflow + monthly chart). Tenancy CRUD, PUT /rentals/tenancies/{id}/rent/{YYYY-MM}, expense CRUD. Screens: /rentals, /tenancy-form, /rental-expense-form, rent log sheet; dashboard RentalsCard.
 - Before/after slider: /compare (pick any before + after/progress photo; ?milestone_id filters to stage). Entry: Media tab "Compare" button, stage photos "Compare before & after".
 - Design polish: blurred sticky Add Expense bar, EmptyState rounded icon + optional CTA (Budget/Team), stronger hero scrim.
+
+## Iteration 31 (Jun 2026)
+- Manual rent reminders: POST /api/rentals/tenancies/{id}/remind {month} (friendly vs late email, 10-min cooldown, logged in Messages); button in rent log sheet.
+- Deposit protected yes/no toggle + warnings; tenancy end ≤60 days alerts; dashboard TenancyAlertsCard.
+- Lender pack: Rental income section (YTD received, costs, net, arrears, tenancies, monthly table) + cover KPIs.
+- Shareable before/after links: /api/compare-links CRUD, public /api/c/{token} branded slider page with trial CTA; ShareCompare card on /compare.
+- Project purpose investment|personal: personal hides BRRR (quick action, profile link, lender pack BRRR), shows Mortgage & equity + Remortgage cards (home_finance in project summary; deposit, mortgage_rate, mortgage_term, mortgage_type, remortgage_ltv). target_type "Home Renovation".

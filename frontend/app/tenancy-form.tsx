@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 
 import { api } from "@/src/api";
-import { Button, Field, fonts, FormScreen, space } from "@/src/components/ui";
+import { Button, Chip, Field, fonts, FormScreen, space } from "@/src/components/ui";
 import { invalidate, useRentals } from "@/src/queries";
 import { useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
-const EMPTY = { tenant_name: "", tenant_email: "", tenant_phone: "", rent: "", deposit: "", deposit_scheme: "", start_date: "", end_date: "", rent_day: "1", notes: "" };
+const EMPTY = { tenant_name: "", tenant_email: "", tenant_phone: "", rent: "", deposit: "", deposit_scheme: "", deposit_protected: false, start_date: "", end_date: "", rent_day: "1", notes: "" };
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export default function TenancyForm() {
@@ -21,10 +21,10 @@ export default function TenancyForm() {
   const existing = data?.tenancies.find((t) => t.id === id);
   const [f, setF] = useState(EMPTY);
   const [error, setError] = useState("");
-  const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }));
+  const set = (k: keyof typeof f) => (v: string | boolean) => setF((x) => ({ ...x, [k]: v }));
 
   useEffect(() => {
-    if (existing) setF(Object.fromEntries(Object.keys(EMPTY).map((k) => [k, String((existing as any)[k] ?? "")])) as typeof EMPTY);
+    if (existing) setF(Object.fromEntries(Object.keys(EMPTY).map((k) => [k, k === "deposit_protected" ? !!existing.deposit_protected : String((existing as any)[k] ?? "")])) as typeof EMPTY);
   }, [existing]);
 
   const done = async (msg: string) => {
@@ -76,6 +76,14 @@ export default function TenancyForm() {
         <View style={half}><Field label="Deposit scheme" value={f.deposit_scheme} onChangeText={set("deposit_scheme")} placeholder="e.g. DPS" testID="tenancy-scheme-input" /></View>
         <View style={half}><Field label="Start date" value={f.start_date} onChangeText={set("start_date")} placeholder="YYYY-MM-DD" testID="tenancy-start-input" /></View>
         <View style={half}><Field label="End date (optional)" value={f.end_date} onChangeText={set("end_date")} placeholder="YYYY-MM-DD" testID="tenancy-end-input" /></View>
+      </View>
+      <View style={{ gap: space.sm }}>
+        <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.onSurfaceTertiary }}>Deposit protected in a government scheme?</Text>
+        <View style={{ flexDirection: "row", gap: space.sm }}>
+          <Chip label="Yes, protected" icon="shield-check" selected={f.deposit_protected} onPress={() => set("deposit_protected")(true)} testID="tenancy-protected-yes" />
+          <Chip label="Not yet" icon="shield-alert" selected={!f.deposit_protected} onPress={() => set("deposit_protected")(false)} testID="tenancy-protected-no" />
+        </View>
+        {!f.deposit_protected && Number(f.deposit) > 0 && <Text style={{ fontFamily: fonts.medium, fontSize: 12, color: colors.warning }} testID="tenancy-protect-warning">UK deposits must be protected within 30 days of receiving them.</Text>}
       </View>
       <Field label="Notes" value={f.notes} onChangeText={set("notes")} multiline placeholder="Break clause, guarantor, inventory…" testID="tenancy-notes-input" />
       {error ? <Text style={{ color: colors.error, fontFamily: fonts.medium }} testID="tenancy-form-error">{error}</Text> : null}

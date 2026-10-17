@@ -44,6 +44,16 @@ export function RentLogSheet({ tenancy, month, onClose }: { tenancy: Tenancy | n
     save.mutate(n);
   };
 
+  const remind = useMutation({
+    mutationFn: () => api<{ kind: "late" | "upcoming" }>(`/rentals/tenancies/${tenancy!.id}/remind`, { body: { month: month!.month } }),
+    onSuccess: async (r) => {
+      await invalidate("rentals");
+      toast(r.kind === "late" ? "Late rent reminder sent" : "Friendly reminder sent");
+      onClose();
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
   const tone = month ? rentTone(month.status, colors) : null;
   return (
     <Modal visible={!!month} transparent animationType="fade" onRequestClose={onClose}>
@@ -62,6 +72,16 @@ export function RentLogSheet({ tenancy, month, onClose }: { tenancy: Tenancy | n
               <Field label="Paid on" value={paidOn} onChangeText={setPaidOn} placeholder="YYYY-MM-DD" testID="rent-paid-on-input" />
               {error ? <Text style={s.error} testID="rent-log-error">{error}</Text> : null}
               <Button title="Save payment" icon="check" loading={save.isPending && save.variables !== 0} onPress={submit} testID="rent-save-button" />
+              {month.status !== "paid" && (
+                tenancy.tenant_email ? (
+                  <View style={{ gap: 4 }}>
+                    <Button variant="outline" icon="send" title={month.status === "late" || (month.status === "partial" && month.due_on < today()) ? "Send late rent reminder" : "Send friendly reminder"} loading={remind.isPending} onPress={() => { setError(""); remind.mutate(); }} testID="rent-remind-button" />
+                    {month.reminded_at && <Text style={[s.muted, { textAlign: "center" }]} testID="rent-reminded-at">Last reminder sent {month.reminded_at.slice(0, 10)}</Text>}
+                  </View>
+                ) : (
+                  <Text style={[s.muted, { textAlign: "center" }]} testID="rent-remind-no-email">Add the tenant&apos;s email to send rent reminders</Text>
+                )
+              )}
               {month.paid > 0 && <Button variant="danger" title="Clear payment" loading={save.isPending && save.variables === 0} onPress={() => save.mutate(0)} testID="rent-clear-button" />}
             </Pressable>
           )}

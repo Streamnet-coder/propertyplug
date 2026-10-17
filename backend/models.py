@@ -69,6 +69,12 @@ class Project(BaseDocument):
     budget: Budget = Budget()
     currency: Currency = "GBP"
     property_type: Literal["residential", "land"] = "residential"
+    purpose: Literal["investment", "personal"] = "investment"
+    deposit: float = 0
+    mortgage_rate: float = 4.5
+    mortgage_term: int = 25
+    mortgage_type: Literal["repayment", "interest_only"] = "repayment"
+    remortgage_ltv: float = 85
     plot_size: float = 0
     plot_unit: Literal["acres", "hectares"] = "acres"
     planning_status: Literal["none", "applied", "granted"] = "none"

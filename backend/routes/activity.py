@@ -13,7 +13,7 @@ AREAS = {
     "milestones": "milestone", "documents": "document", "doc-folders": "document folder", "contacts": "contact", "shopping": "shopping item",
     "planning": "planning application", "project": "project details", "stage-payments": "stage payment", "media": "photo",
     "portal-members": "stakeholder access", "portal-questions": "stakeholder question reply", "digest": "weekly update", "trade-ratings": "trade rating",
-    "messages": "message", "ai": "AI estimate", "rentals": "rental record",
+    "messages": "message", "ai": "AI estimate", "rentals": "rental record", "compare-links": "before/after link",
 }
 VERBS = {"POST": "added", "PUT": "updated", "PATCH": "updated", "DELETE": "deleted"}
 SPECIAL = {("POST", "send"): "sent", ("POST", "resend"): "resent", ("POST", "extend"): "extended", ("POST", "share"): "shared",

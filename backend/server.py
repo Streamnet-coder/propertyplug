@@ -7,13 +7,13 @@ from storage import init_storage
 import asyncio
 
 from routes import (ai, auth, branding, budget, contacts, digest, documents, portal, email_settings, export, media, messages, ratings, milestones, payments, projects, quotes,
-                    referrals, share, shopping, snags, stage_payments, trades, fx, planning, co_owners, activity, subscriptions, rentals)
+                    referrals, share, shopping, snags, stage_payments, trades, fx, planning, co_owners, activity, subscriptions, rentals, compare_share)
 
 app = FastAPI()
 api = APIRouter(prefix="/api")
 
 for m in (auth, projects, budget, contacts, media, ai, payments, trades, milestones, branding, referrals, share, quotes,
-          stage_payments, snags, shopping, digest, export, messages, email_settings, ratings, documents, portal, fx, planning, co_owners, activity, subscriptions, rentals):
+          stage_payments, snags, shopping, digest, export, messages, email_settings, ratings, documents, portal, fx, planning, co_owners, activity, subscriptions, rentals, compare_share):
     api.include_router(m.router)
 
 
@@ -78,7 +78,8 @@ async def startup():
     await db.co_owners.create_index([("owner_id", 1), ("email", 1)], unique=True)
     await db.co_owners.create_index("email")
     await db.project_activity.create_index([("owner_id", 1), ("project_id", 1), ("at", -1)])
-    for coll in (db.tenancies, db.rent_payments, db.rental_expenses):
+    await db.compare_links.create_index("token", unique=True)
+    for coll in (db.tenancies, db.rent_payments, db.rental_expenses, db.rent_reminders):
         await coll.create_index([("user_id", 1), ("project_id", 1)])
     asyncio.create_task(digest.digest_scheduler())
     try:

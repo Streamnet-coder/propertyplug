@@ -46,7 +46,7 @@ async def project_summaries(projects: list) -> list:
                   "line_item_count": counts[p.id]["items"], "receipt_count": counts[p.id]["receipts"],
                   "milestones_total": len(ms), "milestones_done": sum(1 for m in ms if m["status"] == "done"),
                   "current_stage": current["name"] if current else ("Complete" if ms else None),
-                  "rent_yield": rent_yield(p, total_budget)})
+                  "rent_yield": rent_yield(p, total_budget), "home_finance": home_finance(p, total_budget)})
         out.append(o)
     return out
 
@@ -63,6 +63,40 @@ def rent_yield(p: Project, total_budget: float) -> dict:
             "monthly_cashflow": round(p.monthly_rent - mortgage, 2)}
 
 
+def monthly_payment(loan: float, rate: float, years: int, kind: str) -> float:
+    r, n = rate / 100 / 12, max(1, years) * 12
+    if kind == "interest_only":
+        return loan * r
+    return loan / n if r == 0 else loan * r / (1 - (1 + r) ** -n)
+
+
+def home_finance(p: Project, total_budget: float) -> dict:
+    """Personal-home mortgage view: payments, equity before/after the refurb, and remortgaging to fund it."""
+    loan = max(0.0, p.purchase_price - p.deposit)
+    n = max(1, p.mortgage_term) * 12
+    pay = monthly_payment(loan, p.mortgage_rate, p.mortgage_term, p.mortgage_type)
+    total_interest = pay * n - (loan if p.mortgage_type == "repayment" else 0)
+    value = p.estimated_valuation or p.purchase_price
+    max_loan = value * p.remortgage_ltv / 100
+    headroom = max(0.0, max_loan - loan)
+    borrow = min(headroom, total_budget)
+    new_loan = loan + borrow
+    new_pay = monthly_payment(new_loan, p.mortgage_rate, p.mortgage_term, p.mortgage_type)
+    r2 = lambda x: round(x, 2)
+    return {"loan": r2(loan), "ltv_now": r2(loan / p.purchase_price * 100) if p.purchase_price else 0,
+            "ltv_after": r2(loan / value * 100) if value else 0, "monthly_payment": r2(pay), "total_interest": r2(total_interest),
+            "equity_now": r2(p.purchase_price - loan), "equity_after": r2(value - loan),
+            "value_added": r2(value - p.purchase_price), "net_value_added": r2(value - p.purchase_price - total_budget),
+            "remortgage": {"max_loan": r2(max_loan), "headroom": r2(headroom), "borrow_for_refurb": r2(borrow),
+                           "covers_refurb": headroom >= total_budget, "shortfall": r2(max(0.0, total_budget - headroom)),
+                           "new_loan": r2(new_loan), "new_payment": r2(new_pay), "payment_increase": r2(new_pay - pay),
+                           "new_ltv": r2(new_loan / value * 100) if value else 0, "equity_after": r2(value - new_loan)}}
+
+
+def target_for(property_type: str, purpose: str) -> str:
+    return "Land Investment" if property_type == "land" else "Home Renovation" if purpose == "personal" else "BRRR Refurbishment"
+
+
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     address: Optional[str] = None
@@ -75,6 +109,12 @@ class ProjectUpdate(BaseModel):
     budget: Optional[Budget] = None
     currency: Optional[Currency] = None
     property_type: Optional[Literal["residential", "land"]] = None
+    purpose: Optional[Literal["investment", "personal"]] = None
+    deposit: Optional[float] = Field(None, ge=0)
+    mortgage_rate: Optional[float] = Field(None, ge=0, le=30)
+    mortgage_term: Optional[int] = Field(None, ge=1, le=40)
+    mortgage_type: Optional[Literal["repayment", "interest_only"]] = None
+    remortgage_ltv: Optional[float] = Field(None, ge=0, le=100)
     plot_size: Optional[float] = None
     plot_unit: Optional[Literal["acres", "hectares"]] = None
     planning_status: Optional[Literal["none", "applied", "granted"]] = None
@@ -96,9 +136,10 @@ async def update_project(body: ProjectUpdate, user: User = Depends(current_user)
         upd["pin_manual"] = True
     elif clear:
         upd.update({"lat": None, "lon": None, "pin_manual": False, "geocoded_for": None})
-    if "property_type" in upd:
-        upd["target_type"] = "Land Investment" if upd["property_type"] == "land" else "BRRR Refurbishment"
     pid = await active_pid(user)
+    if "property_type" in upd or "purpose" in upd:
+        cur = await db.projects.find_one({"_id": ObjectId(pid)}, {"property_type": 1, "purpose": 1}) or {}
+        upd["target_type"] = target_for(upd.get("property_type", cur.get("property_type", "residential")), upd.get("purpose", cur.get("purpose", "investment")))
     if upd:
         await db.projects.update_one({"_id": ObjectId(pid)}, {"$set": upd})
     return await get_project(user)
@@ -123,6 +164,12 @@ class ProjectCreate(BaseModel):
     budget: Budget = Budget()
     currency: Currency = "GBP"
     property_type: Literal["residential", "land"] = "residential"
+    purpose: Literal["investment", "personal"] = "investment"
+    deposit: float = Field(0, ge=0)
+    mortgage_rate: float = Field(4.5, ge=0, le=30)
+    mortgage_term: int = Field(25, ge=1, le=40)
+    mortgage_type: Literal["repayment", "interest_only"] = "repayment"
+    remortgage_ltv: float = Field(85, ge=0, le=100)
     plot_size: float = 0
     plot_unit: Literal["acres", "hectares"] = "acres"
     planning_status: Literal["none", "applied", "granted"] = "none"
@@ -164,8 +211,8 @@ async def list_projects(user: User = Depends(real_user)):
 async def create_project(body: ProjectCreate, user: User = Depends(real_user)):
     if not body.name.strip():
         raise HTTPException(400, "Project name is required")
-    if body.property_type == "land":
-        body.target_type = "Land Investment"
+    if body.property_type == "land" or body.purpose == "personal":
+        body.target_type = target_for(body.property_type, body.purpose)
     p = Project(user_id=user.id, pin_manual=body.lat is not None and body.lon is not None, **body.model_dump())
     p.id = str((await db.projects.insert_one(p.to_mongo())).inserted_id)
     await seed_milestones(user.id, p.id)
@@ -194,7 +241,7 @@ async def delete_project(pid: str, user: User = Depends(real_user)):
     r = await db.projects.delete_one({"_id": oid(pid), "user_id": user.id})
     if not r.deleted_count:
         raise HTTPException(404, "Project not found")
-    for coll in (db.line_items, db.contacts, db.receipts, db.media, db.milestones, db.quote_requests, db.stage_payments, db.snags, db.snag_links, db.shopping_items, db.documents, db.doc_folders, db.planning_apps, db.tenancies, db.rent_payments, db.rental_expenses):
+    for coll in (db.line_items, db.contacts, db.receipts, db.media, db.milestones, db.quote_requests, db.stage_payments, db.snags, db.snag_links, db.shopping_items, db.documents, db.doc_folders, db.planning_apps, db.tenancies, db.rent_payments, db.rental_expenses, db.rent_reminders, db.compare_links):
         await coll.delete_many({"user_id": user.id, "project_id": pid})
     for coll in (db.portal_members, db.portal_activity, db.portal_questions, db.project_activity, db.portal_doc_requests):
         await coll.delete_many({"owner_id": user.id, "project_id": pid})

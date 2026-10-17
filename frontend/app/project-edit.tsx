@@ -25,6 +25,7 @@ export default function ProjectEdit() {
   const [f, setF] = useState({
     name: "", address: "", purchase_price: "", estimated_valuation: "", monthly_rent: "", refinance_ltv: "75", refinance_rate: "5.5", hard: "", soft: "", contingency: "", finish_type: "Medium Finish",
     currency: "GBP" as CurrencyCode, property_type: "residential" as Project["property_type"], plot_size: "", plot_unit: "acres" as Project["plot_unit"], planning_status: "none" as Project["planning_status"], intended_use: "", value_without_planning: "", value_with_planning: "", lat: "", lon: "",
+    purpose: "investment" as Project["purpose"], deposit: "", mortgage_rate: "4.5", mortgage_term: "25", mortgage_type: "repayment" as Project["mortgage_type"], remortgage_ltv: "85",
   });
   const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }));
   const isLand = f.property_type === "land";
@@ -54,6 +55,12 @@ export default function ProjectEdit() {
         value_with_planning: p.value_with_planning ? String(p.value_with_planning) : "",
         lat: p.pin_manual && p.lat != null ? String(p.lat) : "",
         lon: p.pin_manual && p.lon != null ? String(p.lon) : "",
+        purpose: p.purpose,
+        deposit: p.deposit ? String(p.deposit) : "",
+        mortgage_rate: String(p.mortgage_rate),
+        mortgage_term: String(p.mortgage_term),
+        mortgage_type: p.mortgage_type,
+        remortgage_ltv: String(p.remortgage_ltv),
       });
   }, [p, isNew]);
 
@@ -79,6 +86,12 @@ export default function ProjectEdit() {
           intended_use: f.intended_use,
           value_without_planning: Number(f.value_without_planning) || 0,
           value_with_planning: Number(f.value_with_planning) || 0,
+          purpose: isLand ? "investment" : f.purpose,
+          deposit: Number(f.deposit) || 0,
+          mortgage_rate: Number(f.mortgage_rate) || 0,
+          mortgage_term: Math.min(40, Math.max(1, Math.round(Number(f.mortgage_term) || 25))),
+          mortgage_type: f.mortgage_type,
+          remortgage_ltv: Math.min(100, Number(f.remortgage_ltv) || 0),
           ...pin,
         },
       }),
@@ -153,11 +166,36 @@ export default function ProjectEdit() {
         </>
       ) : (
         <>
-          <Field label={`Expected monthly rent (${c})`} value={f.monthly_rent} onChangeText={set("monthly_rent")} {...num} testID="project-rent-input" />
-          <View style={{ flexDirection: "row", gap: space.md }}>
-            <View style={{ flex: 1 }}><Field label="Refinance LTV (%)" value={f.refinance_ltv} onChangeText={set("refinance_ltv")} {...num} testID="project-ltv-input" /></View>
-            <View style={{ flex: 1 }}><Field label="Mortgage rate (%)" value={f.refinance_rate} onChangeText={set("refinance_rate")} {...num} testID="project-rate-input" /></View>
+          <Text style={label}>Project purpose</Text>
+          <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}>
+            <Chip label="Investment (BRRR)" icon="trending-up" selected={f.purpose === "investment"} onPress={() => set("purpose")("investment")} testID="project-purpose-investment" />
+            <Chip label="Personal home" icon="house" selected={f.purpose === "personal"} onPress={() => set("purpose")("personal")} testID="project-purpose-personal" />
           </View>
+          {f.purpose === "personal" ? (
+            <>
+              <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted }}>BRRR tools are hidden. The dashboard shows your mortgage, equity and remortgage options instead.</Text>
+              <View style={{ flexDirection: "row", gap: space.md }}>
+                <View style={{ flex: 1 }}><Field label={`Deposit (${c})`} value={f.deposit} onChangeText={set("deposit")} {...num} placeholder="0" testID="project-deposit-input" /></View>
+                <View style={{ flex: 1 }}><Field label="Mortgage rate (%)" value={f.mortgage_rate} onChangeText={set("mortgage_rate")} {...num} testID="project-mortgage-rate-input" /></View>
+              </View>
+              <View style={{ flexDirection: "row", gap: space.md }}>
+                <View style={{ flex: 1 }}><Field label="Term (years)" value={f.mortgage_term} onChangeText={set("mortgage_term")} keyboardType="number-pad" testID="project-mortgage-term-input" /></View>
+                <View style={{ flex: 1 }}><Field label="Remortgage max LTV (%)" value={f.remortgage_ltv} onChangeText={set("remortgage_ltv")} {...num} testID="project-remortgage-ltv-input" /></View>
+              </View>
+              <View style={{ flexDirection: "row", gap: space.sm }}>
+                <Chip label="Repayment" selected={f.mortgage_type === "repayment"} onPress={() => set("mortgage_type")("repayment")} testID="project-mortgage-repayment" />
+                <Chip label="Interest-only" selected={f.mortgage_type === "interest_only"} onPress={() => set("mortgage_type")("interest_only")} testID="project-mortgage-interest-only" />
+              </View>
+            </>
+          ) : (
+            <>
+              <Field label={`Expected monthly rent (${c})`} value={f.monthly_rent} onChangeText={set("monthly_rent")} {...num} testID="project-rent-input" />
+              <View style={{ flexDirection: "row", gap: space.md }}>
+                <View style={{ flex: 1 }}><Field label="Refinance LTV (%)" value={f.refinance_ltv} onChangeText={set("refinance_ltv")} {...num} testID="project-ltv-input" /></View>
+                <View style={{ flex: 1 }}><Field label="Mortgage rate (%)" value={f.refinance_rate} onChangeText={set("refinance_rate")} {...num} testID="project-rate-input" /></View>
+              </View>
+            </>
+          )}
         </>
       )}
       <Text style={label}>Budget</Text>

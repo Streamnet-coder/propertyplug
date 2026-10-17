@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { fileUrl, MediaItem } from "@/src/api";
 import { BeforeAfterSlider } from "@/src/components/before-after-slider";
+import { ShareCompare } from "@/src/components/share-compare";
 import { Button, EmptyState, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { useMedia, useMilestones } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -80,6 +81,7 @@ export default function Compare() {
           </View>
           {strip("Before photo", befores, b, setB, "before")}
           {strip("After / progress photo", afters, a, setA, "after")}
+          <ShareCompare beforeId={b} afterId={a} title={stage?.name ?? ""} />
         </ScrollView>
       )}
     </View>

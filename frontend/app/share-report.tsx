@@ -25,7 +25,8 @@ export default function ShareReport() {
   const [pdfBusy, setPdfBusy] = useState(false);
   const [packBusy, setPackBusy] = useState(false);
   const { user } = useAuth();
-  const isPro = user?.plan === "pro";
+  const personal = project?.purpose === "personal";
+  const isPro = user?.plan === "pro" && !personal;
   const link = useQuery({ queryKey: ["share-link"], queryFn: () => api<{ url: string | null }>("/project/share") });
   const url = link.data?.url ?? null;
 
@@ -134,13 +135,13 @@ export default function ShareReport() {
             <Text style={s.muted}>One PDF for your refinance application: a cover summary, the progress report, the budget estimate{isPro ? " and the BRRR analysis" : ""}.</Text>
           </View>
         </View>
-        {["Cover with valuation, refinance & money left in", "Progress report with milestones & photos", "Itemised budget estimate with variance", ...(isPro ? ["BRRR analysis with local comparables"] : [])].map((x) => (
+        {[personal ? "Cover with valuation, mortgage, equity & remortgage options" : "Cover with valuation, refinance & money left in", "Progress report with milestones & photos", "Itemised budget estimate with variance", "Rental income proof: rent received, tenancies & net cashflow (when tenancies are logged)", ...(isPro ? ["BRRR analysis with local comparables"] : [])].map((x) => (
           <View key={x} style={{ flexDirection: "row", gap: space.sm, alignItems: "center" }}>
             <Icon name="check" size={14} color={colors.success} />
             <Text style={s.muted}>{x}</Text>
           </View>
         ))}
-        {!isPro && <Text style={[s.muted, { color: colors.brandPrimary }]} testID="lender-pack-pro-note">Upgrade to Pro to add the BRRR analysis section.</Text>}
+        {!isPro && !personal && <Text style={[s.muted, { color: colors.brandPrimary }]} testID="lender-pack-pro-note">Upgrade to Pro to add the BRRR analysis section.</Text>}
         <Button icon="file-stack" title="Create lender pack" loading={packBusy} onPress={pack} testID="lender-pack-button" />
       </Card>
       <Card style={{ gap: space.md }}>

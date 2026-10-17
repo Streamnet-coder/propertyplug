@@ -167,6 +167,18 @@ function TenancyCard({ t, year, onMonth }: { t: Tenancy; year: number; onMonth: 
           <Text style={s.alertText}>{gbp(t.arrears, 2)} in arrears · {t.late_count} late month{t.late_count === 1 ? "" : "s"}</Text>
         </View>
       )}
+      {t.deposit > 0 && !t.deposit_protected && t.status !== "ended" && (
+        <View style={[s.alert, { backgroundColor: colors.orangeTint }]} testID={`tenancy-deposit-warning-${t.id}`}>
+          <Icon name="shield-alert" size={16} color={colors.warning} />
+          <Text style={[s.alertText, { color: colors.warning }]}>Deposit not protected yet. UK law requires this within 30 days</Text>
+        </View>
+      )}
+      {t.days_to_end != null && t.days_to_end <= 60 && (
+        <View style={[s.alert, { backgroundColor: colors.orangeTint }]} testID={`tenancy-ending-${t.id}`}>
+          <Icon name="calendar-x" size={16} color={colors.warning} />
+          <Text style={[s.alertText, { color: colors.warning }]}>{t.days_to_end === 0 ? "Tenancy ends today" : `Tenancy ends in ${t.days_to_end} day${t.days_to_end === 1 ? "" : "s"}`} · plan renewal or re-let</Text>
+        </View>
+      )}
       {t.schedule.length > 0 ? (
         <View style={s.grid}>
           {t.schedule.map((m) => {
