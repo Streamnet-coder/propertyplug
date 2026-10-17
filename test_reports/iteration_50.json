@@ -1,0 +1,32 @@
+{
+  "summary": "PropertyPlug iter 50: tested the three new features — (1) Home hero banner with cover photo (stock when null + add-photo pill, uploaded cover shows hero-cover-photo), (2) Payout receipts auto-emailed with send_receipt toggle (receipt_sent true/false, payout_receipt message log), (3) Compare two saved AI estimates side-by-side (pick mode, compare-go gated on 2 picks, compare screen with summary/col-a/col-b/totals/items, tap-to-view, cancel exits). Backend 11/11 PASS. Frontend end-to-end verified via mobile Playwright (390x844): login, hero stock+add-photo pill (nav to /project-edit), 13 saved estimates listed, pick-two then /ai-estimates-compare shows all expected testIDs, tap col-a navigates to /ai-estimate-view, compare-cancel exits pick mode. Cleanup script resets cover_path to null and clears split; teardown fixtures already removed the delivered@resend.dev co-owner and all TEST_ payouts.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration50.py",
+    "/app/backend/tests/cleanup_iter50.py",
+    "/app/test_reports/pytest/pytest_iteration50.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/ownership.py add_payout: receipt is sent AFTER insert; if email fails the payout is still saved and receipt_sent=false — correct behaviour. Message log kind 'payout_receipt' with status sent/failed is logged whenever send_receipt=true, which matches the spec.",
+    "routes/ownership.py _payout_receipt computes `person['balance']` from the ledger AFTER insert, so the receipt shows the post-payout balance (good).",
+    "frontend/app/ai-estimates.tsx: compare picking is capped to 2 via `.slice(-2)` — picking a 3rd automatically drops the oldest; works as expected but doesn't visually warn the user. Minor UX nit — not a bug.",
+    "frontend/app/ai-estimates-compare.tsx: uses `Set` of lowercased item names to merge sides — same-named items with different spec collapse into one row. Acceptable for a side-by-side summary."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration50.py (new)",
+    "/app/backend/tests/cleanup_iter50.py (new)"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (3/3 flows)"},
+  "seed_data_creation": "Teardown fixture + cleanup_iter50.py removed: delivered@resend.dev co-owner, all TEST_ payouts, ownership_shares reset to empty, project.cover_path reset to null. No residue left for next iteration.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login testIDs: auth-email-input / auth-password-input / auth-submit-button (NOT login-email/login-password/login-submit). Landing page has sign-in-button that opens the auth screen. Hero testIDs on home: hero-stock-photo (fallback), hero-cover-photo (when cover_path set), hero-add-photo (pill, hidden when cover_path set or acting_as). Payouts panel (payouts-panel) only renders when the project has >=1 co-owner with share pct>0 — demo state has none, so panel hidden by default. Compare picks are capped to last 2 via slice(-2). /api/messages GET requires either `name` or `email` query param to return rows (empty filter -> empty list).",
+  "rca_of_issue": "N/A"
+}

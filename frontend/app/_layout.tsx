@@ -78,6 +78,7 @@ export default function RootLayout() {
                 <Stack.Screen name="repair-history" />
                 <Stack.Screen name="ai-estimates" />
                 <Stack.Screen name="ai-estimate-view" />
+                <Stack.Screen name="ai-estimates-compare" />
                 <Stack.Screen name="my-ownership" />
                 <Stack.Screen name="ownership-portfolio" />
                 <Stack.Screen name="snag-form" options={{ presentation: "modal" }} />

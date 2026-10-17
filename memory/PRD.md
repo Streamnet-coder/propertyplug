@@ -255,3 +255,8 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Estimates store project_id. GET /api/ai/estimates (active project + legacy), GET/PUT(title)/DELETE /api/ai/estimates/{id}. Screens /ai-estimates (link "Saved estimates" on AI estimate screen) and /ai-estimate-view?id (design hotspots, items add-to-budget, rename, Use as project photo, delete).
 - Invite joiners: RegisterIn.invited (auth sends true when next=/join/...) or pending email invite -> no demo seed; open_shared() sets acting owner + first shared project on register/accept_link; join screen goes to home. /projects tolerates no projects. Co-owners keep their own projects private.
 - Share privacy: co-owner/manager viewing GET /project/split sees only their own row; GET /project/statements 403 for non-owner; GET /project/payouts filtered to self. UI: "Your ownership" card (split-mine-card) for co-owners.
+
+## Home photo banner, payout receipts, compare estimates (Jun 2026)
+- Home hero uses project cover_path (testID hero-cover-photo) else stock image; owner sees "Add photo" pill (hero-add-photo) -> /project-edit when no cover.
+- POST /api/project/payouts send_receipt (default true) emails co-owner a receipt (amount, date, note, share, earned/paid/balance); response receipt_sent; logged kind payout_receipt. UI toggle payout-receipt-toggle.
+- /ai-estimates: compare-start -> pick 2 -> compare-go -> /ai-estimates-compare?a&b (side by side design, totals, cheaper highlight, item-by-item ranges).

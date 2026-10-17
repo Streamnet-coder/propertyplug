@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useQuery } from "@tanstack/react-query";
 
-import { api, DocItem, expiryLabel, gbp } from "@/src/api";
+import { api, DocItem, expiryLabel, fileUrl, gbp } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { BrandLogo } from "@/src/components/brand";
 import { Button, Card, fonts, Icon, IconName, ProBadge, radius, SectionTitle, space, tap } from "@/src/components/ui";
@@ -98,16 +98,24 @@ export default function Home() {
           showsVerticalScrollIndicator={false}
         >
           <Animated.View entering={FadeInDown.duration(400)} style={s.hero} testID="project-hero-card">
-            <Image source={{ uri: HERO }} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} contentFit="cover" transition={300} />
+            <Image source={{ uri: p.cover_path ? fileUrl(p.cover_path) : HERO }} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} contentFit="cover" transition={300} testID={p.cover_path ? "hero-cover-photo" : "hero-stock-photo"} />
             <LinearGradient colors={["rgba(15,23,42,0.35)", "rgba(15,23,42,0.05)", colors.scrim]} locations={[0, 0.35, 1]} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
             <View style={s.heroTop}>
               <View style={s.heroTag}>
                 <Text style={s.heroTagText}>{p.target_type.toUpperCase()}</Text>
               </View>
-              <Pressable testID="switch-project-button" onPress={() => { tap(); router.push("/projects"); }} style={s.switchBtn} hitSlop={6}>
-                <Icon name="arrow-left-right" size={14} color={colors.onSurfaceInverse} />
-                <Text style={s.switchText}>Switch</Text>
-              </Pressable>
+              <View style={{ flexDirection: "row", gap: space.sm }}>
+                {!p.cover_path && !user?.acting_as && (
+                  <Pressable testID="hero-add-photo" onPress={() => { tap(); router.push("/project-edit"); }} style={s.switchBtn} hitSlop={6}>
+                    <Icon name="camera" size={14} color={colors.onSurfaceInverse} />
+                    <Text style={s.switchText}>Add photo</Text>
+                  </Pressable>
+                )}
+                <Pressable testID="switch-project-button" onPress={() => { tap(); router.push("/projects"); }} style={s.switchBtn} hitSlop={6}>
+                  <Icon name="arrow-left-right" size={14} color={colors.onSurfaceInverse} />
+                  <Text style={s.switchText}>Switch</Text>
+                </Pressable>
+              </View>
             </View>
             <View style={{ marginTop: "auto", gap: space.xs }}>
               {user?.acting_as && (

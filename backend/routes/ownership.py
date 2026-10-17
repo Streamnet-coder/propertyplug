@@ -255,6 +255,7 @@ class PayoutIn(BaseModel):
     amount: float = Field(gt=0, le=1e9)
     date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
     note: str = Field("", max_length=200)
+    send_receipt: bool = True
 
 
 @router.post("/project/payouts")
@@ -270,7 +271,33 @@ async def add_payout(body: PayoutIn, user: User = Depends(current_user)):
         raise HTTPException(400, "Date must be YYYY-MM-DD")
     await db.coowner_payouts.insert_one({"project_id": pid, "owner_id": user.id, "co_owner_id": body.co_owner_id, "amount": round(body.amount, 2),
                                          "date": body.date, "note": body.note.strip(), "created_at": now_iso()})
-    return await get_payouts(user)
+    out = await get_payouts(user)
+    out["receipt_sent"] = await _payout_receipt(user, pid, body, next(x for x in out["people"] if x["co_owner_id"] == body.co_owner_id)) if body.send_receipt else False
+    return out
+
+
+async def _payout_receipt(user: User, pid: str, body: "PayoutIn", person: dict) -> bool:
+    """Email the co-owner a receipt for the payout with their balance afterwards."""
+    address, sender, head = await _ctx(user.id, {"project_id": pid})
+    bal = person["balance"]
+    rows = (_row("Amount paid", f"<b>{E(money(body.amount, 2))}</b>") + _row("Date", E(body.date)) + (_row("Note", E(body.note.strip())) if body.note.strip() else "")
+            + _row("Your share", f"{person['pct']}%") + _row("Earned to date", E(money(person["earned"], 2))) + _row("Paid to date", E(money(person["paid"], 2)))
+            + _row("Balance", E(f"Owed to you {money(bal, 2)}" if bal > 0 else f"Paid ahead {money(-bal, 2)}" if bal < 0 else "All square")))
+    html = _wrap(f'{head}<p style="font-size:12px;letter-spacing:1px;color:#0f766e;font-weight:bold;margin:0">PAYOUT RECEIPT</p>'
+                 f'<h1 style="font-size:20px;margin:8px 0 12px">{E(address)}</h1><p>Hi {E(person["name"])},</p>'
+                 f'<p style="line-height:1.5">{E(sender)} has recorded a payment to you of <b>{E(money(body.amount, 2))}</b>.</p>'
+                 f'<table width="100%" style="border-collapse:collapse;font-size:14px;margin:12px 0">{rows}</table>'
+                 f'<p style="font-size:12px;color:#888">Earned is your share of rent received minus property expenses. Reply to this email if anything looks wrong.</p>'
+                 f'<p>Kind regards,<br/>{E(sender)}</p>')
+    subject = f"Payout receipt {money(body.amount, 2)} · {address}"
+    try:
+        await send_email(to=person["email"], subject=subject, html=html, reply_to=await owner_reply_to(user.id))
+        status = "sent"
+    except EmailError as e:
+        logger.warning(f"Payout receipt failed: {e}")
+        status = "failed"
+    await log_message(user.id, pid, name=person["name"], email=person["email"], channel="email", kind="payout_receipt", summary=subject, status=status)
+    return status == "sent"
 
 
 @router.delete("/project/payouts/{payout_id}")

@@ -3,14 +3,14 @@ import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import { api, gbp } from "@/src/api";
-import { Button, Field, fonts, radius, space, tap } from "@/src/components/ui";
+import { Button, Chip, Field, fonts, radius, space, tap } from "@/src/components/ui";
 import { queryClient } from "@/src/query-client";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
 type Payout = { id: string; amount: number; date: string; note: string };
 type Person = { co_owner_id: string; name: string; pct: number; earned: number; paid: number; balance: number; payouts: Payout[] };
-type Ledger = { income: { rent_received: number; expenses: number; net: number }; people: Person[]; total_owed: number };
+type Ledger = { income: { rent_received: number; expenses: number; net: number }; people: Person[]; total_owed: number; receipt_sent?: boolean };
 
 /** Owner: each co-owner's share of net rental income to date, what's been paid out, and the balance still owed. */
 export function PayoutsPanel() {
@@ -18,12 +18,12 @@ export function PayoutsPanel() {
   const { colors } = useTheme();
   const toast = useToast();
   const q = useQuery({ queryKey: ["payouts"], queryFn: () => api<Ledger>("/project/payouts") });
-  const [form, setForm] = useState<{ id: string; amount: string; date: string; note: string } | null>(null);
+  const [form, setForm] = useState<{ id: string; amount: string; date: string; note: string; receipt: boolean } | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const done = (d: Ledger, msg: string) => { queryClient.setQueryData(["payouts"], d); toast(msg); };
   const add = useMutation({
-    mutationFn: () => api<Ledger>("/project/payouts", { body: { co_owner_id: form!.id, amount: Number(form!.amount.replace(/[,£\s]/g, "")), date: form!.date.trim(), note: form!.note } }),
-    onSuccess: (d) => { setForm(null); done(d, "Payout recorded"); },
+    mutationFn: () => api<Ledger>("/project/payouts", { body: { co_owner_id: form!.id, amount: Number(form!.amount.replace(/[,£\s]/g, "")), date: form!.date.trim(), note: form!.note, send_receipt: form!.receipt } }),
+    onSuccess: (d) => { setForm(null); done(d, d.receipt_sent ? "Payout recorded · receipt emailed" : "Payout recorded"); },
     onError: (e: Error) => toast(e.message, "error"),
   });
   const del = useMutation({
@@ -70,13 +70,14 @@ export function PayoutsPanel() {
                 <View style={{ flex: 1 }}><Field label="Date" value={form.date} onChangeText={(t) => setForm({ ...form, date: t })} placeholder="YYYY-MM-DD" testID="payout-date" /></View>
               </View>
               <Field label="Note (optional)" value={form.note} onChangeText={(t) => setForm({ ...form, note: t })} placeholder="e.g. Bank transfer, Q3 rent" testID="payout-note" />
+              <Chip label={form.receipt ? "Email a receipt: on" : "Email a receipt: off"} icon={form.receipt ? "mail-check" : "mail-x"} selected={form.receipt} onPress={() => setForm({ ...form, receipt: !form.receipt })} testID="payout-receipt-toggle" />
               <View style={{ flexDirection: "row", gap: space.sm }}>
                 <Button small variant="outline" title="Cancel" onPress={() => setForm(null)} style={{ flex: 1 }} testID="payout-cancel" />
                 <Button small title="Save payout" disabled={!valid} loading={add.isPending} onPress={() => add.mutate()} style={{ flex: 1 }} testID="payout-save" />
               </View>
             </View>
           ) : (
-            <Button small variant="ghost" icon="banknote" title="Record payout" onPress={() => setForm({ id: p.co_owner_id, amount: p.balance > 0 ? String(p.balance) : "", date: new Date().toISOString().slice(0, 10), note: "" })} testID={`payout-add-${p.co_owner_id}`} />
+            <Button small variant="ghost" icon="banknote" title="Record payout" onPress={() => setForm({ id: p.co_owner_id, amount: p.balance > 0 ? String(p.balance) : "", date: new Date().toISOString().slice(0, 10), note: "", receipt: true })} testID={`payout-add-${p.co_owner_id}`} />
           )}
         </View>
       ))}
