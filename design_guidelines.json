@@ -1,36 +1,36 @@
 {
   "app_name": "Builder Assist",
   "personality": "1 iOS-Native Clean",
-  "personality_one_liner": "A structured, authoritative, and clean project management tool that frames complex renovation budgets with clarity and trust.",
+  "personality_one_liner": "A highly readable, operational, and premium property management tool where content and data are the heroes, supported by a clean layout, generous padding, and clear brand colors.",
   "color": {
-    "surface": "#ffffff",
-    "onSurface": "#0f172a",
-    "surfaceSecondary": "#f8fafc",
-    "onSurfaceSecondary": "#1e293b",
-    "surfaceTertiary": "#f1f5f9",
-    "onSurfaceTertiary": "#334155",
-    "surfaceInverse": "#1e293b",
-    "onSurfaceInverse": "#f8fafc",
+    "surface": "#F9F9F8",
+    "onSurface": "#1A1A1A",
+    "surfaceSecondary": "#FFFFFF",
+    "onSurfaceSecondary": "#1A1A1A",
+    "surfaceTertiary": "#F2F2F0",
+    "onSurfaceTertiary": "#4A4A4A",
+    "surfaceInverse": "#1A1A1A",
+    "onSurfaceInverse": "#FFFFFF",
     "brand": "#0f766e",
-    "onBrand": "#ffffff",
+    "onBrand": "#FFFFFF",
     "brandPrimary": "#f97316",
-    "onBrandPrimary": "#ffffff",
-    "brandSecondary": "#0f766e",
-    "onBrandSecondary": "#ffffff",
-    "brandTertiary": "#f0fdf4",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#06b6d4",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#E6F4F1",
     "onBrandTertiary": "#0f766e",
-    "success": "#10b981",
-    "onSuccess": "#ffffff",
-    "warning": "#ea580c",
-    "onWarning": "#ffffff",
-    "error": "#ef4444",
-    "onError": "#ffffff",
-    "info": "#06b6d4",
-    "onInfo": "#ffffff",
-    "border": "#e2e8f0",
-    "borderStrong": "#cbd5e1",
-    "divider": "#f1f5f9",
-    "muted": "#64748b"
+    "success": "#10B981",
+    "onSuccess": "#FFFFFF",
+    "warning": "#F59E0B",
+    "onWarning": "#FFFFFF",
+    "error": "#EF4444",
+    "onError": "#FFFFFF",
+    "info": "#3B82F6",
+    "onInfo": "#FFFFFF",
+    "border": "#E5E5E5",
+    "borderStrong": "#D4D4D4",
+    "divider": "#E5E5E5",
+    "muted": "#737373"
   },
   "typography": {
     "displayFontFamily": "Inter",
@@ -41,10 +41,11 @@
       "lg": 16,
       "xl": 20,
       "2xl": 24
-    }
+    },
+    "rules": "Cap font weight at 500 across the entire app. Never use 600, 700, or bold. Use size and color (onSurface vs muted) for hierarchy."
   },
   "spacing": {
-    "rule": "Generous native spacing. Use lg or xl for screen padding. Use md for component gaps.",
+    "rule": "Generous vertical breathing room. Cards never flush to screen edges.",
     "xs": 4,
     "sm": 8,
     "md": 12,
@@ -56,23 +57,21 @@
   "radius_tokens": {
     "sm": 6,
     "md": 12,
-    "lg": 20,
+    "lg": 16,
     "pill": 999
   },
-  "shadow_tier": "1",
+  "shadow_tier": 1,
   "navigation": "bottom_tabs",
-  "icon_set": "custom (lucide-react-native)",
+  "icon_set": "Phosphor",
   "glassmorphism": {
     "enabled": true,
     "do's": [
-      "Use on bottom tab bar",
-      "Use on floating sticky header during scroll",
-      "Use on floating action buttons (FABs) with a brandTertiary tint",
-      "Use on featured project summary cards sitting on background imagery"
+      "Use on sticky header backgrounds over scrolling content.",
+      "Use on bottom tab bar.",
+      "Use on the sticky 'Add Expense' CTA container at the bottom of the Home screen."
     ],
     "dont's": [
-      "Do not use on regular list items or form inputs",
-      "Do not use on generic body content"
+      "Never apply to standard list rows, form fields, or static body content."
     ]
   },
   "platform_libraries": {
@@ -89,78 +88,57 @@
   },
   "screens": [
     {
-      "name": "Home",
-      "purpose": "A dashboard overview showing total budget, spend, active renovation progress, and quick action buttons.",
+      "name": "Home (Dashboard)",
+      "purpose": "A top-first hierarchy summarizing the most important money state, hero project visual, and recent activity, with a sticky primary action.",
+      "layout": "1. Hero card (modern house image) spanning full width minus `lg` padding. Apply gradient scrim (transparent to 70% surfaceInverse) to the image bottom and place project title/status over it. 2. Stat grid: use flexWrap with `gap: md` and `justifyContent: 'space-between'`. Ensure 2 columns without left-clustering. 3. Add Expense CTA must be sticky at the bottom within a fixed glass container.",
       "states": {
-        "loading": "Skeleton UI for budget summary card.",
-        "empty": "No active projects. Display empty state with blueprint background and CTA to start first project.",
-        "error": "Failed to load project details with a retry button."
-      },
-      "layout": "Dashboard-first layout. Top: Large hero card with background imagery (Victorian house) overlaid with a dark gradient scrim and white text showing current project ('Nottingham Victorian Refurb') and big metrics (Total Budget vs Spent) with a progress bar. Below: 2-column grid or list of recent expenses. Bottom: Sticky primary CTA for 'Add Expense'."
+        "loading": "Centered spinner on off-white surface.",
+        "empty": "Should not be empty, but if no project exists, show brandTertiary tinted Phosphor icon and 'Start your first renovation' CTA.",
+        "error": "Readable message on surfaceSecondary + Retry button."
+      }
+    },
+    {
+      "name": "Media & Compare",
+      "purpose": "Showcase before/after renovation progress cleanly with high visual impact.",
+      "layout": "Use full-bleed image cards (or edge-to-edge minus `lg` padding) for before/after comparison. Ensure every image layered with text uses the mandatory vertical gradient-to-dark scrim. Keep thumbnails in a consistent 2-col grid using `gap: md`.",
+      "states": {
+        "loading": "Skeleton grids.",
+        "empty": "Illustration/Tinted Icon container (brandTertiary) + text + 'Upload Photo' CTA.",
+        "error": "Error text + retry."
+      }
     },
     {
       "name": "Budget",
-      "purpose": "Detailed list of budget line items and AI cost estimates.",
+      "purpose": "Detailed tracking of budget line items and variance alerts in a single-column flow.",
+      "layout": "Clean list rows with subtle dividers (0.5pt `divider`). Group categories using `surfaceSecondary` cards. Use text color (`success` / `error`) for variance alerts but avoid decorative colored borders.",
       "states": {
-        "loading": "Spinner centered on screen.",
-        "empty": "No line items logged. Display subtle illustration and 'Add Item' primary CTA.",
-        "error": "Could not fetch budget data."
-      },
-      "layout": "Filter chips at the top (Hard, Soft, Contingency). A vertically scrolling list of line items (title, category, cost). A sticky primary CTA ('Add Item') at the bottom. The AI Cost Estimate feature is accessed via a prominent secondary banner/card at the top of the list."
-    },
-    {
-      "name": "Team",
-      "purpose": "Directory of tradespeople, subcontractors, and stakeholders.",
-      "states": {
-        "loading": "List skeleton.",
-        "empty": "No team members added. Show yellow hard hat image and 'Add Trade' button.",
-        "error": "Error loading contacts."
-      },
-      "layout": "Vertical list view with avatar/initials on the left, name and trade on the right. Each row contains quick-action icon buttons (WhatsApp, Call). Pro-locked stakeholders are visually distinct with a 'Pro' badge."
-    },
-    {
-      "name": "Media",
-      "purpose": "Gallery for receipts and before/after photos.",
-      "states": {
-        "loading": "Grid skeleton.",
-        "empty": "No media uploaded. Display empty state asking to upload first receipt.",
-        "error": "Failed to load media."
-      },
-      "layout": "A 2-column or 3-column grid of thumbnails for photos and receipts. Floating Action Button (FAB) at bottom right to launch camera/gallery upload."
-    },
-    {
-      "name": "Profile & Plan",
-      "purpose": "User settings, BRRR calculator access, and Pro tier upgrade.",
-      "states": {
-        "loading": "Spinner.",
-        "empty": "N/A",
-        "error": "Failed to fetch plan status."
-      },
-      "layout": "Accessed via header icon. Contains user details, a highly visible 'Upgrade to Pro' card detailing features (BRRR calculator, Stakeholders), and settings toggles."
+        "empty": "Tinted icon container + 'No budget items yet' + CTA.",
+        "loading": "Skeleton rows.",
+        "error": "Error text + retry."
+      }
     }
   ],
   "images": {
-    "hero_victorian": {
-      "url": "https://images.unsplash.com/photo-1714259830228-893a69a2d45b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwyfHxWaWN0b3JpYW4lMjBob3VzZSUyMHJlZnVyYmlzaG1lbnR8ZW58MHx8fHwxNzkxOTgyNjI2fDA&ixlib=rb-4.1.0&q=85",
-      "alt": "Victorian house refurbishment"
+    "hero_project_exterior": {
+      "url": "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzN8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBob3VzZSUyMGV4dGVyaW9yfGVufDB8fHx8MTc5MjIyMDA5M3ww&ixlib=rb-4.1.0&q=85",
+      "alt": "Modern house exterior during daytime"
     },
-    "blueprint_empty": {
-      "url": "https://images.pexels.com/photos/4458205/pexels-photo-4458205.jpeg",
-      "alt": "Architectural blueprint"
+    "kitchen_renovation_before": {
+      "url": "https://images.unsplash.com/photo-1705538851801-4de1c763df2a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzd8MHwxfHNlYXJjaHwxfHxraXRjaGVuJTIwcmVub3ZhdGlvbiUyMGJlZm9yZXxlbnwwfHx8fDE3OTIyMjAwOTR8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Kitchen renovation before"
     },
-    "hardhat_logo": {
-      "url": "https://images.pexels.com/photos/34965713/pexels-photo-34965713.jpeg",
-      "alt": "Yellow hard hat on site"
+    "kitchen_renovation_after": {
+      "url": "https://images.unsplash.com/photo-1628745277862-bc0b2d68c50c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNTl8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBraXRjaGVuJTIwYWZ0ZXJ8ZW58MHx8fHwxNzkyMjIwMDk0fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Modern kitchen after"
     }
   },
   "instructions_to_main_agent": [
-    "Strictly follow the '1 iOS-Native Clean' personality: highly structured, legible, with generous padding, separating data effectively.",
-    "Brand colors are set: Teal (#0f766e) is the main identity, Orange (#f97316) is strictly for the Primary CTAs (brandPrimary) to drive action. Green 50 (#f0fdf4) is the brandTertiary used for subtle tinted backgrounds.",
-    "All interactive primary buttons (like 'Add Expense') must be sticky above the tab bar within a safe area.",
-    "For the Home screen 'Nottingham Victorian Refurb' hero card, USE the `hero_victorian` image as a background WITH a mandatory top-to-bottom vertical gradient scrim (transparent to >=70% surfaceInverse) so that white text overlay is readable.",
-    "Use Lucide icons across the app per the prompt request, ensuring consistent weight (e.g., all outlined) per screen.",
-    "For Team/Trades list items, implement direct integrations for WhatsApp and calls as quick action icon buttons on each row.",
-    "For Pro features (BRRR calculator, Stakeholders), add lock icons or 'Pro' badges if the user is on the basic tier, steering them to the Profile/Plan upgrade screen.",
-    "Integrate haptic feedback on tab changes, CTA presses, and list item interactions. Serialize haptics into your components."
+    "Prioritize these 6 Visual Polish changes:",
+    "1. UPDATE APP/FRONTEND/SRC/THEME.TS & COMPONENTS: Standardize colors to match the iOS-Native Clean palette above. Restrict Inter font weights to '400' and '500' max. Remove any 'bold' or '700' weights across the app.",
+    "2. DASHBOARD (HOME) HERO CARD: In `app/(tabs)/index.tsx`, convert the hero project card to use `expo-image` with the provided `hero_project_exterior` URL. You MUST apply a vertical `expo-linear-gradient` scrim (transparent at 0% to 70% `surfaceInverse` at 100%) absolutely positioned over the image, and place the title/status text at the bottom. Text must be `onSurfaceInverse`.",
+    "3. STICKY CTA ON DASHBOARD: Wrap the 'Add Expense' CTA in `index.tsx` inside a fixed absolute container anchored to the bottom. Use a glassmorphism background (`expo-blur` or `expo-glass-effect`) so scrolling content is visible beneath it. Ensure it clears the safe area.",
+    "4. CARD CONSISTENCY: In `ui.tsx`, ensure the `Card` component universally uses `surfaceSecondary`, a subtle shadow (shadow tier 1), `lg` (16px) border radius, and `lg` (16px) internal padding. Do not let cards stretch flush to the screen edges.",
+    "5. EMPTY STATES: In `ui.tsx` (EmptyState component) and usage in Budget/Team tabs, avoid plain text. Use a `brandTertiary` tinted rounded square containing a primary icon, followed by concise text and a primary CTA.",
+    "6. MULTI-COLUMN STATS GRID: In `index.tsx` (Budget Breakdown, Stats), enforce a strict multi-column layout for stat cards. Use `flexDirection: 'row'`, `flexWrap: 'wrap'`, `justifyContent: 'space-between'`, and `gap: md` rather than hacky `width: 48%` rules."
   ]
 }

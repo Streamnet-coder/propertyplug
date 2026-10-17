@@ -162,7 +162,7 @@ export type Receipt = { id: string; title: string; amount: number; date: string;
 export type MediaItem = { id: string; title: string; phase: "before" | "progress" | "after"; url?: string | null; storage_path?: string | null; date: string; milestone_id?: string | null };
 export type Branding = { company_name: string; contact_name: string; phone: string; email: string; website: string; tagline: string; logo_path?: string | null };
 export type Comparable = { address: string; beds: number; price: number; distance: string; date: string };
-export type Estimate = { items: { name: string; category: string; low: number; high: number; supplier: string }[]; total_low: number; total_high: number; notes: string };
+export type Estimate = { items: { name: string; spec?: string; category: string; low: number; high: number; supplier: string; visible?: boolean }[]; total_low: number; total_high: number; notes: string };
 export type RentYield = { gross_yield: number; yield_on_cost: number; invested: number; refinance_amount: number; cash_left_in: number; monthly_mortgage: number; monthly_cashflow: number };
 export type ShoppingItem = { id: string; line_item_id?: string | null; name: string; supplier: string; qty: string; est_cost: number; checked: boolean; actual_cost?: number | null; receipt_id?: string | null };
 export type Digest = {
@@ -198,3 +198,10 @@ export const expiryLabel = (d: { expiry_status: string | null; days_left: number
   d.expiry_status === "expired" ? `Expired ${Math.abs(d.days_left ?? 0)} day${Math.abs(d.days_left ?? 0) === 1 ? "" : "s"} ago` : d.expiry_status === "soon" ? (d.days_left === 0 ? "Expires today" : `Expires in ${d.days_left} day${d.days_left === 1 ? "" : "s"}`) : null;
 export type PortalActivity = { id: string; email: string; name: string; kind: "login" | "view" | "download" | "team_invite" | "team_remove" | "doc_request" | "doc_reminder"; doc_id: string | null; doc_title: string | null; doc_type: string | null; detail?: string | null; at: string };
 export type PortalQuestion = { id: string; name: string; email: string; text: string; created_at: string; reply: string | null; replied_at: string | null };
+export type RentStatus = "paid" | "partial" | "late" | "due";
+export type RentMonth = { month: string; due_on: string; due: number; paid: number; paid_on: string | null; status: RentStatus };
+export type Tenancy = { id: string; tenant_name: string; tenant_email: string; tenant_phone: string; rent: number; deposit: number; deposit_scheme: string; start_date: string; end_date: string | null; rent_day: number; notes: string;
+  status: "active" | "upcoming" | "ended"; schedule: RentMonth[]; arrears: number; late_count: number };
+export type RentalExpense = { id: string; category: string; amount: number; date: string; description: string };
+export type Rentals = { year: number; tenancies: Tenancy[]; expenses: RentalExpense[];
+  summary: { rent_due: number; received: number; arrears: number; expenses: number; net: number; active_rent: number; by_category: Record<string, number>; monthly: { month: string; due: number; received: number; expenses: number; net: number }[] } };

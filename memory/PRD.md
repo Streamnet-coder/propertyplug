@@ -162,3 +162,11 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 
 - Activity filters (Jun 2026): client-side person + area chips on project-activity screen (limit 300).
 - Stripe webhook endpoint created via API (we_1URGLVRfIVVOsnJmtQd4HGOC) for preview URL; STRIPE_WEBHOOK_SECRET set; signature verified. Must re-create for deployed URL.
+
+## AI estimate photo + finished design (Jun 2026)
+- /ai/estimate accepts photo_path (Claude vision), items have spec + visible; returns id. POST /ai/estimate/{id}/design: Nano Banana (gemini-3.1-flash-image-preview) edits photo or generates, Claude locates pins (x,y - AI estimate photo + finished design: /ai/estimate photo_path, POST /ai/estimate/{id}/design (Nano Banana + Claude pins), DesignHotspots.
+
+## Iteration 30 (Jun 2026)
+- Rent & tenancy tracker: /api/rentals?year (tenancies with monthly schedule paid/partial/late/due, arrears; expenses by category; yearly net cashflow + monthly chart). Tenancy CRUD, PUT /rentals/tenancies/{id}/rent/{YYYY-MM}, expense CRUD. Screens: /rentals, /tenancy-form, /rental-expense-form, rent log sheet; dashboard RentalsCard.
+- Before/after slider: /compare (pick any before + after/progress photo; ?milestone_id filters to stage). Entry: Media tab "Compare" button, stage photos "Compare before & after".
+- Design polish: blurred sticky Add Expense bar, EmptyState rounded icon + optional CTA (Budget/Team), stronger hero scrim.

@@ -171,7 +171,7 @@ export default function Team() {
               </View>
             )
           }
-          ListEmptyComponent={<EmptyState icon="hard-hat" title="No team members yet" subtitle="Add your first trade to call or WhatsApp them in one tap." testID="team-empty" />}
+          ListEmptyComponent={<EmptyState icon="hard-hat" title="No team members yet" subtitle="Add your first trade to call or WhatsApp them in one tap." testID="team-empty" action="Add contact" onAction={() => router.push({ pathname: "/contact-form", params: { kind } })} />}
         />
       )}
     </View>

@@ -30,6 +30,9 @@ export function StagePhotos({ milestoneId, stage }: { milestoneId: string; stage
           ))}
         </ScrollView>
       )}
+      {photos.some((p) => p.phase === "before") && photos.some((p) => p.phase !== "before") && (
+        <Button small variant="ghost" icon="chevrons-left-right" title="Compare before & after" onPress={() => router.push({ pathname: "/compare", params: { milestone_id: milestoneId } })} testID="stage-compare-button" />
+      )}
       <View style={{ flexDirection: "row", gap: space.sm }}>
         <Button small variant="outline" icon="camera" title="Add before" onPress={() => add("before")} style={{ flex: 1 }} testID="stage-add-before-button" />
         <Button small variant="secondary" icon="camera" title="Add after" onPress={() => add("after")} style={{ flex: 1 }} testID="stage-add-after-button" />

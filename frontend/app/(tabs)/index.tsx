@@ -1,4 +1,5 @@
 import { Image } from "expo-image";
+import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect } from "react";
@@ -19,6 +20,7 @@ import { shareProgressReport } from "@/src/report";
 import { LandUplift, PlanningCard } from "@/src/components/land-cards";
 import { ExpiringAccessCard } from "@/src/components/expiring-access-card";
 import { OverdueRequestsCard } from "@/src/components/overdue-requests-card";
+import { RentalsCard } from "@/src/components/rentals-card";
 import { makeStyles, useTheme } from "@/src/theme";
 
 const HERO = "https://images.unsplash.com/photo-1714259830228-893a69a2d45b?crop=entropy&cs=srgb&fm=jpg&ixlib=rb-4.1.0&q=85&w=1200";
@@ -91,7 +93,7 @@ export default function Home() {
         >
           <Animated.View entering={FadeInDown.duration(400)} style={s.hero} testID="project-hero-card">
             <Image source={{ uri: HERO }} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} contentFit="cover" transition={300} />
-            <LinearGradient colors={["rgba(15,23,42,0.15)", colors.scrim]} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
+            <LinearGradient colors={["rgba(15,23,42,0.35)", "rgba(15,23,42,0.05)", colors.scrim]} locations={[0, 0.35, 1]} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
             <View style={s.heroTop}>
               <View style={s.heroTag}>
                 <Text style={s.heroTagText}>{p.target_type.toUpperCase()}</Text>
@@ -328,6 +330,7 @@ export default function Home() {
                 <Icon name="chevron-right" size={18} color={colors.brandPrimary} />
               </Pressable>
             )}
+            <RentalsCard />
           </View>
           )}
 
@@ -353,9 +356,9 @@ export default function Home() {
       )}
 
       {p && (
-        <View style={[s.cta, { bottom: bottomChrome + space.lg }]}>
+        <BlurView intensity={40} tint="light" style={[s.cta, { paddingBottom: bottomChrome + space.md }]}>
           <Button title="Add Expense" icon="plus" onPress={() => router.push("/receipt-form")} testID="add-expense-button" />
-        </View>
+        </BlurView>
       )}
     </View>
   );
@@ -448,5 +451,5 @@ const useStyles = makeStyles((c) => ({
   rIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: c.brandTertiary, alignItems: "center", justifyContent: "center" },
   rTitle: { fontFamily: fonts.semibold, fontSize: 14, color: c.onSurface },
   rAmt: { fontFamily: fonts.bold, fontSize: 14, color: c.onSurface },
-  cta: { position: "absolute", left: space.lg, right: space.lg },
+  cta: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: space.lg, paddingTop: space.md, borderTopWidth: 1, borderTopColor: c.border, backgroundColor: "rgba(255,255,255,0.72)", overflow: "hidden" },
 }));

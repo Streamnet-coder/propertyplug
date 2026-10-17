@@ -60,6 +60,10 @@ export default function RootLayout() {
                 <Stack.Screen name="portfolio-map" />
                 <Stack.Screen name="planning" />
                 <Stack.Screen name="planning-form" options={{ presentation: "modal" }} />
+                <Stack.Screen name="rentals" />
+                <Stack.Screen name="tenancy-form" options={{ presentation: "modal" }} />
+                <Stack.Screen name="rental-expense-form" options={{ presentation: "modal" }} />
+                <Stack.Screen name="compare" />
                 <Stack.Screen name="trades-finder" />
                 <Stack.Screen name="timeline" />
                 <Stack.Screen name="milestone-form" options={{ presentation: "modal" }} />

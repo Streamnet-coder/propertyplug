@@ -153,7 +153,7 @@ export default function Budget() {
               <CategoryBars items={q.data ?? []} />
             </View>
           }
-          ListEmptyComponent={<EmptyState icon="clipboard-list" title="No line items logged" subtitle="Add your first cost to start tracking variance." testID="budget-empty" />}
+          ListEmptyComponent={<EmptyState icon="clipboard-list" title="No line items logged" subtitle="Add your first cost to start tracking variance." testID="budget-empty" action="Add first item" onAction={() => router.push("/item-form")} />}
         />
       )}
       <View style={[s.cta, { bottom: bottomChrome + space.lg }]}>

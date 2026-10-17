@@ -4,6 +4,9 @@ import { ScrollView, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
 import { api, Estimate, gbp } from "@/src/api";
+import { DesignHotspots, DesignPin } from "@/src/components/design-hotspots";
+import { PhotoPicker, PickedAsset } from "@/src/components/photo-picker";
+import { uploadAsset } from "@/src/upload";
 import { Button, Card, Chip, Field, fonts, FormScreen, Icon, radius, space } from "@/src/components/ui";
 import { invalidate } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -19,10 +22,18 @@ export default function AiEstimate() {
   const [desc, setDesc] = useState("");
   const [finish, setFinish] = useState("Medium Finish");
   const [added, setAdded] = useState<Record<number, boolean>>({});
+  const [photo, setPhoto] = useState<PickedAsset | null>(null);
 
+  const design = useMutation({
+    mutationFn: (id: string) => api<{ image_path: string; pins: DesignPin[] }>(`/ai/estimate/${id}/design`, { method: "POST" }),
+    onSuccess: () => { invalidate("media"); toast("Design saved to your project photos"); },
+  });
   const est = useMutation({
-    mutationFn: () => api<Estimate>("/ai/estimate", { body: { description: desc, finish_type: finish } }),
-    onSuccess: () => setAdded({}),
+    mutationFn: async () => {
+      const photo_path = photo ? await uploadAsset(photo) : undefined;
+      return api<Estimate & { id: string }>("/ai/estimate", { body: { description: desc, finish_type: finish, photo_path } });
+    },
+    onSuccess: (d) => { setAdded({}); design.reset(); design.mutate(d.id); }, // design the finished look straight after the estimate
   });
 
   const addItem = async (i: number) => {
@@ -58,6 +69,7 @@ export default function AiEstimate() {
           <Chip key={e} label={e.length > 28 ? e.slice(0, 28) + "…" : e} onPress={() => setDesc(e)} testID={`ai-example-${i}`} />
         ))}
       </ScrollView>
+      <PhotoPicker value={photo} onChange={setPhoto} hint="Add a photo of the space (optional). The AI uses it for the estimate and designs the finished look over it." />
       <View style={{ gap: space.sm }}>
         <Text style={s.label}>Finish level</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
@@ -70,7 +82,7 @@ export default function AiEstimate() {
       {est.isPending && (
         <Card style={{ alignItems: "center", gap: space.sm }} testID="ai-estimate-loading">
           <Icon name="sparkles" size={22} color={colors.brand} />
-          <Text style={s.muted}>Checking UK supplier prices and trade rates…</Text>
+          <Text style={s.muted}>{photo ? "Uploading your photo, then checking" : "Checking"} UK supplier prices and trade rates…</Text>
         </Card>
       )}
       {est.isError && <Text style={{ color: colors.error, fontFamily: fonts.medium }} testID="ai-estimate-error">{(est.error as Error).message}</Text>}
@@ -83,10 +95,26 @@ export default function AiEstimate() {
               {gbp(est.data.total_low)} – {gbp(est.data.total_high)}
             </Text>
           </View>
+          <Text style={s.label}>Finished look</Text>
+          {design.isPending && (
+            <Card style={{ alignItems: "center", gap: space.sm }} testID="design-loading">
+              <Icon name="wand-sparkles" size={22} color={colors.brandPrimary} />
+              <Text style={s.muted}>Designing your finished {photo ? "room from your photo" : "space"} and pinning prices… (about 20 seconds)</Text>
+            </Card>
+          )}
+          {design.isError && (
+            <Card style={{ gap: space.sm }} testID="design-error">
+              <Text style={{ color: colors.error, fontFamily: fonts.medium }}>{(design.error as Error).message}</Text>
+              <Button small variant="outline" icon="refresh-cw" title="Try the design again" onPress={() => design.mutate(est.data!.id)} testID="design-retry-button" />
+            </Card>
+          )}
+          {design.data && <DesignHotspots path={design.data.image_path} pins={design.data.pins} />}
+          <Text style={s.label}>Items</Text>
           {est.data.items.map((it, i) => (
             <Card key={i} style={s.item}>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={s.itemName}>{it.name}</Text>
+                {it.spec ? <Text style={s.muted} numberOfLines={2}>{it.spec}</Text> : null}
                 <Text style={s.muted}>{it.supplier} · {it.category}</Text>
                 <Text style={s.range}>{gbp(it.low)} – {gbp(it.high)}</Text>
               </View>

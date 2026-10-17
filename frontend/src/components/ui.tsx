@@ -164,7 +164,7 @@ export function SectionTitle({ title, action, onAction, testID }: { title: strin
   );
 }
 
-export function EmptyState({ icon, title, subtitle, testID }: { icon: IconName; title: string; subtitle?: string; testID?: string }) {
+export function EmptyState({ icon, title, subtitle, testID, action, onAction }: { icon: IconName; title: string; subtitle?: string; testID?: string; action?: string; onAction?: () => void }) {
   const s = useStyles();
   const { colors } = useTheme();
   return (
@@ -174,6 +174,7 @@ export function EmptyState({ icon, title, subtitle, testID }: { icon: IconName; 
       </View>
       <Text style={s.emptyTitle}>{title}</Text>
       {subtitle && <Text style={s.emptySub}>{subtitle}</Text>}
+      {action && onAction && <Button small title={action} icon="plus" onPress={onAction} style={{ marginTop: space.md }} testID={testID ? `${testID}-action` : undefined} />}
     </View>
   );
 }
@@ -291,9 +292,11 @@ const useStyles = makeStyles((c) => ({
   sectionAction: { fontFamily: fonts.semibold, fontSize: 14, color: c.brand },
   empty: { alignItems: "center", paddingVertical: space.xxxl, paddingHorizontal: space.xl, gap: space.sm },
   emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: c.border,
     backgroundColor: c.brandTertiary,
     alignItems: "center",
     justifyContent: "center",

@@ -50,8 +50,16 @@ export default function MediaScreen() {
   return (
     <View style={s.root} testID="media-screen">
       <View style={[s.header, { paddingTop: insets.top + space.sm }]}>
-        <Text style={s.title}>Media</Text>
-        <Text style={s.muted}>Before & after photos and receipts</Text>
+        <View style={s.headRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.title}>Media</Text>
+            <Text style={s.muted}>Before & after photos and receipts</Text>
+          </View>
+          <Pressable testID="media-compare-button" onPress={() => { tap(); router.push("/compare"); }} style={({ pressed }) => [s.compareBtn, pressed && { opacity: 0.85 }]}>
+            <Icon name="chevrons-left-right" size={16} color={colors.brand} />
+            <Text style={s.compareText}>Compare</Text>
+          </Pressable>
+        </View>
       </View>
       <View style={s.chipRow}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
@@ -155,6 +163,9 @@ export default function MediaScreen() {
 const useStyles = makeStyles((c) => ({
   root: { flex: 1, backgroundColor: c.surfaceSecondary },
   header: { paddingHorizontal: space.lg, paddingBottom: space.sm, backgroundColor: c.surface },
+  headRow: { flexDirection: "row", alignItems: "center", gap: space.md },
+  compareBtn: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, paddingHorizontal: space.md, borderRadius: radius.pill, backgroundColor: c.brandTertiary },
+  compareText: { fontFamily: fonts.bold, fontSize: 13, color: c.brand },
   title: { fontFamily: fonts.extrabold, fontSize: 28, color: c.onSurface, letterSpacing: -0.5 },
   muted: { fontFamily: fonts.regular, fontSize: 12, color: c.muted },
   chipRow: { height: 56, backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, justifyContent: "center" },
