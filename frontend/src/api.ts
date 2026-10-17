@@ -162,7 +162,7 @@ export type Contract = {
   payments: StagePayment[];
 };
 export type Snag = { id: string; room: string; description: string; priority: "low" | "medium" | "high"; status: "open" | "fixed"; storage_path?: string | null; assignee: string; created_at: string; fix_photo_path?: string | null; fixed_by?: string | null; fix_note?: string; reported_by?: string;
-  reporter_name?: string; reporter_email?: string; reporter_phone?: string; source?: string; assigned_to?: { kind: "team" | "trade"; id: string; name: string; email: string } | null };
+  reporter_name?: string; reporter_email?: string; reporter_phone?: string; source?: string; fix_cost?: number | null; assigned_to?: { kind: "team" | "trade"; id: string; name: string; email: string } | null };
 export type Referrals = { count: number; months_earned: number; trial_ends: string; recent: { name: string; source: string; date: string }[] };
 export type VarianceAlert = "over" | "near" | null;
 export type LineItem = { id: string; category: Category; name: string; budgeted: number; actual: number; supplier: string; status: string; linked_spend: number; spent: number; alert: VarianceAlert };

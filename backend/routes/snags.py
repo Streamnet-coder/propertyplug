@@ -35,7 +35,11 @@ class SnagUpdate(BaseModel):
 @router.get("/snags")
 async def list_snags(user: User = Depends(current_user)):
     docs = await db.snags.find({"user_id": user.id, "project_id": await active_pid(user)}).sort("created_at", -1).to_list(1000)
-    return [Snag.from_mongo(d).out() for d in docs]
+    out = [Snag.from_mongo(d).out() for d in docs]
+    if user.no_money:
+        for o in out:
+            o["fix_cost"] = None
+    return out
 
 
 @router.post("/snags")

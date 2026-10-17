@@ -224,4 +224,5 @@ class Snag(BaseDocument):
     source: str = ""
     assigned_to: Optional[dict] = None
     job_token: Optional[str] = None
+    fix_cost: Optional[float] = None
     created_at: str = Field(default_factory=now_iso)

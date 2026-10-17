@@ -6,7 +6,8 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Tex
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { api, fileUrl, Snag } from "@/src/api";
+import { api, fileUrl, gbp, Snag } from "@/src/api";
+import { useCanSeeMoney } from "@/src/money";
 import { Button, Chip, EmptyState, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { PdfButton } from "@/src/components/pdf-button";
 import { SignoffPanel } from "@/src/components/signoff-panel";
@@ -24,6 +25,7 @@ export default function Snags() {
   const s = useStyles();
   const { colors } = useTheme();
   const toast = useToast();
+  const canMoney = useCanSeeMoney();
   const q = useSnags();
   const [room, setRoom] = useState("All");
   const [showFixed, setShowFixed] = useState(true);
@@ -113,7 +115,7 @@ export default function Snags() {
                   ) : item.assignee ? <Text style={s.muted}>Assigned: {item.assignee}</Text> : null}
                   {item.fixed_by ? (
                     <Text style={[s.muted, { color: colors.success, fontFamily: fonts.semibold }]} testID={`snag-fixed-by-${item.id}`}>
-                      Fixed by {item.fixed_by}{item.fix_photo_path ? " · photo" : ""}
+                      Fixed by {item.fixed_by}{item.fix_photo_path ? " · photo" : ""}{item.fix_cost && canMoney ? ` · ${gbp(item.fix_cost, 2)} logged to repairs` : ""}
                     </Text>
                   ) : null}
                 </View>

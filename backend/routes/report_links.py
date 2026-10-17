@@ -13,7 +13,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
-from core import APP_NAME, E, db, now_iso, oid
+from core import APP_NAME, E, db, money, now_iso, oid
 from deps import active_pid, current_user
 from email_service import EmailError, send_email
 from html_utils import brand_block, owner_branding, page, serve_logo
@@ -382,29 +382,44 @@ async def job_page(token: str, done: Optional[str] = None):
         body += (f"<form class='card' id='job-form' method='post' action='/api/job/{tk}/fix' enctype='multipart/form-data'>{head}"
                  f"<label>Photo of the fix (recommended)</label><input type='file' name='photo' id='job-photo' accept='image/*' capture='environment'/>"
                  f"<label>Note (optional)</label><input name='note' id='job-note' placeholder='What was done'/>"
+                 f"<label>Cost of the fix (optional)</label><input name='cost' id='job-cost' type='number' inputmode='decimal' min='0' max='1000000' step='0.01' placeholder='e.g. 120.00'/>"
+                 f"<p class='cap'>Parts and labour total. It's added to the property's repair expenses.</p>"
                  f"<button type='submit' id='job-fix'>Mark as fixed</button></form>")
     else:
         fix = f"<img src='/api/job/{tk}/photo?kind=fix' style='width:100%;max-height:260px;object-fit:cover;border-radius:10px;margin-top:8px'/>" if s.get("fix_photo_path") else ""
-        body += f"<div class='card' id='job-done'>{head}<p class='under'>✓ Fixed {E((s.get('fixed_at') or '')[:10])}{(' by ' + E(s['fixed_by'])) if s.get('fixed_by') else ''}</p>{fix}</div>"
+        cost = f"<p class='cap' id='job-cost-logged'>Cost logged: {money(s['fix_cost'], 2)}</p>" if s.get("fix_cost") else ""
+        body += f"<div class='card' id='job-done'>{head}<p class='under'>✓ Fixed {E((s.get('fixed_at') or '')[:10])}{(' by ' + E(s['fixed_by'])) if s.get('fixed_by') else ''}</p>{cost}{fix}</div>"
     return page(f"Job · {address}", body)
 
 
 @router.post("/job/{token}/fix")
-async def job_fix(token: str, note: str = Form(""), photo: Optional[UploadFile] = File(None)):
+async def job_fix(token: str, note: str = Form(""), cost: str = Form(""), photo: Optional[UploadFile] = File(None)):
     s = await _job(token)
     if not s:
         raise HTTPException(404, "Link not active")
+    try:
+        amount = round(float(cost.replace(",", "").replace("£", "").strip() or 0), 2)
+    except ValueError:
+        raise HTTPException(400, "Cost must be a number")
+    if not 0 <= amount <= 1_000_000:
+        raise HTTPException(400, "Cost must be between 0 and 1,000,000")
     if s["status"] == "open":
         who = (s.get("assigned_to") or {}).get("name") or s.get("assignee") or "Assignee"
         upd = {"status": "fixed", "fixed_at": now_iso(), "fixed_by": who, "fix_note": note.strip()[:500]}
         path = await _save_photo(s["user_id"], photo)
         if path:
             upd["fix_photo_path"] = path
+        if amount > 0:
+            upd["fix_cost"] = amount
+            await db.rental_expenses.insert_one({"user_id": s["user_id"], "project_id": s["project_id"], "category": "repairs", "amount": amount,
+                                                 "date": date.today().isoformat(), "description": f"Repair: {s['room']} · {s['description'][:80]} (fixed by {who})"[:200],
+                                                 "snag_id": str(s["_id"]), "source": "job_link", "created_at": now_iso()})
         await db.snags.update_one({"_id": s["_id"]}, {"$set": upd})
         from routes.tenant_portal import notify_tenant_repair_fixed
         await notify_tenant_repair_fixed({**s, **upd})
+        await _ctx(s["user_id"], s)  # sets the project currency for money()
         await log_message(s["user_id"], s["project_id"], name=who, channel="web", kind="snag_fixed", direction="in",
-                          summary=f"Marked fixed: {s['description'][:120]} ({s['room']})" + (" · photo added" if path else ""))
+                          summary=f"Marked fixed: {s['description'][:120]} ({s['room']})" + (" · photo added" if path else "") + (f" · cost {money(amount, 2)}" if amount else ""))
     return RedirectResponse(f"/api/job/{token}?done=1", status_code=303)
 
 

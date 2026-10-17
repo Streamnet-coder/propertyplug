@@ -223,3 +223,7 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Assignee reminders: reminder_scheduler (hourly) emails open assigned jobs: first after 2 days, then every 3 days (urgent: daily), max 3 (assigned_to.reminders, last_reminded_at); logged kind job_reminder. Reassign resets.
 - Tenant tracker: report-link snags get track_token; thank-you page + confirmation email link /api/track/{token} (Reported -> Assigned -> Fixed timeline, issue + fix photos); fixed email includes tracker link.
 - Urgent: high-priority reports email owner with URGENT subject; assigning an urgent job sends URGENT email. Optional Twilio SMS (backend/sms.py, env TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN/TWILIO_FROM_NUMBER, currently NOT set -> SMS off) texts owner's branding phone and assignee phone. GET /api/report-link returns sms_enabled + alert_phone.
+
+## Repair cost logging (Jun 2026)
+- Job page (/api/job/{token}) fix form has optional cost (#job-cost); POST /fix validates 0..1,000,000 (400 if not numeric), sets snag.fix_cost and inserts rental_expenses {category repairs, snag_id, source job_link}. Done page shows "Cost logged". Snags list shows "· £X logged to repairs" (hidden for no-money managers; API nulls fix_cost).
+- SMS: waiting for user's Twilio keys (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER in backend/.env).
