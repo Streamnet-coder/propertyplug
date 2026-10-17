@@ -218,4 +218,10 @@ class Snag(BaseDocument):
     reported_by: str = ""
     tenancy_id: Optional[str] = None
     tenant_notified_at: Optional[str] = None
+    reporter_name: str = ""
+    reporter_email: str = ""
+    reporter_phone: str = ""
+    source: str = ""
+    assigned_to: Optional[dict] = None
+    job_token: Optional[str] = None
     created_at: str = Field(default_factory=now_iso)

@@ -59,6 +59,10 @@ async def update_snag(sid: str, body: SnagUpdate, user: User = Depends(current_u
     upd = body.model_dump(exclude_unset=True)
     if "status" in upd:
         upd["fixed_at"] = now_iso() if upd["status"] == "fixed" else None
+    if "assignee" in upd:
+        prev = await db.snags.find_one({"_id": oid(sid), "user_id": user.id}, {"assigned_to": 1})
+        if prev and (prev.get("assigned_to") or {}).get("name", "").lower() != (upd["assignee"] or "").strip().lower():
+            upd["assigned_to"] = None  # typed a different name: no longer the emailed team member
     r = await db.snags.update_one({"_id": oid(sid), "user_id": user.id}, {"$set": upd})
     if not r.matched_count:
         raise HTTPException(404, "Snag not found")

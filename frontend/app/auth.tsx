@@ -10,7 +10,7 @@ import { Button, fonts, Field, Icon, space } from "@/src/components/ui";
 import { makeStyles, useTheme } from "@/src/theme";
 
 export default function AuthScreen() {
-  const params = useLocalSearchParams<{ mode?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; next?: string }>();
   const [mode, setMode] = useState<"login" | "register">(params.mode === "login" ? "login" : "register");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -34,7 +34,9 @@ export default function AuthScreen() {
     try {
       if (isReg) await signUp(name, email, password);
       else await signIn(email, password);
-      router.replace("/(tabs)");
+      // Only follow in-app paths (e.g. an invite link) so `next` can't send people off-site.
+      if (params.next?.startsWith("/join/")) router.replace(params.next as any);
+      else router.replace("/(tabs)");
     } catch (e: any) {
       setError(e.message);
     } finally {

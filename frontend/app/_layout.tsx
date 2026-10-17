@@ -64,6 +64,7 @@ export default function RootLayout() {
                 <Stack.Screen name="rentals" />
                 <Stack.Screen name="rent-roll" />
                 <Stack.Screen name="inbox" />
+                <Stack.Screen name="join/[token]" />
                 <Stack.Screen name="tenancy-form" options={{ presentation: "modal" }} />
                 <Stack.Screen name="rental-expense-form" options={{ presentation: "modal" }} />
                 <Stack.Screen name="compare" />

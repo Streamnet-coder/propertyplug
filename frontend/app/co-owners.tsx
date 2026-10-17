@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
 import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
+import { InviteLinks } from "@/src/components/invite-links";
 import { Button, Card, Chip, Field, fonts, FormScreen, Icon, radius, space } from "@/src/components/ui";
 import { ProjectRow, useProjects } from "@/src/queries";
 import { queryClient } from "@/src/query-client";
@@ -79,6 +80,8 @@ export default function CoOwners() {
       <MoneyToggle value={moneyAccess} onChange={setMoneyAccess} testPrefix="invite-money" />
       <Button icon="user-plus" title={role === "manager" ? "Make manager" : "Make co-owner"} loading={invite.isPending}
         disabled={!/^\S+@\S+\.\S+$/.test(email.trim()) || (role === "manager" && !picked.length)} onPress={() => invite.mutate()} testID="co-owner-invite-button" />
+      <Text style={[s.muted, { textAlign: "center" }]}>or invite without an email</Text>
+      <InviteLinks projectIds={role === "manager" ? picked : null} moneyAccess={moneyAccess} disabled={role === "manager" && !picked.length} />
 
       <Text style={s.section}>People with access ({mine.data?.length ?? 0})</Text>
       {mine.isLoading ? <ActivityIndicator color={colors.brand} /> : !mine.data?.length ? <Text style={s.muted} testID="co-owners-empty">Nobody yet.</Text> : null}

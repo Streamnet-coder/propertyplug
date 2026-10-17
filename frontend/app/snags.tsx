@@ -11,6 +11,8 @@ import { Button, Chip, EmptyState, fonts, Icon, radius, space, tap } from "@/src
 import { PdfButton } from "@/src/components/pdf-button";
 import { SignoffPanel } from "@/src/components/signoff-panel";
 import { SnagShareSheet } from "@/src/components/snag-share-sheet";
+import { AssignSheet } from "@/src/components/assign-sheet";
+import { ReportLinkSheet } from "@/src/components/report-link-sheet";
 import { shareSnagPdf } from "@/src/report";
 import { invalidate, useSnags } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -26,6 +28,8 @@ export default function Snags() {
   const [room, setRoom] = useState("All");
   const [showFixed, setShowFixed] = useState(true);
   const [sharing, setSharing] = useState(false);
+  const [reportLink, setReportLink] = useState(false);
+  const [assigning, setAssigning] = useState<Snag | null>(null);
   const all = useMemo(() => q.data ?? [], [q.data]);
   const rooms = useMemo(() => ["All", ...Array.from(new Set(all.map((x) => x.room)))], [all]);
   const list = all.filter((x) => (room === "All" || x.room === room) && (showFixed || x.status === "open")).sort((a, b) => (a.status === b.status ? 0 : a.status === "open" ? -1 : 1));
@@ -49,6 +53,9 @@ export default function Snags() {
           </Pressable>
           <Text style={[s.headerTitle, { flex: 1, marginLeft: space.md }]}>Snagging list</Text>
           <PdfButton onGenerate={shareSnagPdf} testID="snags-pdf-button" />
+          <Pressable testID="snags-report-link-button" accessibilityLabel="Tenant report link" onPress={() => { tap(); setReportLink(true); }} style={s.back} hitSlop={10}>
+            <Icon name="megaphone" size={20} color={colors.brandPrimary} />
+          </Pressable>
           <Pressable testID="snags-share-button" onPress={() => { tap(); setSharing(true); }} style={s.back} hitSlop={10}>
             <Icon name="send" size={20} color={colors.brand} />
           </Pressable>
@@ -93,8 +100,17 @@ export default function Snags() {
                   <Text style={[s.desc, item.status === "fixed" && { textDecorationLine: "line-through" }]} numberOfLines={2}>{item.description}</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     <View style={[s.dot, { backgroundColor: prio[item.priority] }]} />
-                    <Text style={s.muted}>{item.room} · {item.priority}{item.assignee ? ` · ${item.assignee}` : ""}{item.reported_by ? ` · ${item.reported_by}` : ""}</Text>
+                    <Text style={[s.muted, { flex: 1 }]}>{item.room} · {item.priority}{item.reported_by ? ` · ${item.reported_by}` : ""}</Text>
                   </View>
+                  {item.reporter_phone || item.reporter_email ? (
+                    <Text style={s.muted} numberOfLines={1} testID={`snag-reporter-${item.id}`}>{[item.reporter_phone, item.reporter_email].filter(Boolean).join(" · ")}</Text>
+                  ) : null}
+                  {item.status === "open" ? (
+                    <Pressable onPress={() => { tap(); setAssigning(item); }} hitSlop={6} style={s.assign} testID={`snag-assign-${item.id}`}>
+                      <Icon name={item.assignee ? "user-check" : "user-plus"} size={14} color={colors.brand} />
+                      <Text style={s.assignText}>{item.assignee ? `Assigned: ${item.assignee}` : "Assign"}</Text>
+                    </Pressable>
+                  ) : item.assignee ? <Text style={s.muted}>Assigned: {item.assignee}</Text> : null}
                   {item.fixed_by ? (
                     <Text style={[s.muted, { color: colors.success, fontFamily: fonts.semibold }]} testID={`snag-fixed-by-${item.id}`}>
                       Fixed by {item.fixed_by}{item.fix_photo_path ? " · photo" : ""}
@@ -111,6 +127,8 @@ export default function Snags() {
         <Button title="Log snag" icon="plus" onPress={() => router.push({ pathname: "/snag-form", params: room !== "All" ? { room } : {} })} testID="add-snag-button" />
       </View>
       <SnagShareSheet visible={sharing} onClose={() => setSharing(false)} snags={all} />
+      <ReportLinkSheet visible={reportLink} onClose={() => setReportLink(false)} />
+      <AssignSheet snag={assigning} onClose={() => setAssigning(null)} />
     </View>
   );
 }
@@ -131,6 +149,8 @@ const useStyles = makeStyles((c) => ({
   check: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: c.borderStrong, alignItems: "center", justifyContent: "center" },
   desc: { fontFamily: fonts.semibold, fontSize: 14, color: c.onSurface },
   dot: { width: 8, height: 8, borderRadius: 4 },
+  assign: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", marginTop: 4, paddingHorizontal: space.sm, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: c.brandTertiary },
+  assignText: { fontFamily: fonts.semibold, fontSize: 12, color: c.brand },
   thumb: { width: 48, height: 48, borderRadius: radius.sm, backgroundColor: c.surfaceTertiary },
   cta: { position: "absolute", left: space.lg, right: space.lg },
 }));

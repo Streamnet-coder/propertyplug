@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 40 — Co-owner shareable invite LINKS (one-person, 7-day, cancellable). BACKEND 12/12 passed covering POST/GET/DELETE /api/co-owner-links, public GET /api/join/{token} (200 preview / 404 invalid / 410 used / 410 expired via mongo tamper), POST /api/join/{token} (400 for owner-using-own-link, 200 for new TEST user with co_owner & manager roles with correct money_access, 410 for second user). Verified owner's co-owners list reflects link-joined user (role, money_access), owner's projects appear in TEST user's /api/projects as shared, and manager-link limits to chosen project_ids. FRONTEND end-to-end on 390x844: owner on /co-owners sees invite-link-create (enabled in co_owner mode, aria-disabled=true in manager mode without project tick); clicking Create renders invite-link-{id} card with invite-link-copy-{id}, invite-link-share-{id}, invite-link-cancel-{id}; URL text matches {BACKEND}/join/{token}. Logged-out /join/{token} renders join-card with join-scope, join-money, join-register-button, join-login-button (and expiry/one-use notice). Tapping join-login-button navigates to /auth?mode=login&next=/join/{token} (URL-encoded in href, decoded correctly). After signing in with a fresh TEST user, app redirects back to /join/{token} where join-accept-button is visible; tapping it POSTs /api/join/{token} and lands on /projects where the owner's demo project 'Nottingham Victorian Refurb' is listed with 'Co-owner · Demo Builder' label. Visiting an invalid or already-used token renders join-invalid ('Invite link not available'). All TEST data cleaned (2 users, 1 co_owner row, 3 demo links removed; demo project untouched). No Stripe calls made.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Button (shared ui)", "issue": "join-accept-button renders TWO DOM nodes with the same data-testid (outer View wrapper + inner Pressable). Playwright strict mode warns 'locator resolved to 2 elements' and `wait_for_selector` can time out on visibility heuristics. Not a user-facing bug, but duplicate testIDs break strict selectors in tests. Workaround: use .last. Reference: src/components/ui (Button component) + /app/frontend/app/join/[token].tsx:62", "testID": "join-accept-button", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration40.py",
+    "/app/test_reports/pytest/pytest_iteration40.xml",
+    "/app/test_reports/iteration_40.json"
+  ],
+  "action_items": [
+    "Optional: ensure Button component in src/components/ui applies testID to a single DOM node (currently appears on both outer wrapper and inner Pressable) so Playwright strict selectors resolve to exactly one element. Not blocking."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/routes/co_owners.py (lines 130-222) is tight and correct: links have ~7-day expiry (datetime.now(UTC)+timedelta(days=7).isoformat()), active filter is {used_at: None, expires_at: {$gt: now}}, used_at is set atomically via update_one with {used_at: None} guard so a single-use link truly can't double-fire (test_new_user_accepts_coowner_full_access confirms second user gets 410). _usable() returns 404 for unknown token and 410 for used/expired — matches spec. accept_link rejects owner's own token with 400 and inserts the via_link flag on the co_owners row so audits can distinguish email vs link invites. _check_pids reuses the same validator as email invites, so manager-link scoping is consistent (verified pids=[pid] passes, pids=[] returns 400, and non-owner pids 404).",
+    "Public GET /api/join/{token} correctly returns only safe fields (owner_name, role, project_names, money_access, expires_at) — no owner email, user_id or link id leaked, so the preview is safe to render pre-auth.",
+    "/app/frontend/app/join/[token].tsx uses useAuth loading guard then branches on user to show register/login or accept — good UX. onSuccess invalidates ALL queries (queryClient.invalidateQueries()) so /projects reflects the new shared project immediately; verified in-browser the Nottingham project appears right after accept.",
+    "/app/frontend/app/auth.tsx submit() handles next by only following in-app /join/ paths (`if (params.next?.startsWith('/join/')) router.replace(params.next)`), preventing open-redirect abuse. Login round-trip from /join -> /auth?next=/join/{token} -> back to /join/{token} verified end-to-end.",
+    "/app/frontend/src/components/invite-links.tsx: create mutation disables the button when (role==='manager' && !picked.length) via the parent-passed disabled prop; verified aria-disabled flips true/false. urlFor() uses BACKEND_URL which equals the preview origin, and the frontend route /join/[token] correctly handles that URL since non-/api paths route to Expo.",
+    "Minor: _link_out spreads created_at/expires_at as raw ISO strings — Pydantic isn't used here but values are consistent since now_iso() is used everywhere. The 20-active-link-per-owner cap in create_link prevents abuse."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration40.py (new, 12 passing)",
+    "/app/test_reports/pytest/pytest_iteration40.xml (new JUnit)",
+    "/app/test_reports/iteration_40.json (new)"
+  ],
+  "success_rate": {
+    "backend": "100% — 12/12 passed",
+    "frontend": "100% — create link, listed card with copy/share/cancel, logged-out join-card, login round-trip via next=, accept, /projects shows shared project, invalid+used both show join-invalid"
+  },
+  "seed_data_creation": "Backend: 3 TEST users (test_iter40_co_*, test_iter40_second_*, test_iter40_mgr_*@example.com); 6 co-owner-links for demo owner across tests; corresponding co_owners rows. Frontend: 1 TEST user (test_iter40_fe_*@example.com) + 1 accepted co_owner row + 3 extra demo links. ALL CLEANED post-run (verified via mongo count: 0 remaining TEST users / co_owners rows / demo co_owner_links). Demo project (Nottingham Victorian Refurb) left intact and still active for demo user.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run backend tests with: EXPO_PUBLIC_BACKEND_URL=<from frontend/.env> MONGO_URL=mongodb://localhost:27017 DB_NAME=test_database pytest backend/tests/test_iteration40.py -v -o addopts='' (pytest.ini default forces xdist loadscope; -o addopts='' runs sequential so the module-scoped cleanup_registry fixture isn't duplicated across workers). Public URL for /join/{token} is served by Expo (non-/api route) at the same preview origin as the backend. The join-accept-button testID is duplicated on two DOM nodes (ui Button wrapper + inner Pressable) — in Playwright use .last.click() or page.locator().first.click(force=True) rather than wait_for_selector visibility strict mode. The co_owners insert triggered by POST /api/join/{token} stores via_link:true on the row; email of the joining user is lowercased when accept uses user.email (lowercased at register/login).",
+  "rca_of_issue": "N/A — feature fully works end-to-end on both backend and frontend."
+}

@@ -25,17 +25,20 @@ async def inbox(days: int = 30, user: User = Depends(real_user)):
     horizon = (date.today() + timedelta(days=max(1, min(days, 365)))).isoformat()
     items = []
     async for s in db.snags.find({"project_id": {"$in": pids}, "status": "open"}):
-        tenant = bool(s.get("tenancy_id"))
+        tenant = bool(s.get("tenancy_id")) or s.get("source") == "report_link"
+        a = s.get("assigned_to") or {}
+        mine = a.get("kind") == "team" and (a.get("user_id") == user.id or (a.get("email") or "").lower() == user.email.lower())
         items.append({"id": str(s["_id"]), "kind": "repair" if tenant else "snag", "project_id": s["project_id"], "project_name": projects[s["project_id"]],
-                      "title": s["description"], "detail": " · ".join(x for x in (s.get("room"), s.get("reported_by") or s.get("assignee")) if x),
-                      "priority": s.get("priority", "medium"), "date": s.get("created_at", "")[:10], "overdue": False})
+                      "title": s["description"], "detail": " · ".join(x for x in (s.get("room"), s.get("reported_by"), (f"Assigned: {s['assignee']}" if s.get("assignee") else "")) if x),
+                      "priority": s.get("priority", "medium"), "date": s.get("created_at", "")[:10], "overdue": False, "mine": mine})
     async for m in db.milestones.find({"project_id": {"$in": pids}, "status": {"$ne": "done"}, "target_date": {"$nin": [None, ""], "$lte": horizon}}):
         items.append({"id": str(m["_id"]), "kind": "stage", "project_id": m["project_id"], "project_name": projects[m["project_id"]],
                       "title": m["name"], "detail": "In progress" if m["status"] == "in_progress" else "Not started",
-                      "priority": "high" if m["target_date"] < today else "medium", "date": m["target_date"], "overdue": m["target_date"] < today})
-    # Overdue stages and urgent repairs first, then by priority and date.
-    items.sort(key=lambda i: (not i["overdue"], i["kind"] != "repair" or i["priority"] != "high", PRIORITY[i["priority"]], i["date"] or "9999"))
+                      "priority": "high" if m["target_date"] < today else "medium", "date": m["target_date"], "overdue": m["target_date"] < today, "mine": False})
+    # Jobs assigned to me, overdue stages and urgent repairs first, then by priority and date.
+    items.sort(key=lambda i: (not i["mine"], not i["overdue"], i["kind"] != "repair" or i["priority"] != "high", PRIORITY[i["priority"]], i["date"] or "9999"))
     counts = {k: sum(i["kind"] == k for i in items) for k in ("repair", "snag", "stage")}
+    counts["mine"] = sum(i["mine"] for i in items)
     return {"items": items, "counts": {**counts, "overdue": sum(i["overdue"] for i in items), "total": len(items)}, "projects": len(pids)}
 
 

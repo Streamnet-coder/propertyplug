@@ -159,6 +159,8 @@ async def share_docs(tid: str, body: DocsIn, user: User = Depends(current_user))
 async def notify_tenant_repair_fixed(snag: dict):
     """Email the tenant who reported a repair once it's marked fixed (owner app or trade snag link)."""
     if not snag.get("tenancy_id"):
+        if snag.get("reporter_email"):
+            await _notify_reporter_fixed(snag)
         return
     t = await db.tenancies.find_one({"_id": oid(snag["tenancy_id"])})
     if not t or not t.get("tenant_email"):
@@ -181,6 +183,29 @@ async def notify_tenant_repair_fixed(snag: dict):
         logger.warning(f"Repair-fixed email failed: {e}")
         status = "failed"
     await log_message(t["user_id"], t["project_id"], name=t["tenant_name"], email=t["tenant_email"], channel="email", kind="repair_fixed", summary=subject, status=status)
+    await db.snags.update_one({"_id": snag["_id"]}, {"$set": {"tenant_notified_at": now_iso()}})
+
+
+async def _notify_reporter_fixed(snag: dict):
+    """Tenant who used the property "Report a problem" link (no tenancy) is emailed when it's fixed."""
+    uid = snag["user_id"]
+    address, sender, head = await _ctx(uid, snag)
+    note = snag.get("fix_note") or ""
+    html = _wrap(f'{head}<p style="font-size:12px;letter-spacing:1px;color:#10b981;font-weight:bold;margin:0">REPAIR COMPLETED</p>'
+                 f'<h1 style="font-size:20px;margin:8px 0 12px">{E(address)}</h1><p>Hi {E(snag.get("reporter_name") or "there")},</p>'
+                 f'<p style="line-height:1.5">Good news: the problem you reported has been marked as fixed.</p>'
+                 f'<table width="100%" style="border-collapse:collapse;font-size:14px;margin:12px 0">{_row("Location", E(snag["room"]))}{_row("Issue", E(snag["description"]))}'
+                 f'{_row("Reported", E(snag["created_at"][:10]))}{_row("Fixed", E((snag.get("fixed_at") or now_iso())[:10]))}'
+                 + (_row("Note", E(note)) if note else "") + '</table><p style="line-height:1.5">If the problem comes back, just reply to this email.</p>'
+                 f'<p>Kind regards,<br/>{E(sender)}</p>')
+    subject = f"Repair fixed: {snag['room']} · {address}"
+    try:
+        await send_email(to=snag["reporter_email"], subject=subject, html=html, reply_to=await owner_reply_to(uid))
+        status = "sent"
+    except Exception as e:
+        logger.warning(f"Repair-fixed email failed: {e}")
+        status = "failed"
+    await log_message(uid, snag["project_id"], name=snag.get("reporter_name") or "Tenant", email=snag["reporter_email"], channel="email", kind="repair_fixed", summary=subject, status=status)
     await db.snags.update_one({"_id": snag["_id"]}, {"$set": {"tenant_notified_at": now_iso()}})
 
 

@@ -14,8 +14,8 @@ import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
 type Kind = "repair" | "snag" | "stage";
-type Item = { id: string; kind: Kind; project_id: string; project_name: string; title: string; detail: string; priority: "low" | "medium" | "high"; date: string; overdue: boolean };
-type Inbox = { items: Item[]; counts: Record<Kind | "overdue" | "total", number>; projects: number };
+type Item = { id: string; kind: Kind; project_id: string; project_name: string; title: string; detail: string; priority: "low" | "medium" | "high"; date: string; overdue: boolean; mine: boolean };
+type Inbox = { items: Item[]; counts: Record<Kind | "overdue" | "total" | "mine", number>; projects: number };
 
 const KIND: Record<Kind, { label: string; icon: IconName }> = {
   repair: { label: "Tenant repair", icon: "wrench" },
@@ -31,11 +31,11 @@ export default function InboxScreen() {
   const toast = useToast();
   const { refresh } = useAuth();
   const project = useProject();
-  const [filter, setFilter] = useState<Kind | "all">("all");
+  const [filter, setFilter] = useState<Kind | "all" | "mine">("all");
   const [opening, setOpening] = useState<string | null>(null);
   const [fixing, setFixing] = useState<FixTarget | null>(null);
   const q = useQuery({ queryKey: ["inbox"], queryFn: () => api<Inbox>("/inbox") });
-  const items = (q.data?.items ?? []).filter((i) => filter === "all" || i.kind === filter);
+  const items = (q.data?.items ?? []).filter((i) => filter === "all" || (filter === "mine" ? i.mine : i.kind === filter));
 
   const open = async (i: Item) => {
     tap();
@@ -67,6 +67,7 @@ export default function InboxScreen() {
       </View>
       <View style={s.filters}>
         <Chip label={`All${c ? ` (${c.total})` : ""}`} selected={filter === "all"} onPress={() => setFilter("all")} testID="inbox-filter-all" />
+        {!!c?.mine && <Chip label={`Assigned to me (${c.mine})`} icon="user-check" selected={filter === "mine"} onPress={() => setFilter("mine")} testID="inbox-filter-mine" />}
         <Chip label={`Repairs${c ? ` (${c.repair})` : ""}`} icon="wrench" selected={filter === "repair"} onPress={() => setFilter("repair")} testID="inbox-filter-repair" />
         <Chip label={`Snags${c ? ` (${c.snag})` : ""}`} icon="list-checks" selected={filter === "snag"} onPress={() => setFilter("snag")} testID="inbox-filter-snag" />
         <Chip label={`Stages${c ? ` (${c.stage})` : ""}`} icon="flag" selected={filter === "stage"} onPress={() => setFilter("stage")} testID="inbox-filter-stage" />
@@ -91,6 +92,7 @@ export default function InboxScreen() {
                   <Icon name={KIND[i.kind].icon} size={18} color={i.kind === "repair" ? colors.brandPrimary : colors.brand} />
                 </View>
                 <View style={{ flex: 1, gap: 2 }}>
+                  {i.mine && <Text style={s.mine} testID={`inbox-mine-${i.id}`}>ASSIGNED TO YOU</Text>}
                   <Text style={s.title} numberOfLines={2}>{i.title}</Text>
                   <Text style={s.muted} numberOfLines={1}>{KIND[i.kind].label} · {i.project_name}{i.detail ? ` · ${i.detail}` : ""}</Text>
                   <Text style={[s.meta, { color: tone }]}>
@@ -127,4 +129,5 @@ const useStyles = makeStyles((c) => ({
   muted: { fontFamily: fonts.regular, fontSize: 12, color: c.muted },
   fixBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.success, alignItems: "center", justifyContent: "center" },
   meta: { fontFamily: fonts.semibold, fontSize: 12 },
+  mine: { fontFamily: fonts.bold, fontSize: 10, letterSpacing: 0.6, color: c.brandPrimary },
 }));
