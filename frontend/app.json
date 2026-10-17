@@ -13,7 +13,7 @@
         "NSCameraUsageDescription": "Snap site photos and receipts",
         "NSPhotoLibraryUsageDescription": "Attach site photos and receipts to projects"
       },
-      "bundleIdentifier": "com.emergent.devbudgettracker.abwzec"
+      "bundleIdentifier": "com.emergent.propertyplug.abwzec"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,7 +24,7 @@
         "CAMERA",
         "READ_MEDIA_IMAGES"
       ],
-      "package": "com.emergent.devbudgettracker.abwzec"
+      "package": "com.emergent.propertyplug.abwzec"
     },
     "web": {
       "bundler": "metro",
