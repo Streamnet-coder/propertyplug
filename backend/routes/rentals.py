@@ -41,6 +41,7 @@ class TenancyIn(BaseModel):
     rent_day: int = Field(default=1, ge=1, le=28)
     receipts_auto: bool = True
     statements_auto: bool = True
+    arrears_auto: bool = True
     notes: str = ""
 
     _d = field_validator("start_date", "end_date")(classmethod(lambda cls, v: _iso(v)))

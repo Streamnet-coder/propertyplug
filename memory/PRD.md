@@ -276,3 +276,9 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - users.notify_prefs {repairs, jobs, fixed, payouts, invites} (default true). GET/PUT /api/notification-prefs (real_user). notify(kind=...) skips users who turned that kind off. Screen /notification-settings (Profile -> Notifications).
 - POST /api/ai/estimates/{id}/choose: marks chosen (unchooses others in project), adds every not-yet-added item to budget (mid of range), tracks added_items; POST /api/ai/estimates/{id}/added {index} for single adds. UI: estimate-choose button + estimate-chosen-badge in view, CHOSEN badge in list, compare-choose-a/b in compare.
 - Android push still waiting for user's google-services.json.
+
+## Jun 2026 — Rent Arrears Tracker + BRRR Deal Analyser (DONE, iter 52)
+- /arrears screen: all overdue tenancies across properties (home-currency total), month chips, per-tenancy auto-reminder switch, Remind now, Open rent. Entry: bell icon on Rent roll & Rent & tenancy headers.
+- Auto reminders (routes/arrears.py scheduler, hourly): day after rent is missed, then every 7 days while unpaid; tenancy field arrears_auto (new tenancies default on, form toggle).
+- BRRR: bridging loan %, monthly rate, arrangement fee, holding costs, months to refinance; cash needed upfront; saved named deals (/api/brrr/deals) and /brrr-deals side-by-side compare (up to 3, best value ticked).
+- Pending: Android push needs google-services.json (package com.emergent.propertyplug.abwzec); Twilio keys.

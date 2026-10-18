@@ -272,7 +272,10 @@ ${rows || "<p>No snags logged.</p>"}${signSection}`);
   await printPdf(html, `${p.name} snagging report`);
 }
 
-export type BrrrFigures = { purchase: number; fees: number; refurb: number; valuation: number; ltv: number; rate: number; rent: number; costs: number;
+type BrrrBase = { purchase: number; fees: number; refurb: number; valuation: number; ltv: number; rate: number; rent: number; costs: number };
+/** Optional bridging/timing: months to refinance, bridging loan as % of purchase, bridging interest % per month, arrangement fee %, holding costs per month. */
+type BrrrBridge = { months?: number; bridge_pct?: number; bridge_rate?: number; bridge_fee?: number; holding?: number };
+export type BrrrFigures = BrrrBase & BrrrBridge & { bridgeLoan: number; financeCost: number; holdingTotal: number; cashNeeded: number;
   invested: number; refi: number; leftIn: number; mortgage: number; cashflow: number; roi: number; yieldPct: number; equity: number };
 
 export async function shareBrrrPdf(f: BrrrFigures, comps: Comparable[]) {
@@ -285,25 +288,30 @@ async function brrrBody(p: Project, f: BrrrFigures, comps: Comparable[]) {
   const avg = comps.length ? comps.reduce((a, c) => a + c.price, 0) / comps.length : 0;
   return `${await brandHeader("BRRR ANALYSIS", p)}
 ${kpis([["Money left in", f.leftIn <= 0 ? `${gbp(-f.leftIn)} out` : gbp(f.leftIn)], ["Cash-on-cash ROI", Number.isFinite(f.roi) ? `${f.roi.toFixed(1)}%` : "Infinite"], ["Cashflow / mo", gbp(f.cashflow)], ["Gross yield", `${f.yieldPct.toFixed(1)}%`]])}
-<h2>Buy &amp; refurbish</h2><table>${row("Purchase price", gbp(f.purchase))}${row("Fees &amp; SDLT", gbp(f.fees))}${row("Refurb budget", gbp(f.refurb))}${row("<b>Total invested</b>", `<b>${gbp(f.invested)}</b>`)}</table>
+<h2>Buy &amp; refurbish</h2><table>${row("Purchase price", gbp(f.purchase))}${row("Fees &amp; SDLT", gbp(f.fees))}${row("Refurb budget", gbp(f.refurb))}${f.financeCost ? row(`Bridging (${gbp(f.bridgeLoan)} over ${f.months} mo)`, gbp(f.financeCost)) : ""}${f.holdingTotal ? row("Holding costs until refinance", gbp(f.holdingTotal)) : ""}${row("<b>Total invested</b>", `<b>${gbp(f.invested)}</b>`)}</table>
 <h2>Refinance</h2><table>${row("End valuation (GDV)", gbp(f.valuation))}${row(`Refinance at ${f.ltv}% LTV`, gbp(f.refi))}${row("Equity retained", gbp(f.equity))}${row(`Mortgage (${f.rate}% interest-only)`, `${gbp(f.mortgage)}/mo`)}</table>
 <h2>Rent</h2><table>${row("Monthly rent", gbp(f.rent))}${row("Monthly costs", gbp(f.costs))}${row("<b>Monthly cashflow</b>", `<b class="${f.cashflow < 0 ? "over" : "under"}">${gbp(f.cashflow)}</b>`)}${row("Annual cashflow", gbp(f.cashflow * 12))}</table>
 ${comps.length ? `<h2>1/4 mile comparables · average ${gbp(avg)}</h2><table><tr><th>Address</th><th>Beds</th><th>Date</th><th class="n">Sold</th></tr>${comps.map((c) => `<tr><td>${esc(c.address)}</td><td>${c.beds}</td><td>${esc(c.date)}</td><td class="n">${gbp(c.price)}</td></tr>`).join("")}</table>` : ""}`;
 }
 
-export type BrrrInputs = Pick<BrrrFigures, "purchase" | "fees" | "refurb" | "valuation" | "ltv" | "rate" | "rent" | "costs">;
+export type BrrrInputs = BrrrBase & BrrrBridge;
 export const BRRR_DEFAULT_FEES = 6000;
 export const BRRR_DEFAULT_COSTS = 200;
 
 export function calcBrrr(i: BrrrInputs): BrrrFigures {
-  const invested = i.purchase + i.fees + i.refurb;
+  const months = i.months ?? 0;
+  const bridgeLoan = i.purchase * ((i.bridge_pct ?? 0) / 100);
+  const financeCost = bridgeLoan * ((i.bridge_rate ?? 0) / 100) * months + bridgeLoan * ((i.bridge_fee ?? 0) / 100);
+  const holdingTotal = (i.holding ?? 0) * months;
+  const invested = i.purchase + i.fees + i.refurb + financeCost + holdingTotal;
+  const cashNeeded = invested - bridgeLoan;
   const refi = i.valuation * (i.ltv / 100);
   const leftIn = invested - refi;
   const mortgage = (refi * (i.rate / 100)) / 12;
   const cashflow = i.rent - mortgage - i.costs;
   const roi = leftIn <= 0 ? Infinity : ((cashflow * 12) / leftIn) * 100;
   const yieldPct = i.valuation > 0 ? ((i.rent * 12) / i.valuation) * 100 : 0;
-  return { ...i, invested, refi, leftIn, mortgage, cashflow, roi, yieldPct, equity: i.valuation - refi };
+  return { ...i, bridgeLoan, financeCost, holdingTotal, cashNeeded, invested, refi, leftIn, mortgage, cashflow, roi, yieldPct, equity: i.valuation - refi };
 }
 
 /** One combined PDF for refinance applications: cover + progress + budget estimate (+ BRRR analysis for Pro). */

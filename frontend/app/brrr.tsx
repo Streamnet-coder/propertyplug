@@ -1,18 +1,21 @@
-import { useRouter } from "expo-router";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { gbp, sym } from "@/src/api";
+import { api, BrrrDeal, BrrrDealInputs, gbp, sym } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { PdfButton } from "@/src/components/pdf-button";
-import { Card, fonts, Icon, LockedPro, radius, SectionTitle, space } from "@/src/components/ui";
+import { Button, Card, Field, fonts, Icon, LockedPro, radius, SectionTitle, space, tap } from "@/src/components/ui";
 import { BRRR_DEFAULT_COSTS, BRRR_DEFAULT_FEES, calcBrrr, shareBrrrPdf } from "@/src/report";
-import { useComparables, useProject } from "@/src/queries";
+import { invalidate, useComparables, useProject } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
+import { useToast } from "@/src/toast";
 
-type Inputs = { purchase: string; fees: string; refurb: string; valuation: string; ltv: string; rate: string; rent: string; costs: string };
+type Inputs = Record<keyof BrrrDealInputs, string>;
+const KEYS: (keyof BrrrDealInputs)[] = ["purchase", "fees", "refurb", "valuation", "ltv", "rate", "rent", "costs", "months", "bridge_pct", "bridge_rate", "bridge_fee", "holding"];
 
 export default function Brrr() {
   const insets = useSafeAreaInsets();
@@ -23,19 +26,43 @@ export default function Brrr() {
   const isPro = user?.plan === "pro";
   const { data: p } = useProject();
   const comps = useComparables(isPro);
-  const [v, setV] = useState<Inputs>({ purchase: "", fees: String(BRRR_DEFAULT_FEES), refurb: "", valuation: "", ltv: "75", rate: "5.5", rent: "", costs: String(BRRR_DEFAULT_COSTS) });
+  const toast = useToast();
+  const { deal } = useLocalSearchParams<{ deal?: string }>();
+  const deals = useQuery({ queryKey: ["brrr-deals"], queryFn: () => api<BrrrDeal[]>("/brrr/deals"), enabled: isPro });
+  const loaded = deals.data?.find((d) => d.id === deal);
+  const [name, setName] = useState("");
+  const [v, setV] = useState<Inputs>({ purchase: "", fees: String(BRRR_DEFAULT_FEES), refurb: "", valuation: "", ltv: "75", rate: "5.5", rent: "", costs: String(BRRR_DEFAULT_COSTS),
+    months: "6", bridge_pct: "0", bridge_rate: "0.85", bridge_fee: "2", holding: "0" });
   const set = (k: keyof Inputs) => (t: string) => setV((x) => ({ ...x, [k]: t }));
 
   useEffect(() => {
-    if (p) setV((x) => ({ ...x, purchase: String(p.purchase_price), refurb: String(p.total_budget), valuation: String(p.estimated_valuation), rent: String(p.monthly_rent), ltv: String(p.refinance_ltv), rate: String(p.refinance_rate) }));
+    if (loaded) {
+      setV(Object.fromEntries(KEYS.map((k) => [k, String(loaded.inputs[k] ?? 0)])) as Inputs);
+      setName(loaded.name);
+    }
+  }, [loaded]);
+
+  useEffect(() => {
+    if (p && !deal) setV((x) => ({ ...x, purchase: String(p.purchase_price), refurb: String(p.total_budget), valuation: String(p.estimated_valuation), rent: String(p.monthly_rent), ltv: String(p.refinance_ltv), rate: String(p.refinance_rate) }));
   }, [p]);
 
   const n = (k: keyof Inputs) => Number(v[k]) || 0;
   const r = useMemo(
-    () => calcBrrr({ purchase: n("purchase"), fees: n("fees"), refurb: n("refurb"), valuation: n("valuation"), ltv: n("ltv"), rate: n("rate"), rent: n("rent"), costs: n("costs") }),
+    () => calcBrrr(Object.fromEntries(KEYS.map((k) => [k, n(k)])) as BrrrDealInputs),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [v],
   );
+
+  const save = useMutation({
+    mutationFn: (asNew: boolean) =>
+      api<BrrrDeal>(deal && !asNew ? `/brrr/deals/${deal}` : "/brrr/deals", { method: deal && !asNew ? "PUT" : "POST", body: { name, inputs: Object.fromEntries(KEYS.map((k) => [k, n(k)])) } }),
+    onSuccess: async (d) => {
+      await invalidate("brrr-deals");
+      toast(deal === d.id ? "Deal updated" : "Deal saved");
+      router.setParams({ deal: d.id });
+    },
+    onError: (e: Error) => toast(e.message, "error"),
+  });
 
   const avgComp = comps.data?.length ? comps.data.reduce((a, c) => a + c.price, 0) / comps.data.length : 0;
 
@@ -58,10 +85,12 @@ export default function Brrr() {
         </Pressable>
         <Text style={s.headerTitle}>BRRR calculator</Text>
         {isPro ? (
-          <PdfButton
-            testID="brrr-pdf-button"
-            onGenerate={() => shareBrrrPdf(r, comps.data ?? [])}
-          />
+          <View style={{ flexDirection: "row", gap: space.sm }}>
+            <Pressable testID="brrr-deals-button" onPress={() => { tap(); router.push("/brrr-deals"); }} style={s.back} hitSlop={6} accessibilityLabel="Saved deals">
+              <Icon name="folder-open" size={20} />
+            </Pressable>
+            <PdfButton testID="brrr-pdf-button" onGenerate={() => shareBrrrPdf(r, comps.data ?? [])} />
+          </View>
         ) : (
           <View style={{ width: 44 }} />
         )}
@@ -92,6 +121,14 @@ export default function Brrr() {
                 <Text style={s.resLabel}>Gross yield</Text>
                 <Text style={s.resVal}>{r.yieldPct.toFixed(1)}%</Text>
               </View>
+              <View style={s.resCell}>
+                <Text style={s.resLabel}>Cash needed upfront</Text>
+                <Text style={s.resVal} testID="brrr-cash-needed">{gbp(r.cashNeeded)}</Text>
+              </View>
+              <View style={s.resCell}>
+                <Text style={s.resLabel}>Bridging & holding</Text>
+                <Text style={s.resVal} testID="brrr-finance-cost">{gbp(r.financeCost + r.holdingTotal)}</Text>
+              </View>
             </View>
           </View>
 
@@ -101,12 +138,32 @@ export default function Brrr() {
             {input("Refurb budget", "refurb")}
             <Text style={s.hint}>Total invested: <Text style={{ fontFamily: fonts.bold, color: colors.onSurface }}>{gbp(r.invested)}</Text></Text>
           </Card>
+          <Card style={{ gap: space.md }} testID="brrr-bridging-card">
+            <SectionTitle title="Bridging & time to refinance" />
+            <View style={s.row2}>{input("Months to refinance", "months", "mo")}{input("Holding costs", "holding")}</View>
+            <View style={s.row2}>{input("Bridging loan", "bridge_pct", "% of price")}{input("Bridge rate", "bridge_rate", "%/mo")}</View>
+            {input("Arrangement fee", "bridge_fee", "%")}
+            <Text style={s.hint}>
+              {r.bridgeLoan > 0 ? <>Bridge {gbp(r.bridgeLoan)} · interest & fee {gbp(r.financeCost)}</> : "No bridging: set a loan % if you're buying with bridging finance"}
+              {r.holdingTotal > 0 ? ` · holding ${gbp(r.holdingTotal)}` : ""}. Holding = council tax, insurance, utilities while empty.
+            </Text>
+          </Card>
           <Card style={{ gap: space.md }}>
             <SectionTitle title="Refinance & rent" />
             {input("End valuation (GDV)", "valuation")}
             <View style={s.row2}>{input("LTV", "ltv", "%")}{input("Interest rate", "rate", "%")}</View>
             <View style={s.row2}>{input("Monthly rent", "rent")}{input("Monthly costs", "costs")}</View>
             <Text style={s.hint}>Mortgage (interest-only): <Text style={{ fontFamily: fonts.bold, color: colors.onSurface }}>{gbp(r.mortgage)}/mo</Text> · Equity retained {gbp(r.equity)}</Text>
+          </Card>
+
+          <Card style={{ gap: space.md }} testID="brrr-save-card">
+            <SectionTitle title={deal ? "Saved deal" : "Save this deal"} />
+            <Field label="Deal name" value={name} onChangeText={setName} placeholder="e.g. 22 Oak St, 3-bed terrace" maxLength={80} testID="brrr-deal-name-input" />
+            <View style={s.row2}>
+              <Button title={deal ? "Update deal" : "Save deal"} icon="save" style={{ flex: 1 }} loading={save.isPending && !save.variables} disabled={!name.trim()} onPress={() => save.mutate(false)} testID="brrr-save-deal-button" />
+              {deal ? <Button title="Save as new" variant="outline" style={{ flex: 1 }} loading={save.isPending && !!save.variables} disabled={!name.trim()} onPress={() => save.mutate(true)} testID="brrr-save-new-button" /> : null}
+            </View>
+            <Text style={s.hint}>Saved deals can be compared side by side from the folder icon at the top.</Text>
           </Card>
 
           <View>

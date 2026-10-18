@@ -25,7 +25,7 @@ export default function RentRollScreen() {
       <View style={[s.header, { paddingTop: insets.top + space.sm }]}>
         <Pressable testID="rent-roll-back-button" onPress={() => router.back()} style={s.iconBtn} hitSlop={10}><Icon name="arrow-left" size={22} /></Pressable>
         <Text style={s.headerTitle}>Rent roll</Text>
-        <View style={{ width: 44 }} />
+        <Pressable testID="rent-roll-arrears-button" onPress={() => { tap(); router.push("/arrears"); }} style={s.iconBtn} hitSlop={6} accessibilityLabel="Rent arrears"><Icon name="bell-ring" size={20} /></Pressable>
       </View>
       <View style={s.yearBar}>
         <Pressable testID="rent-roll-prev-year" onPress={() => { tap(); setYear(year - 1); }} style={s.iconBtn} hitSlop={6}><Icon name="chevron-left" size={20} /></Pressable>

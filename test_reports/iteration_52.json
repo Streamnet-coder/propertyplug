@@ -1,0 +1,33 @@
+{
+  "summary": "PropertyPlug iter 52 - tested two new features end-to-end: (1) Rent Arrears Tracker (GET /api/portfolio/arrears, PUT /api/rentals/tenancies/{tid}/auto-reminders, POST /api/rentals/tenancies/{tid}/remind-arrears, scheduler routes.arrears.run_auto_reminders(), TenancyIn arrears_auto default True); (2) BRRR Saved Deals CRUD (/api/brrr/deals GET/POST/PUT/DELETE with Pro gating + validation). Backend 14/14 PASS (0 skipped). Frontend verified via mobile Playwright at 390x844: /arrears shows totals card (£3,200.00 / 1 tenancy behind / 0 auto-reminders on) with the seeded 'Arrears Test' card listing 4 month chips (Jul-Oct 2026), Switch (arrears-auto-toggle-{id}), Remind now and Open rent buttons; /brrr now exposes Bridging & time to refinance inputs (months, holding, bridge_pct, bridge_rate, bridge_fee) and shows new result cells brrr-cash-needed (£121,418) + brrr-finance-cost (£11,417); Save deal navigates URL to /brrr?deal=<id> and renders Save as new button; /brrr-deals lists saved deals, ticking two surfaces the comparison table with 14 rows and best-value ✓ ticks, pencil opens brrr-deal-open-{id} to /brrr?deal=<id> with 'Update deal' label. Math (bridgeLoan/financeCost/holdingTotal/invested/cashNeeded/leftIn) matches spec in /app/frontend/src/report.ts.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration52.py",
+    "/app/test_reports/pytest/pytest_iteration52.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/arrears.py overdue_rows() correctly scans this and last year (and from tenancy start year), computes paid<due AND due_on<today, and attaches owed + days_late. _chase_state() returns date.today() as next_on when any month is still unchased OR there's no prior late reminder, otherwise last_late + 7 days. Logic matches spec: day after missed, then every 7 days.",
+    "run_auto_reminders() filter {arrears_auto:True, tenant_email:{$nin:[\"\", None]}} + 6-hour retry guard via arrears_attempt_at. Only chases if next_on <= today and sets arrears_attempt_at before sending so a crash can't loop.",
+    "remind_arrears(): rate-limit of 10 min uses MAX sent_at across ALL reminders on that tenancy (not just 'late'), which is intentional - any kind of recent email counts as rate limit.",
+    "routes/brrr_deals.py: DealIn validator cleans unknown keys (raises) and rejects negative/non-finite values, strips name whitespace, caps at 80 chars. Create enforces MAX_DEALS=50 BEFORE insert. _out() correctly excludes _id. Pro-gated via Depends(pro_user).",
+    "server.py: db.brrr_deals.create_index([(user_id,1),(updated_at,-1)]) on startup is well-aligned with the sort order in list_deals.",
+    "Frontend arrears.tsx: SwitchColor error-tint only when owed severe; Remind now disabled when !tenant_email - defensive. Last reminder date is formatted when present.",
+    "Frontend brrr.tsx + report.ts share brrrCalc with identical formulas so PDF and screen stay consistent."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration52.py (new)"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% (3/3 flows: arrears screen, BRRR calculator save, BRRR deals compare+edit+delete)"},
+  "seed_data_creation": "Created 1 TEST_UI_Deal_52 + 2 TEST_Compare_* BRRR deals during browser tests; all deleted via DELETE /api/brrr/deals/{id} at teardown (remaining: []). Seeded 'Arrears Test' tenancy was toggled arrears_auto=True during UI test then reset to False (and arrears_attempt_at cleared) via pymongo so it matches the agent-provided baseline. Demo user plan was promoted to pro during tests and reverted to basic at teardown. Any TEST_ tenancies created inside tests are deleted in their own finally blocks.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The seeded 'Arrears Test' tenancy (id in db.tenancies via tenant_name='Arrears Test') has rent 900, Jul-Oct 2026 overdue (Aug partly paid 400). Server date ~2026-10-18. Owed total shown is £3,200. /api/portfolio/arrears returns next_auto_on only when arrears_auto AND tenant_email set. The 10-min rate limit on remind-arrears considers ALL rent_reminders on the tenancy, not just kind=late — so a receipt send would also block an arrears send for 10 min. Pytest file test_iteration52.py uses a sync pymongo client + a fresh motor client bound to each test's own loop for run_auto_reminders() (motor's default db in core.py is bound to the uvicorn worker's loop and raises 'different loop' from a pytest-created loop).",
+  "rca_of_issue": "N/A"
+}

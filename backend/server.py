@@ -8,14 +8,14 @@ from storage import init_storage
 import asyncio
 
 from routes import (ai, auth, branding, budget, contacts, digest, documents, portal, email_settings, export, media, messages, ratings, milestones, payments, projects, quotes,
-                    referrals, share, shopping, snags, stage_payments, trades, fx, planning, co_owners, activity, subscriptions, rentals, compare_share, tenant_portal, inbox, report_links, ownership, ownership_views, push)
+                    referrals, share, shopping, snags, stage_payments, trades, fx, planning, co_owners, activity, subscriptions, rentals, compare_share, tenant_portal, inbox, report_links, ownership, ownership_views, push, arrears, brrr_deals)
 
 app = FastAPI()
 api = APIRouter(prefix="/api")
 
 for m in (auth, projects, budget, contacts, media, ai, payments, trades, milestones, branding, referrals, share, quotes,
-          stage_payments, snags, shopping, digest, export, messages, email_settings, ratings, documents, portal, fx, planning, co_owners, activity, subscriptions, rentals, compare_share, tenant_portal, inbox, report_links, ownership, ownership_views, push):
-    api.include_router(m.router, dependencies=[Depends(block_money)] if m in (budget, quotes, stage_payments, ai, rentals, tenant_portal, share) else [])
+          stage_payments, snags, shopping, digest, export, messages, email_settings, ratings, documents, portal, fx, planning, co_owners, activity, subscriptions, rentals, compare_share, tenant_portal, inbox, report_links, ownership, ownership_views, push, arrears, brrr_deals):
+    api.include_router(m.router, dependencies=[Depends(block_money)] if m in (budget, quotes, stage_payments, ai, rentals, tenant_portal, share, brrr_deals) else [])
 
 
 @api.get("/")
@@ -88,6 +88,8 @@ async def startup():
     asyncio.create_task(tenant_portal.statement_scheduler())
     asyncio.create_task(report_links.reminder_scheduler())
     asyncio.create_task(ownership.statement_scheduler())
+    asyncio.create_task(arrears.reminder_scheduler())
+    await db.brrr_deals.create_index([("user_id", 1), ("updated_at", -1)])
     await db.snags.create_index("job_token", sparse=True)
     await db.snags.create_index("track_token", sparse=True)
     await db.report_links.create_index("token", unique=True)

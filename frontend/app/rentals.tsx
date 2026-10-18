@@ -30,7 +30,7 @@ export default function RentalsScreen() {
           <Icon name="arrow-left" size={22} />
         </Pressable>
         <Text style={s.headerTitle}>Rent & tenancy</Text>
-        <View style={{ width: 44 }} />
+        <Pressable testID="rentals-arrears-button" onPress={() => { tap(); router.push("/arrears"); }} style={s.iconBtn} hitSlop={6} accessibilityLabel="Rent arrears"><Icon name="bell-ring" size={20} /></Pressable>
       </View>
       <View style={s.yearBar}>
         <Pressable testID="rentals-prev-year" onPress={() => { tap(); setYear(year - 1); }} style={s.iconBtn} hitSlop={6}><Icon name="chevron-left" size={20} /></Pressable>

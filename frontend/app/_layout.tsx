@@ -62,6 +62,8 @@ export default function RootLayout() {
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen name="profile" />
                 <Stack.Screen name="brrr" />
+                <Stack.Screen name="brrr-deals" />
+                <Stack.Screen name="arrears" />
                 <Stack.Screen name="item-form" options={{ presentation: "modal" }} />
                 <Stack.Screen name="contact-form" options={{ presentation: "modal" }} />
                 <Stack.Screen name="receipt-form" options={{ presentation: "modal" }} />

@@ -9,7 +9,7 @@ import { invalidate, useRentals } from "@/src/queries";
 import { useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
-const EMPTY = { tenant_name: "", tenant_email: "", tenant_phone: "", rent: "", deposit: "", deposit_scheme: "", deposit_protected: false, receipts_auto: true, statements_auto: true, start_date: "", end_date: "", rent_day: "1", notes: "" };
+const EMPTY = { tenant_name: "", tenant_email: "", tenant_phone: "", rent: "", deposit: "", deposit_scheme: "", deposit_protected: false, receipts_auto: true, statements_auto: true, arrears_auto: true, start_date: "", end_date: "", rent_day: "1", notes: "" };
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export default function TenancyForm() {
@@ -24,7 +24,7 @@ export default function TenancyForm() {
   const set = (k: keyof typeof f) => (v: string | boolean) => setF((x) => ({ ...x, [k]: v }));
 
   useEffect(() => {
-    if (existing) setF(Object.fromEntries(Object.keys(EMPTY).map((k) => [k, k === "deposit_protected" || k === "receipts_auto" || k === "statements_auto" ? !!(existing as any)[k] : String((existing as any)[k] ?? "")])) as typeof EMPTY);
+    if (existing) setF(Object.fromEntries(Object.keys(EMPTY).map((k) => [k, ["deposit_protected", "receipts_auto", "statements_auto", "arrears_auto"].includes(k) ? !!(existing as any)[k] : String((existing as any)[k] ?? "")])) as typeof EMPTY);
   }, [existing]);
 
   const done = async (msg: string) => {
@@ -96,7 +96,13 @@ export default function TenancyForm() {
           <Chip label="Yes, each January" icon="calendar-check" selected={f.statements_auto} onPress={() => set("statements_auto")(true)} testID="tenancy-statements-on" />
           <Chip label="Off" icon="mail-x" selected={!f.statements_auto} onPress={() => set("statements_auto")(false)} testID="tenancy-statements-off" />
         </View>
-        {(f.receipts_auto || f.statements_auto) && !f.tenant_email.trim() && <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted }}>Add the tenant&apos;s email to send receipts and statements.</Text>}
+        <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.onSurfaceTertiary, marginTop: space.sm }}>Chase missed rent automatically?</Text>
+        <View style={{ flexDirection: "row", gap: space.sm }}>
+          <Chip label="Yes, auto-remind" icon="bell-ring" selected={f.arrears_auto} onPress={() => set("arrears_auto")(true)} testID="tenancy-arrears-on" />
+          <Chip label="Off" icon="bell-off" selected={!f.arrears_auto} onPress={() => set("arrears_auto")(false)} testID="tenancy-arrears-off" />
+        </View>
+        {f.arrears_auto && <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted }}>Emails the tenant the day after rent is missed, then every 7 days until it&apos;s paid.</Text>}
+        {(f.receipts_auto || f.statements_auto || f.arrears_auto) && !f.tenant_email.trim() && <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted }}>Add the tenant&apos;s email to send receipts, statements and reminders.</Text>}
       </View>
       <Field label="Notes" value={f.notes} onChangeText={set("notes")} multiline placeholder="Break clause, guarantor, inventory…" testID="tenancy-notes-input" />
       {error ? <Text style={{ color: colors.error, fontFamily: fonts.medium }} testID="tenancy-form-error">{error}</Text> : null}
