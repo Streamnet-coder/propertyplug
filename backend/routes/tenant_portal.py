@@ -339,6 +339,8 @@ async def tenant_repair(token: str, room: str = Form(...), description: str = Fo
         doc["storage_path"] = res["path"]
     await db.snags.insert_one(doc)
     summary = f"Repair reported: {doc['description'][:120]} ({doc['room']})"
+    from routes.push import notify
+    await notify([t["user_id"]], f"{'URGENT: ' if doc['priority'] == 'high' else ''}Repair reported by {t['tenant_name']}"[:80], f"{doc['description'][:120]} ({doc['room']})", "/snags", kind="repairs")
     await log_message(t["user_id"], t["project_id"], name=t["tenant_name"], email=t.get("tenant_email"), channel="web", kind="tenant_repair", direction="in", summary=summary)
     owner = await db.users.find_one({"_id": ObjectId(t["user_id"])}, {"email": 1}) or {}
     if owner.get("email"):

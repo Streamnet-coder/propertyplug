@@ -242,6 +242,8 @@ async def accept_link(token: str, user: User = Depends(real_user)):
     await db.co_owners.insert_one({"owner_id": d["owner_id"], "email": user.email, "invited_at": now_iso(), "project_ids": d.get("project_ids"),
                                    "role": _role(d), "money_access": d.get("money_access", True), "auto_add": bool(d.get("auto_add")), "via_link": True})
     await open_shared(user.id, user.email, d["owner_id"])  # land straight in the shared project
+    from routes.push import notify
+    await notify([d["owner_id"]], "Invite accepted", f"{user.name} joined as your {'co-owner' if _role(d) == 'co_owner' else 'manager'}", "/co-owners", kind="invites")
     owner = await db.users.find_one({"_id": ObjectId(d["owner_id"])}, {"name": 1, "email": 1}) or {}
     if owner.get("email"):
         try:

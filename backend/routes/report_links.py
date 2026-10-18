@@ -22,6 +22,7 @@ from routes.email_settings import owner_reply_to
 from routes.messages import log_message
 from routes.rentals import _ctx, _row, _wrap
 from sms import send_sms, sms_enabled
+from routes.push import notify
 from storage import get_object, put_object
 
 router = APIRouter()
@@ -128,6 +129,8 @@ async def assign(sid: str, body: AssignIn, user: User = Depends(current_user)):
     url = _url(body.origin_url, f"/api/job/{token}")
     await db.snags.update_one({"_id": snag["_id"]}, {"$set": {"assignee": who["name"], "assigned_to": {**who, "at": now_iso()}, "job_token": token, "job_origin": body.origin_url}})
     emailed = await _job_email(user.id, snag, who, url)
+    if who.get("user_id"):
+        await notify([who["user_id"]], f"{'URGENT ' if snag.get('priority') == 'high' else ''}New job assigned to you", f"{snag['description'][:120]} ({snag['room']})", "/inbox", kind="jobs")
     texted = False
     if snag.get("priority") == "high" and who.get("phone"):
         address, sender, _ = await _ctx(user.id, snag)
@@ -267,6 +270,7 @@ async def submit_report(token: str, name: str = Form(...), room: str = Form(...)
                       direction="in", summary=f"Problem reported: {description[:120]} ({room})")
     urgent = doc["priority"] == "high"
     address, sender, head = await _ctx(link["user_id"], link)
+    await notify([link["user_id"]], f"{'URGENT: ' if urgent else ''}Problem reported · {address}"[:80], f"{name}: {description[:120]} ({room})", "/snags", kind="repairs")
     owner = await db.users.find_one({"_id": ObjectId(link["user_id"])}, {"email": 1, "branding.phone": 1}) or {}
     if owner.get("email"):
         html = _wrap(f'<p style="font-size:12px;letter-spacing:1px;color:{PRIO[doc["priority"]]};font-weight:bold;margin:0">{"URGENT " if urgent else ""}PROBLEM REPORTED · {doc["priority"].upper()}</p>'
@@ -418,6 +422,7 @@ async def job_fix(token: str, note: str = Form(""), cost: str = Form(""), photo:
         from routes.tenant_portal import notify_tenant_repair_fixed
         await notify_tenant_repair_fixed({**s, **upd})
         await _ctx(s["user_id"], s)  # sets the project currency for money()
+        await notify([s["user_id"]], f"Fixed: {s['room']}", f"{who} marked fixed: {s['description'][:120]}" + (f" · {money(amount, 2)}" if amount else ""), "/snags", kind="fixed")
         await log_message(s["user_id"], s["project_id"], name=who, channel="web", kind="snag_fixed", direction="in",
                           summary=f"Marked fixed: {s['description'][:120]} ({s['room']})" + (" · photo added" if path else "") + (f" · cost {money(amount, 2)}" if amount else ""))
     return RedirectResponse(f"/api/job/{token}?done=1", status_code=303)

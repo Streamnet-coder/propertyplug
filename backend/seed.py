@@ -84,6 +84,10 @@ async def create_user(name: str, email: str, password: str, source: Optional[str
     u.id = str(res.inserted_id)
     # People joining from an invite (link or email) get no demo project: they open straight into what was shared.
     from routes.co_owners import open_shared
-    if not (invited or await open_shared(u.id, email)):
+    if await open_shared(u.id, email):
+        from routes.push import notify
+        owner_id = (await db.users.find_one({"_id": res.inserted_id}, {"acting_owner_id": 1}) or {}).get("acting_owner_id")
+        await notify([owner_id], "Invite accepted", f"{name} signed up and joined your team", "/co-owners", kind="invites")
+    elif not invited:
         await seed_user_data(u.id)
     return User.from_mongo(await db.users.find_one({"_id": res.inserted_id}))

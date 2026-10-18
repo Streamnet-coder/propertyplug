@@ -272,6 +272,9 @@ async def add_payout(body: PayoutIn, user: User = Depends(current_user)):
     await db.coowner_payouts.insert_one({"project_id": pid, "owner_id": user.id, "co_owner_id": body.co_owner_id, "amount": round(body.amount, 2),
                                          "date": body.date, "note": body.note.strip(), "created_at": now_iso()})
     out = await get_payouts(user)
+    from routes.push import notify, user_id_for_email
+    person = next(x for x in out["people"] if x["co_owner_id"] == body.co_owner_id)
+    await notify([await user_id_for_email(person["email"])], "Payout recorded", f"{user.name} paid you {money(body.amount, 2)} ({body.date})", "/my-ownership", kind="payouts")
     out["receipt_sent"] = await _payout_receipt(user, pid, body, next(x for x in out["people"] if x["co_owner_id"] == body.co_owner_id)) if body.send_receipt else False
     return out
 

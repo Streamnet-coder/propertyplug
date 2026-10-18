@@ -69,6 +69,7 @@ class Project(BaseDocument):
     refinance_rate: float = 5.5
     budget: Budget = Budget()
     cover_path: Optional[str] = None  # preferred project photo (shown on project list / home)
+    cover_history: List[dict] = []  # every photo ever set as cover: {path, at} -> before & now timeline
     currency: Currency = "GBP"
     property_type: Literal["residential", "land"] = "residential"
     purpose: Literal["investment", "personal"] = "investment"

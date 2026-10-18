@@ -23,6 +23,7 @@ import { OverdueRequestsCard } from "@/src/components/overdue-requests-card";
 import { RentalsCard, TenancyAlertsCard } from "@/src/components/rentals-card";
 import { useCanSeeMoney } from "@/src/money";
 import { OwnershipSplitCard } from "@/src/components/ownership-split-card";
+import { PhotoTimelineCard } from "@/src/components/photo-timeline-card";
 import { FixedRateAlertCard, HomeFinanceCard } from "@/src/components/home-finance-card";
 import { makeStyles, useTheme } from "@/src/theme";
 
@@ -210,6 +211,7 @@ export default function Home() {
             </Pressable>
           )}
 
+          <PhotoTimelineCard p={p} />
           <ExpiringAccessCard linkToPortal />
           <OverdueRequestsCard />
           {money && p.property_type !== "land" && <TenancyAlertsCard />}

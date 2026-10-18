@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from datetime import date
 from typing import List, Literal, Optional
 from bson import ObjectId
-from core import db, oid
+from core import db, now_iso, oid
 from models import User, Budget, Currency, Project
 from deps import MONEY_KEYS, block_money, current_user, effective, hide_money, pro_user, real_user, active_pid, get_project_doc
 from seed import seed_milestones
@@ -316,5 +316,20 @@ async def set_cover(body: CoverIn, user: User = Depends(current_user)):
     pid = await active_pid(user)
     if body.storage_path and not await db.files.find_one({"storage_path": body.storage_path, "owner_id": {"$in": [user.id, user.real_id or user.id]}, "is_deleted": False}):
         raise HTTPException(404, "Image not found")
-    await db.projects.update_one({"_id": oid(pid), "user_id": user.id}, {"$set": {"cover_path": body.storage_path or None}})
+    upd = {"$set": {"cover_path": body.storage_path or None}}
+    if body.storage_path:
+        upd["$push"] = {"cover_history": {"path": body.storage_path, "at": now_iso()}}
+    await db.projects.update_one({"_id": oid(pid), "user_id": user.id}, upd)
     return {"cover_path": body.storage_path or None}
+
+
+@router.delete("/project/cover-history")
+async def remove_cover_history(path: str, user: User = Depends(current_user)):
+    """Drop one photo from the timeline (the current cover stays unless it was that photo)."""
+    pid = await active_pid(user)
+    await db.projects.update_one({"_id": oid(pid), "user_id": user.id}, {"$pull": {"cover_history": {"path": path}}})
+    doc = await db.projects.find_one({"_id": oid(pid)}, {"cover_path": 1, "cover_history": 1})
+    if doc.get("cover_path") == path:
+        hist = doc.get("cover_history") or []
+        await db.projects.update_one({"_id": oid(pid)}, {"$set": {"cover_path": hist[-1]["path"] if hist else None}})
+    return {"ok": True}

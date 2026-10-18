@@ -2,11 +2,13 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { ActivityIndicator, LogBox, View } from "react-native";
+import { ActivityIndicator, LogBox, Platform, View } from "react-native";
+import * as Notifications from "expo-notifications";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
 import { AuthProvider } from "@/src/auth";
 import { ErrorBoundary } from "@/src/components/error-boundary";
+import { PushManager } from "@/src/components/push-manager";
 import { queryClient } from "@/src/query-client";
 import { colors } from "@/src/theme";
 import { ToastProvider } from "@/src/toast";
@@ -14,6 +16,17 @@ import { ToastProvider } from "@/src/toast";
 // Disable logbox errors etc so that users can see the app
 // and agent works as expected.
 LogBox.ignoreAllLogs(true);
+
+// Push: show notifications while the app is open (module scope, native only).
+if (Platform.OS !== "web") {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({ shouldShowAlert: true, shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }),
+  });
+}
+// Android channel must exist before any push arrives.
+if (Platform.OS === "android") {
+  Notifications.setNotificationChannelAsync("default", { name: "Default", importance: Notifications.AndroidImportance.MAX, sound: "default" });
+}
 
 export default function RootLayout() {
   const [loaded] = useFonts({
@@ -41,6 +54,7 @@ export default function RootLayout() {
           <AuthProvider>
             <ToastProvider>
               <StatusBar style="dark" />
+              <PushManager />
               <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.surfaceSecondary } }}>
                 <Stack.Screen name="index" />
                 <Stack.Screen name="welcome" />
@@ -79,6 +93,7 @@ export default function RootLayout() {
                 <Stack.Screen name="ai-estimates" />
                 <Stack.Screen name="ai-estimate-view" />
                 <Stack.Screen name="ai-estimates-compare" />
+                <Stack.Screen name="notification-settings" />
                 <Stack.Screen name="my-ownership" />
                 <Stack.Screen name="ownership-portfolio" />
                 <Stack.Screen name="snag-form" options={{ presentation: "modal" }} />

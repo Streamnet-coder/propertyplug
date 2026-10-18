@@ -260,3 +260,19 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Home hero uses project cover_path (testID hero-cover-photo) else stock image; owner sees "Add photo" pill (hero-add-photo) -> /project-edit when no cover.
 - POST /api/project/payouts send_receipt (default true) emails co-owner a receipt (amount, date, note, share, earned/paid/balance); response receipt_sent; logged kind payout_receipt. UI toggle payout-receipt-toggle.
 - /ai-estimates: compare-start -> pick 2 -> compare-go -> /ai-estimates-compare?a&b (side by side design, totals, cheaper highlight, item-by-item ranges).
+
+## Photo timeline (Jun 2026)
+- Project.cover_history [{path, at}] appended on every PUT /api/project/cover with a path. DELETE /api/project/cover-history?path= removes one (cover falls back to latest remaining).
+- Home PhotoTimelineCard (photo-timeline-card): Before (first) & Now (latest) pair, horizontal strip when 3+ (long-press removes), "Add progress photo" (photo-timeline-add) -> PhotoPicker -> upload -> becomes banner.
+- Demo project cover reset to none after smoke test.
+
+## Push notifications (Emergent managed, Jun 2026)
+- backend routes/push.py: POST /api/register-push (auth; user_id must equal caller), send_push(), notify() non-blocking. EMERGENT_PUSH_KEY=placeholder in backend/.env (set by deploy pipeline; never edit).
+- Events: report-link + tenant-portal repair -> owner (/snags); job assigned to team member with account -> assignee (/inbox); job fixed via job link or inbox quick-fix -> owner (/snags); payout recorded -> co-owner (/my-ownership); invite link accepted or email-invite signup -> owner (/co-owners).
+- frontend: _layout module-scope setNotificationHandler + Android "default" channel; src/components/push-manager.tsx (tap handlers warm/cold, registerForPush on login/app open with getDevicePushTokenAsync, weekly Open Settings nudge). app.json expo-notifications plugin. PENDING: google-services.json from user -> frontend/google-services.json + expo.android.googleServicesFile.
+- Works only in published builds (not Expo Go/web).
+
+## Notification preferences + winning estimate (Jun 2026)
+- users.notify_prefs {repairs, jobs, fixed, payouts, invites} (default true). GET/PUT /api/notification-prefs (real_user). notify(kind=...) skips users who turned that kind off. Screen /notification-settings (Profile -> Notifications).
+- POST /api/ai/estimates/{id}/choose: marks chosen (unchooses others in project), adds every not-yet-added item to budget (mid of range), tracks added_items; POST /api/ai/estimates/{id}/added {index} for single adds. UI: estimate-choose button + estimate-chosen-badge in view, CHOSEN badge in list, compare-choose-a/b in compare.
+- Android push still waiting for user's google-services.json.

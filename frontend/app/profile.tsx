@@ -236,6 +236,7 @@ export default function Profile() {
           {[
             { icon: "folder-open" as IconName, label: "My projects", onPress: () => router.push("/projects"), id: "projects" },
             { icon: "users" as IconName, label: "Co-owners & managers", onPress: () => router.push("/co-owners"), id: "co-owners" },
+            { icon: "bell" as IconName, label: "Notifications", onPress: () => router.push("/notification-settings"), id: "notifications" },
             { icon: "history" as IconName, label: "Project activity", onPress: () => router.push("/project-activity"), id: "project-activity" },
             { icon: "receipt" as IconName, label: "Billing history", onPress: () => router.push("/billing"), id: "billing" },
             { icon: "milestone" as IconName, label: "Milestone timeline", onPress: () => router.push("/timeline"), id: "timeline" },

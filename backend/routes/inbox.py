@@ -66,6 +66,9 @@ async def quick_fix(sid: str, note: str = Form(""), file: Optional[UploadFile] =
     await db.snags.update_one({"_id": snag["_id"]}, {"$set": upd})
     from routes.tenant_portal import notify_tenant_repair_fixed
     await notify_tenant_repair_fixed({**snag, **upd})
+    if user.id != snag["user_id"]:
+        from routes.push import notify
+        await notify([snag["user_id"]], f"Fixed: {snag.get('room', 'snag')}", f"{user.name} marked fixed: {snag['description'][:120]}", "/snags", kind="fixed")
     await log_message(snag["user_id"], snag["project_id"], name=user.name, channel="app", kind="snag_fixed", direction="in",
                       summary=f"Marked fixed from My tasks: {snag['description'][:120]} ({snag.get('room', '')})" + (" · photo added" if upd.get("fix_photo_path") else ""))
     await db.project_activity.insert_one({"owner_id": snag["user_id"], "project_id": snag["project_id"], "actor_id": user.id, "actor_name": user.name,

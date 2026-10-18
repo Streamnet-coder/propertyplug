@@ -1,11 +1,14 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
 import { api, fileUrl, gbp } from "@/src/api";
-import { Card, fonts, FormScreen, Icon, radius, space, tap } from "@/src/components/ui";
+import { Button, Card, fonts, FormScreen, Icon, radius, space, tap } from "@/src/components/ui";
+import { invalidate } from "@/src/queries";
+import { queryClient } from "@/src/query-client";
 import { makeStyles, useTheme } from "@/src/theme";
+import { useToast } from "@/src/toast";
 import type { SavedEstimate } from "./ai-estimates";
 
 const mid = (e: SavedEstimate) => (e.total_low + e.total_high) / 2;
@@ -18,6 +21,16 @@ export default function CompareEstimates() {
   const { a, b } = useLocalSearchParams<{ a: string; b: string }>();
   const qa = useQuery({ queryKey: ["ai-estimate", a], queryFn: () => api<SavedEstimate>(`/ai/estimates/${a}`) });
   const qb = useQuery({ queryKey: ["ai-estimate", b], queryFn: () => api<SavedEstimate>(`/ai/estimates/${b}`) });
+  const toast = useToast();
+  const choose = useMutation({
+    mutationFn: (eid: string) => api<{ added: number }>(`/ai/estimates/${eid}/choose`, { method: "POST" }),
+    onSuccess: (r) => {
+      ["ai-estimate", "ai-estimates"].forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
+      invalidate("line-items", "project");
+      toast(`Chosen · ${r.added} item${r.added === 1 ? "" : "s"} added to budget`);
+    },
+    onError: (e: Error) => toast(e.message, "error"),
+  });
   const A = qa.data, B = qb.data;
 
   if (!A || !B) return <FormScreen title="Compare estimates" testID="compare-screen"><ActivityIndicator color={colors.brand} /></FormScreen>;
@@ -44,6 +57,9 @@ export default function CompareEstimates() {
             <Text style={s.range} testID={`compare-total-${i === 0 ? "a" : "b"}`}>{gbp(e.total_low)} – {gbp(e.total_high)}</Text>
             <Text style={s.muted}>{e.finish_type} · {e.items.length} items</Text>
             <Text style={s.muted}>{e.created_at.slice(0, 10)}</Text>
+            {e.chosen ? <Text style={[s.tag, { color: colors.success }]} testID={`compare-chosen-${i === 0 ? "a" : "b"}`}>✓ CHOSEN</Text> : (
+              <Button small title="Choose" icon="trophy" loading={choose.isPending && choose.variables === e.id} onPress={() => choose.mutate(e.id)} testID={`compare-choose-${i === 0 ? "a" : "b"}`} />
+            )}
           </Pressable>
         ))}
       </View>

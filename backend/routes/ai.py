@@ -127,7 +127,8 @@ def _est_out(d: dict) -> dict:
     r = d.get("result") or {}
     return {"id": str(d["_id"]), "description": d["description"], "finish_type": d.get("finish_type", ""), "created_at": d["created_at"],
             "photo_path": d.get("photo_path"), "design_path": d.get("design_path"), "pins": d.get("pins") or [], "title": d.get("title") or "",
-            "total_low": r.get("total_low", 0), "total_high": r.get("total_high", 0), "items": r.get("items", []), "notes": r.get("notes", "")}
+            "total_low": r.get("total_low", 0), "total_high": r.get("total_high", 0), "items": r.get("items", []), "notes": r.get("notes", ""),
+            "chosen": bool(d.get("chosen")), "chosen_at": d.get("chosen_at"), "added_items": d.get("added_items") or []}
 
 
 @router.get("/ai/estimates")
@@ -160,4 +161,39 @@ async def rename_estimate(eid: str, body: EstimateRename, user: User = Depends(c
 @router.delete("/ai/estimates/{eid}")
 async def delete_estimate(eid: str, user: User = Depends(current_user)):
     await db.estimates.delete_one({"_id": oid(eid), "user_id": user.id})
+    return {"ok": True}
+
+
+@router.post("/ai/estimates/{eid}/choose")
+async def choose_estimate(eid: str, user: User = Depends(current_user)):
+    """Mark this estimate as the winning option for the project and add all its items to the budget (once each)."""
+    d = await db.estimates.find_one({"_id": oid(eid), "user_id": user.id})
+    if not d:
+        raise HTTPException(404, "Estimate not found")
+    pid = await active_pid(user)
+    from models import LineItem
+    items = (d.get("result") or {}).get("items", [])
+    done = set(d.get("added_items") or [])
+    added = 0
+    for i, it in enumerate(items):
+        if i in done:
+            continue
+        li = LineItem(user_id=user.id, project_id=pid, category="Soft Cost" if it.get("category") == "Soft Cost" else "Hard Cost", name=it.get("name", "Item")[:120],
+                      budgeted=round((float(it.get("low", 0)) + float(it.get("high", 0))) / 2), supplier=it.get("supplier", "")[:120], status="Planned")
+        await db.line_items.insert_one(li.to_mongo())
+        done.add(i)
+        added += 1
+    await db.estimates.update_many({"user_id": user.id, "project_id": pid, "_id": {"$ne": d["_id"]}}, {"$set": {"chosen": False}})
+    await db.estimates.update_one({"_id": d["_id"]}, {"$set": {"chosen": True, "chosen_at": now_iso(), "project_id": d.get("project_id") or pid, "added_items": sorted(done)}})
+    return {"added": added, "estimate": await get_estimate(eid, user)}
+
+
+class AddedIn(BaseModel):
+    index: int = Field(ge=0, le=500)
+
+
+@router.post("/ai/estimates/{eid}/added")
+async def mark_added(eid: str, body: AddedIn, user: User = Depends(current_user)):
+    """Remember a single item was added to the budget so "add all" skips it."""
+    await db.estimates.update_one({"_id": oid(eid), "user_id": user.id}, {"$addToSet": {"added_items": body.index}})
     return {"ok": True}

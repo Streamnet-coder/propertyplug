@@ -55,7 +55,14 @@
           "cameraPermission": "Snap site photos and receipts"
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#0f766e"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

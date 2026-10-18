@@ -22,7 +22,7 @@ export default function EstimateView() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const q = useQuery({ queryKey: ["ai-estimate", id], queryFn: () => api<SavedEstimate>(`/ai/estimates/${id}`) });
   const [title, setTitle] = useState<string | null>(null);
-  const [added, setAdded] = useState<Record<number, boolean>>({});
+  const [addedNow, setAdded] = useState<Record<number, boolean>>({});
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["ai-estimates"] });
 
   const rename = useMutation({
@@ -43,13 +43,25 @@ export default function EstimateView() {
     try {
       await api("/line-items", { body: { name: it.name, category: it.category === "Soft Cost" ? "Soft Cost" : "Hard Cost", budgeted: Math.round((it.low + it.high) / 2), actual: 0, supplier: it.supplier, status: "Planned" } });
       setAdded((a) => ({ ...a, [i]: true }));
+      api(`/ai/estimates/${id}/added`, { body: { index: i } }).catch(() => {});
       invalidate("line-items", "project");
       toast("Added to budget");
     } catch (e) {
       toast((e as Error).message, "error");
     }
   };
+  const choose = useMutation({
+    mutationFn: () => api<{ added: number; estimate: SavedEstimate }>(`/ai/estimates/${id}/choose`, { method: "POST" }),
+    onSuccess: (r) => {
+      queryClient.setQueryData(["ai-estimate", id], r.estimate);
+      refresh();
+      invalidate("line-items", "project");
+      toast(r.added ? `Chosen · ${r.added} item${r.added === 1 ? "" : "s"} added to budget` : "Chosen · items were already in your budget");
+    },
+    onError: (e: Error) => toast(e.message, "error"),
+  });
   const e = q.data;
+  const added = (i: number) => !!addedNow[i] || !!e?.added_items?.includes(i);
 
   return (
     <FormScreen title="Saved estimate" testID="estimate-view-screen">
@@ -88,6 +100,14 @@ export default function EstimateView() {
               <Image source={{ uri: fileUrl(e.photo_path) }} style={s.photo} contentFit="cover" testID="estimate-view-photo" />
             </>
           ) : null}
+          {e.chosen ? (
+            <View style={s.chosenBox} testID="estimate-chosen-badge">
+              <Icon name="circle-check" size={18} color={colors.success} />
+              <Text style={[s.itemName, { flex: 1 }]}>Chosen option{e.chosen_at ? ` · ${e.chosen_at.slice(0, 10)}` : ""}</Text>
+            </View>
+          ) : null}
+          <Button icon="trophy" title={e.chosen ? "Add any missing items to budget" : "Choose this option & add all to budget"} loading={choose.isPending}
+            disabled={e.chosen && e.items.every((_, i) => added(i))} onPress={() => choose.mutate()} testID="estimate-choose" />
           <Text style={s.label}>Items</Text>
           {e.items.map((it, i) => (
             <Card key={i} style={s.item} testID={`estimate-view-item-${i}`}>
@@ -97,7 +117,7 @@ export default function EstimateView() {
                 <Text style={s.muted}>{it.supplier} · {it.category}</Text>
                 <Text style={s.range}>{gbp(it.low)} – {gbp(it.high)}</Text>
               </View>
-              <Button small variant={added[i] ? "outline" : "secondary"} icon={added[i] ? "check" : "plus"} title={added[i] ? "Added" : "Add"} disabled={added[i]} onPress={() => add(i)} testID={`estimate-view-add-${i}`} />
+              <Button small variant={added(i) ? "outline" : "secondary"} icon={added(i) ? "check" : "plus"} title={added(i) ? "Added" : "Add"} disabled={added(i)} onPress={() => add(i)} testID={`estimate-view-add-${i}`} />
             </Card>
           ))}
           {e.notes ? (
@@ -124,5 +144,6 @@ const useStyles = makeStyles((c) => ({
   item: { flexDirection: "row", alignItems: "center", gap: space.md, padding: space.md },
   itemName: { fontFamily: fonts.semibold, fontSize: 14, color: c.onSurface },
   range: { fontFamily: fonts.bold, fontSize: 14, color: c.brand, marginTop: 2 },
+  chosenBox: { flexDirection: "row", alignItems: "center", gap: space.sm, backgroundColor: c.surfaceTertiary, padding: space.md, borderRadius: radius.md },
   notes: { flexDirection: "row", gap: space.sm, backgroundColor: c.brandTertiary, padding: space.md, borderRadius: radius.md },
 }));

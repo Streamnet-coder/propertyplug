@@ -12,6 +12,7 @@ import { makeStyles, useTheme } from "@/src/theme";
 export type SavedEstimate = {
   id: string; title: string; description: string; finish_type: string; created_at: string; photo_path: string | null; design_path: string | null; pins: DesignPin[];
   total_low: number; total_high: number; items: { name: string; spec?: string; category: string; low: number; high: number; supplier: string }[]; notes: string;
+  chosen: boolean; chosen_at: string | null; added_items: number[];
 };
 
 /** Every AI cost estimate for this project, with its designed finished look, to review later. */
@@ -57,6 +58,7 @@ export default function SavedEstimates() {
             <View style={[s.thumb, s.noImg]}><Icon name="image-off" size={20} color={colors.muted} /></View>
           )}
           <View style={{ flex: 1, gap: 2 }}>
+            {e.chosen && <Text style={s.chosen} testID={`saved-estimate-chosen-${e.id}`}>✓ CHOSEN OPTION</Text>}
             <Text style={s.name} numberOfLines={2}>{e.title || e.description}</Text>
             <Text style={s.range}>{gbp(e.total_low)} – {gbp(e.total_high)}</Text>
             <Text style={s.muted}>{e.finish_type} · {e.items.length} items · {e.created_at.slice(0, 10)}{e.design_path ? " · design" : ""}</Text>
@@ -74,6 +76,7 @@ const useStyles = makeStyles((c) => ({
   thumb: { width: 72, height: 72, borderRadius: radius.md, backgroundColor: c.surfaceTertiary },
   noImg: { alignItems: "center", justifyContent: "center" },
   name: { fontFamily: fonts.semibold, fontSize: 14, color: c.onSurface },
+  chosen: { fontFamily: fonts.bold, fontSize: 10, letterSpacing: 0.6, color: c.success },
   range: { fontFamily: fonts.bold, fontSize: 14, color: c.brand },
   muted: { fontFamily: fonts.regular, fontSize: 12, color: c.muted, lineHeight: 17 },
 }));

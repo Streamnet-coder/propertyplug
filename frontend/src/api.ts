@@ -66,6 +66,7 @@ export type Project = {
   id: string;
   name: string;
   cover_path?: string | null;
+  cover_history?: { path: string; at: string }[];
   address: string;
   target_type: string;
   finish_type: string;

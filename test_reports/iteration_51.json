@@ -1,0 +1,34 @@
+{
+  "summary": "PropertyPlug iter 51: tested the two new features — (1) Notification Preferences (GET defaults all true, PUT persists, routes.push.notify(kind) filters out users whose kind pref is False), and (2) Pick Winning Option on saved AI estimates (POST /api/ai/estimates/{id}/choose creates line items with budgeted=round(mid(low,high)), marks chosen=true, un-chooses other project estimates, is idempotent on repeat call, POST /api/ai/estimates/{id}/added marks a single index, 404 for unknown id). Backend 9/9 PASS. Frontend end-to-end verified via mobile Playwright (390x844): login -> Profile -> Notifications shows all 5 switches (notif-toggle-repairs/jobs/fixed/payouts/invites) and toggling + reload persists; /ai-estimates lists 13 cards, opening one and tapping estimate-choose shows estimate-chosen-badge and item buttons flip to 'Added', back on list the chosen card shows saved-estimate-chosen-{id}; compare screen (compare-start -> pick 2 -> compare-go) shows compare-choose-a/b for not-yet-chosen and compare-chosen-a/b after choice. The expected 401 console log is for the push-token register call since EMERGENT_PUSH_KEY is the documented placeholder (per agent note — non-blocking). Cleanup script removed the 15 line items added via choose, reset estimates chosen=false/added_items=[], and restored notify_prefs to all true.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration51.py",
+    "/app/backend/tests/cleanup_iter51.py",
+    "/app/test_reports/pytest/pytest_iteration51.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/push.py notify(): filters recipients via a single $in query on notify_prefs.{kind}=False — correct and efficient; dict.fromkeys dedupes while preserving order.",
+    "routes/push.py send_push: 401 from provider is converted to HTTPException(500) which bubbles out of notify() where it is caught by the try/except and only logged — so a bad push key never breaks the triggering business flow (confirmed by live 401 placeholder behaviour).",
+    "routes/ai.py choose_estimate: inserts a LineItem per not-yet-added item then $set added_items=sorted(done); category is coerced to Soft/Hard Cost; name truncated to 120 chars; supplier to 120. budgeted = round(mid(low,high)). Idempotent — second call returns added=0 since all indexes are in added_items. Also update_many un-chooses sibling estimates in the same project before marking this one chosen — order is correct (sibling update first, then self update).",
+    "routes/ai.py mark_added uses $addToSet so repeated calls are safely idempotent.",
+    "ai-estimate-view.tsx: 'added' local state is OR'd with e.added_items.includes(i), so after choose the UI immediately shows Added for every item without a refetch of the list.",
+    "ai-estimates-compare.tsx choose mutation invalidates both ai-estimate/ai-estimates query keys and line-items/project — list and detail stay in sync."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration51.py (new)",
+    "/app/backend/tests/cleanup_iter51.py (new)"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (3/3 flows)"},
+  "seed_data_creation": "Teardown fixture reset estimates in Mongo; cleanup_iter51.py additionally deleted 15 line_items created today whose names matched estimate items (added via the UI choose test), reset all demo-user estimates to chosen=false/added_items=[], and restored notify_prefs to all true. No residual state.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login testIDs: auth-email-input / auth-password-input / auth-submit-button; landing page sign-in-button opens auth screen. Notification settings route: /notification-settings; testIDs notification-settings-screen + notif-toggle-{repairs|jobs|fixed|payouts|invites}. React Native web Switch does not expose aria-checked in a stable way — assert persistence by API GET /api/notification-prefs instead of DOM state. AI estimates list cards use testID saved-estimate-{id}; chosen marker uses saved-estimate-chosen-{id} (two testIDs on the same card, don't match prefix only). Choose endpoint returns {added, estimate}. Push 401 errors in console are the placeholder EMERGENT_PUSH_KEY — expected and non-blocking.",
+  "rca_of_issue": "N/A"
+}
