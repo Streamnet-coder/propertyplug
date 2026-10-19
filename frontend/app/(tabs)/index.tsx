@@ -13,6 +13,7 @@ import { api, DocItem, expiryLabel, fileUrl, gbp } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { BrandLogo } from "@/src/components/brand";
 import { Button, Card, fonts, Icon, IconName, ProBadge, radius, SectionTitle, space, tap } from "@/src/components/ui";
+import { MAX_CONTENT, useLayout } from "@/src/layout";
 import { usesNativeTabs } from "@/src/navigation";
 import { PdfButton } from "@/src/components/pdf-button";
 import { invalidate, prefetchProjects, useDigest, useLineItems, useProject, useReceipts } from "@/src/queries";
@@ -38,6 +39,7 @@ export default function Home() {
   const { user } = useAuth();
   const project = useProject();
   const money = useCanSeeMoney();
+  const { wide } = useLayout();
   const receipts = useReceipts(money);
   const digest = useDigest(0);
   const lineItems = useLineItems(money);
@@ -94,11 +96,13 @@ export default function Home() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={{ padding: space.lg, paddingBottom: bottomChrome + 100, gap: space.xl }}
+          contentContainerStyle={[{ padding: wide ? space.xl : space.lg, paddingBottom: bottomChrome + 100, gap: space.xl }, s.contained]}
           refreshControl={<RefreshControl refreshing={project.isRefetching} onRefresh={() => invalidate("project", "receipts", "digest", "line-items")} tintColor={colors.brand} />}
           showsVerticalScrollIndicator={false}
         >
-          <Animated.View entering={FadeInDown.duration(400)} style={s.hero} testID="project-hero-card">
+          <View style={wide ? s.cols : s.stack}>
+          <View style={wide ? s.colMain : s.stack}>
+          <Animated.View entering={FadeInDown.duration(400)} style={[s.hero, wide && { height: 320 }]} testID="project-hero-card">
             <Image source={{ uri: p.cover_path ? fileUrl(p.cover_path) : HERO }} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} contentFit="cover" transition={300} testID={p.cover_path ? "hero-cover-photo" : "hero-stock-photo"} />
             <LinearGradient colors={["rgba(15,23,42,0.35)", "rgba(15,23,42,0.05)", colors.scrim]} locations={[0, 0.35, 1]} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
             <View style={s.heroTop}>
@@ -268,7 +272,9 @@ export default function Home() {
               </View>
             </View>
           </Pressable>
+          </View>
 
+          <View style={wide ? s.colSide : s.stack} testID={wide ? "home-side-column" : undefined}>
           {money && (<>
           <View>
             <SectionTitle title="Budget breakdown" action="Details" onAction={() => router.push("/(tabs)/budget")} testID="budget-details-link" />
@@ -385,11 +391,13 @@ export default function Home() {
           </View>
           </>)}
           {!money && p.property_type === "land" && <PlanningCard />}
+          </View>
+          </View>
         </ScrollView>
       )}
 
       {p && money && (
-        <BlurView intensity={40} tint="light" style={[s.cta, { paddingBottom: bottomChrome + space.md }]}>
+        <BlurView intensity={40} tint="light" style={wide ? s.ctaWide : [s.cta, { paddingBottom: bottomChrome + space.md }]}>
           <Button title="Add Expense" icon="plus" onPress={() => router.push("/receipt-form")} testID="add-expense-button" />
         </BlurView>
       )}
@@ -399,6 +407,12 @@ export default function Home() {
 
 const useStyles = makeStyles((c) => ({
   root: { flex: 1, backgroundColor: c.surfaceSecondary },
+  contained: { width: "100%", maxWidth: MAX_CONTENT, alignSelf: "center" },
+  stack: { gap: space.xl },
+  cols: { flexDirection: "row", alignItems: "flex-start", gap: space.xl },
+  colMain: { flex: 1.25, minWidth: 0, gap: space.xl },
+  colSide: { flex: 1, minWidth: 0, gap: space.xl },
+  ctaWide: { position: "absolute", right: space.xl, bottom: space.xl, width: 280, padding: space.md, borderRadius: radius.lg, borderWidth: 1, borderColor: c.border, backgroundColor: "rgba(255,255,255,0.85)", overflow: "hidden" },
   header: {
     flexDirection: "row",
     alignItems: "center",

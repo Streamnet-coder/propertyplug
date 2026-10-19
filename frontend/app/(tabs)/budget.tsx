@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Category, gbp, LineItem } from "@/src/api";
 import { Button, Chip, EmptyState, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { PdfButton } from "@/src/components/pdf-button";
+import { MAX_CONTENT, useLayout } from "@/src/layout";
 import { usesNativeTabs } from "@/src/navigation";
 import { shareBudgetPdf } from "@/src/report";
 import { invalidate, useLineItems, useSpendTrend } from "@/src/queries";
@@ -24,6 +25,7 @@ export default function Budget() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
   const q = useLineItems();
   const trend = useSpendTrend();
+  const { wide } = useLayout();
 
   const items = useMemo(() => (q.data ?? []).filter((i) => filter === "All" || (filter === "Alerts" ? !!i.alert : i.category === filter)), [q.data, filter]);
   const totals = items.reduce((a, i) => ({ b: a.b + i.budgeted, a: a.a + i.spent }), { b: 0, a: 0 });
@@ -66,40 +68,7 @@ export default function Budget() {
     );
   };
 
-  return (
-    <View style={s.root} testID="budget-screen">
-      <View style={[s.header, { paddingTop: insets.top + space.sm }]}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.title}>Budget</Text>
-            <Text style={s.sub}>Line items, suppliers & variance</Text>
-          </View>
-          <PdfButton onGenerate={shareBudgetPdf} testID="budget-pdf-button" />
-        </View>
-      </View>
-      <View style={s.chipRow}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
-          {FILTERS.map((f) => (
-            <Chip key={f} label={f} selected={filter === f} onPress={() => setFilter(f)} testID={`budget-filter-${f.replace(" ", "-").toLowerCase()}`} />
-          ))}
-        </ScrollView>
-      </View>
-
-      {q.isLoading ? (
-        <View style={s.center}><ActivityIndicator color={colors.brand} /></View>
-      ) : q.isError ? (
-        <View style={s.center}>
-          <Text style={s.meta}>Could not fetch budget data.</Text>
-          <Button small title="Retry" onPress={() => q.refetch()} testID="budget-retry-button" />
-        </View>
-      ) : (
-        <FlatList
-          data={items}
-          keyExtractor={(i) => i.id}
-          renderItem={renderItem}
-          contentContainerStyle={{ padding: space.lg, paddingBottom: bottomChrome + 100, gap: space.sm }}
-          refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => invalidate("line-items", "project")} tintColor={colors.brand} />}
-          ListHeaderComponent={
+  const header = (
             <View style={{ gap: space.md, marginBottom: space.sm }}>
               <Pressable testID="ai-estimate-banner" onPress={() => { tap(); router.push("/ai-estimate"); }} style={s.ai}>
                 <View style={s.aiIcon}><Icon name="sparkles" size={20} color={colors.onBrand} /></View>
@@ -152,11 +121,54 @@ export default function Budget() {
               {trend.data && <SpendTrendChart trend={trend.data} />}
               <CategoryBars items={q.data ?? []} />
             </View>
-          }
+  );
+
+  return (
+    <View style={s.root} testID="budget-screen">
+      <View style={[s.header, { paddingTop: insets.top + space.sm }]}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.title}>Budget</Text>
+            <Text style={s.sub}>Line items, suppliers & variance</Text>
+          </View>
+          <PdfButton onGenerate={shareBudgetPdf} testID="budget-pdf-button" />
+        </View>
+      </View>
+      <View style={s.chipRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
+          {FILTERS.map((f) => (
+            <Chip key={f} label={f} selected={filter === f} onPress={() => setFilter(f)} testID={`budget-filter-${f.replace(" ", "-").toLowerCase()}`} />
+          ))}
+        </ScrollView>
+      </View>
+
+      {q.isLoading ? (
+        <View style={s.center}><ActivityIndicator color={colors.brand} /></View>
+      ) : q.isError ? (
+        <View style={s.center}>
+          <Text style={s.meta}>Could not fetch budget data.</Text>
+          <Button small title="Retry" onPress={() => q.refetch()} testID="budget-retry-button" />
+        </View>
+      ) : (
+        <View style={wide ? s.wideRow : { flex: 1 }}>
+        {wide && (
+          <ScrollView style={s.side} contentContainerStyle={{ padding: space.xl, paddingRight: 0, paddingBottom: space.xxxl }} showsVerticalScrollIndicator={false} testID="budget-side-column">
+            {header}
+          </ScrollView>
+        )}
+        <FlatList
+          style={{ flex: 1 }}
+          data={items}
+          keyExtractor={(i) => i.id}
+          renderItem={renderItem}
+          contentContainerStyle={{ padding: wide ? space.xl : space.lg, paddingBottom: bottomChrome + 100, gap: space.sm }}
+          refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => invalidate("line-items", "project")} tintColor={colors.brand} />}
+          ListHeaderComponent={wide ? undefined : header}
           ListEmptyComponent={<EmptyState icon="clipboard-list" title="No line items logged" subtitle="Add your first cost to start tracking variance." testID="budget-empty" action="Add first item" onAction={() => router.push("/item-form")} />}
         />
+        </View>
       )}
-      <View style={[s.cta, { bottom: bottomChrome + space.lg }]}>
+      <View style={[wide ? s.ctaWide : s.cta, { bottom: bottomChrome + space.lg }]}>
         <Button title="Add Item" icon="plus" onPress={() => router.push("/item-form")} testID="add-line-item-button" />
       </View>
     </View>
@@ -167,6 +179,9 @@ const useStyles = makeStyles((c) => ({
   alertPill: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill },
   alertPillText: { fontFamily: fonts.semibold, fontSize: 11 },
   root: { flex: 1, backgroundColor: c.surfaceSecondary },
+  wideRow: { flex: 1, flexDirection: "row", width: "100%", maxWidth: MAX_CONTENT, alignSelf: "center" },
+  side: { width: 420, flexGrow: 0 },
+  ctaWide: { position: "absolute", right: space.xl, width: 280 },
   header: { paddingHorizontal: space.lg, paddingBottom: space.sm, backgroundColor: c.surface },
   title: { fontFamily: fonts.extrabold, fontSize: 28, color: c.onSurface, letterSpacing: -0.5 },
   sub: { fontFamily: fonts.regular, fontSize: 13, color: c.muted },

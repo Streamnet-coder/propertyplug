@@ -5,6 +5,7 @@ import { Platform } from "react-native";
 import { useAuth } from "@/src/auth";
 import { useCanSeeMoney } from "@/src/money";
 import { fonts, Icon, IconName, tap } from "@/src/components/ui";
+import { useLayout } from "@/src/layout";
 import { usesNativeTabs } from "@/src/navigation";
 import { useTheme } from "@/src/theme";
 
@@ -19,6 +20,7 @@ export default function TabsLayout() {
   const { user, loading } = useAuth();
   const { colors } = useTheme();
   const money = useCanSeeMoney();
+  const { wide } = useLayout();
   if (!loading && !user) return <Redirect href="/welcome" />;
 
   if (usesNativeTabs) {
@@ -39,15 +41,17 @@ export default function TabsLayout() {
       screenListeners={{ tabPress: () => tap() }}
       screenOptions={{
         headerShown: false,
+        tabBarPosition: wide ? "left" : "bottom",
+        tabBarVariant: wide ? "material" : "uikit",
+        tabBarLabelPosition: wide ? "beside-icon" : "below-icon",
         tabBarActiveTintColor: colors.brand,
+        tabBarActiveBackgroundColor: wide ? colors.brandTertiary : undefined,
         tabBarInactiveTintColor: colors.muted,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
-          ...(Platform.OS === "web" ? { height: 64 } : {}),
-        },
-        tabBarItemStyle: { alignSelf: "center" },
-        tabBarLabelStyle: { fontFamily: fonts.semibold, fontSize: 11 },
+        tabBarStyle: wide
+          ? { backgroundColor: colors.surface, borderRightColor: colors.border, width: 240, maxWidth: 240, paddingTop: 24, paddingHorizontal: 8 }
+          : { backgroundColor: colors.surface, borderTopColor: colors.border, ...(Platform.OS === "web" ? { height: 64 } : {}) },
+        tabBarItemStyle: wide ? { borderRadius: 12, marginVertical: 2, justifyContent: "flex-start", paddingHorizontal: 12, minHeight: 48 } : { alignSelf: "center" },
+        tabBarLabelStyle: { fontFamily: fonts.semibold, fontSize: wide ? 14 : 11 },
       }}
     >
       {TABS.map((t) => (

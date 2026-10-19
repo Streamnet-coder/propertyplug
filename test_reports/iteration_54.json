@@ -1,0 +1,23 @@
+{
+  "summary": "Frontend-only responsive layout verification for Dashboard (Home), Budget and Rent & tenancy at 1440x900 (desktop), 820x1180 (tablet) and 390x844 (mobile). All testIDs resolved, two-column layouts render only at wide (>=1024), bottom tab bar converts to a left sidebar on desktop and remains at the bottom at tablet/mobile, floating action buttons work and navigation/filters/row-taps all open the right routes/sheets.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Pre-existing (not from this change): console warnings 'shadow* style props are deprecated. Use boxShadow.' - RN Web deprecation across the shared ui library; worth batch-migrating in a future pass.",
+    "Pre-existing (not from this change): expo-notifications 'Listening to push token changes is not yet fully supported on web' warning on load; expected on web preview."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "seed_data_creation": "None - used demo@mybuilder.app / demo1234 (existing seeded project 'Nottingham Victorian Refurb' with Plan Test tenancy).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login via /auth?mode=login with testIDs auth-email-input, auth-password-input, auth-submit-button. Responsive breakpoint lives in src/layout.ts (wide >= 1024, tablet >= 768, MAX_CONTENT 1280). Wide-only testIDs that must stay stable: home-side-column, budget-side-column, rentals-side-column. Floating CTAs at desktop are positioned bottom-right (ctaWide) with fixed widths (home 280, budget 280, rentals 360 split 2x176).",
+  "rca_of_issue": "N/A - no bugs found. Verified bboxes: desktop tabs (x=24, stacked vertically, 54px rows), home right column (x=968, w=448), budget left column (x=360, w=420), rentals left column (x=104, w=503), add-expense floating at (1149,811,254x52), add-line-item at (1136,832,280x52), add-tenancy / add-rental-expense side-by-side at (1056,832) and (1240,832) 176x52. Mobile tab-home at y=786.5 (bottom bar), full-width CTAs (w=358 at x=16). Tablet 820: tab-home y=1122.5 (bottom bar), no side columns rendered. Add-expense click -> /receipt-form, tab-budget sidebar click -> /budget, line-item tap -> /item-form?id=..., add-tenancy -> /tenancy-form?year=2026, rent-month tap -> RentLogSheet modal (Jul 2026 rent). All screens visible and buttons tappable at every breakpoint."
+}

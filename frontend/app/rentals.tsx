@@ -8,6 +8,7 @@ import { RenewSheet } from "@/src/components/renew-sheet";
 import { SendAllStatements, TenancyActions } from "@/src/components/tenancy-actions";
 import { RentLogSheet } from "@/src/components/rent-log-sheet";
 import { Button, Card, EmptyState, fonts, Icon, radius, SectionTitle, space, tap } from "@/src/components/ui";
+import { MAX_CONTENT, useLayout } from "@/src/layout";
 import { invalidate, useRentals } from "@/src/queries";
 import { EXPENSE_CATEGORIES, ExpenseCategory, MONTHS, rentTone } from "@/src/rentals";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -22,6 +23,42 @@ export default function RentalsScreen() {
   const [renew, setRenew] = useState<Tenancy | null>(null);
   const q = useRentals(year);
   const d = q.data;
+  const { wide } = useLayout();
+
+  const tenancies = d && (
+          <View>
+            <SectionTitle title={`Tenancies (${d.tenancies.length})`} />
+            {d.tenancies.some((t) => t.tenant_email) && <SendAllStatements year={year} />}
+            {d.tenancies.length === 0 ? (
+              <EmptyState icon="key-round" title="No tenancies yet" subtitle="Add your tenant to track rent each month, late payments and the deposit." testID="tenancies-empty" />
+            ) : (
+              <View style={{ gap: space.md }}>
+                {d.tenancies.map((t) => <TenancyCard key={t.id} t={t} year={year} onMonth={(m) => setLog({ t, m })} onRenew={setRenew} />)}
+              </View>
+            )}
+          </View>
+  );
+  const expenses = d && (
+          <View>
+            <SectionTitle title={`Property expenses (${d.expenses.length})`} />
+            {d.expenses.length === 0 ? (
+              <Card><Text style={[s.muted, { textAlign: "center" }]} testID="expenses-empty">No expenses logged for {year}. Add repairs, agent fees and insurance to see true net cashflow.</Text></Card>
+            ) : (
+              <Card style={{ paddingVertical: space.xs }}>
+                {d.expenses.map((e, i) => (
+                  <Pressable key={e.id} testID={`rental-expense-${e.id}`} onPress={() => { tap(); router.push({ pathname: "/rental-expense-form", params: { id: e.id, year: String(year) } }); }} style={[s.expRow, i > 0 && s.divider]}>
+                    <View style={s.expIcon}><Icon name="wrench" size={16} color={colors.brandPrimary} /></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.expTitle} numberOfLines={1}>{e.description || EXPENSE_CATEGORIES[e.category as ExpenseCategory]}</Text>
+                      <Text style={s.muted}>{EXPENSE_CATEGORIES[e.category as ExpenseCategory]} · {e.date}</Text>
+                    </View>
+                    <Text style={s.expAmt}>-{gbp(e.amount, 2)}</Text>
+                  </Pressable>
+                ))}
+              </Card>
+            )}
+          </View>
+  );
 
   return (
     <View style={s.root} testID="rentals-screen">
@@ -44,46 +81,25 @@ export default function RentalsScreen() {
         <View style={s.center}><Text style={s.muted}>Could not load rental records.</Text><Button small title="Retry" onPress={() => q.refetch()} testID="rentals-retry-button" /></View>
       ) : (
         <ScrollView
-          contentContainerStyle={{ padding: space.lg, gap: space.xl, paddingBottom: insets.bottom + 120 }}
+          contentContainerStyle={[{ padding: wide ? space.xl : space.lg, gap: space.xl, paddingBottom: insets.bottom + 120 }, s.contained]}
           refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => invalidate("rentals")} tintColor={colors.brand} />}
         >
-          <Summary d={d} />
-
-          <View>
-            <SectionTitle title={`Tenancies (${d.tenancies.length})`} />
-            {d.tenancies.some((t) => t.tenant_email) && <SendAllStatements year={year} />}
-            {d.tenancies.length === 0 ? (
-              <EmptyState icon="key-round" title="No tenancies yet" subtitle="Add your tenant to track rent each month, late payments and the deposit." testID="tenancies-empty" />
-            ) : (
-              <View style={{ gap: space.md }}>
-                {d.tenancies.map((t) => <TenancyCard key={t.id} t={t} year={year} onMonth={(m) => setLog({ t, m })} onRenew={setRenew} />)}
-              </View>
-            )}
-          </View>
-
-          <View>
-            <SectionTitle title={`Property expenses (${d.expenses.length})`} />
-            {d.expenses.length === 0 ? (
-              <Card><Text style={[s.muted, { textAlign: "center" }]} testID="expenses-empty">No expenses logged for {year}. Add repairs, agent fees and insurance to see true net cashflow.</Text></Card>
-            ) : (
-              <Card style={{ paddingVertical: space.xs }}>
-                {d.expenses.map((e, i) => (
-                  <Pressable key={e.id} testID={`rental-expense-${e.id}`} onPress={() => { tap(); router.push({ pathname: "/rental-expense-form", params: { id: e.id, year: String(year) } }); }} style={[s.expRow, i > 0 && s.divider]}>
-                    <View style={s.expIcon}><Icon name="wrench" size={16} color={colors.brandPrimary} /></View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.expTitle} numberOfLines={1}>{e.description || EXPENSE_CATEGORIES[e.category as ExpenseCategory]}</Text>
-                      <Text style={s.muted}>{EXPENSE_CATEGORIES[e.category as ExpenseCategory]} · {e.date}</Text>
-                    </View>
-                    <Text style={s.expAmt}>-{gbp(e.amount, 2)}</Text>
-                  </Pressable>
-                ))}
-              </Card>
-            )}
-          </View>
+          {wide ? (
+            <View style={s.cols}>
+              <View style={s.colSide} testID="rentals-side-column"><Summary d={d} />{expenses}</View>
+              <View style={s.colMain}>{tenancies}</View>
+            </View>
+          ) : (
+            <>
+              <Summary d={d} />
+              {tenancies}
+              {expenses}
+            </>
+          )}
         </ScrollView>
       )}
 
-      <View style={[s.cta, { bottom: insets.bottom + space.lg }]}>
+      <View style={[wide ? s.ctaWide : s.cta, { bottom: insets.bottom + space.lg }]}>
         <Button title="Tenancy" icon="user-plus" variant="secondary" style={{ flex: 1 }} onPress={() => router.push({ pathname: "/tenancy-form", params: { year: String(year) } })} testID="add-tenancy-button" />
         <Button title="Expense" icon="plus" style={{ flex: 1 }} onPress={() => router.push({ pathname: "/rental-expense-form", params: { year: String(year) } })} testID="add-rental-expense-button" />
       </View>
@@ -213,6 +229,11 @@ function TenancyCard({ t, year, onMonth, onRenew }: { t: Tenancy; year: number; 
 
 const useStyles = makeStyles((c) => ({
   root: { flex: 1, backgroundColor: c.surfaceSecondary },
+  contained: { width: "100%", maxWidth: MAX_CONTENT, alignSelf: "center" },
+  cols: { flexDirection: "row", alignItems: "flex-start", gap: space.xl },
+  colMain: { flex: 1.4, minWidth: 0 },
+  colSide: { flex: 1, minWidth: 0, gap: space.xl },
+  ctaWide: { position: "absolute", right: space.xl, width: 360, flexDirection: "row", gap: space.sm },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.lg, paddingBottom: space.sm, backgroundColor: c.surface },
   iconBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.surfaceTertiary, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontFamily: fonts.bold, fontSize: 17, color: c.onSurface },
