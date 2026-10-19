@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api, gbp, RentRoll, RentRollRow } from "@/src/api";
 import { Button, Card, EmptyState, fonts, Icon, radius, space, tap } from "@/src/components/ui";
+import { MAX_CONTENT, useLayout } from "@/src/layout";
 import { queryClient } from "@/src/query-client";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
@@ -19,6 +20,7 @@ export default function RentRollScreen() {
   const q = useQuery({ queryKey: ["rent-roll", year], queryFn: () => api<RentRoll>(`/portfolio/rent-roll?year=${year}`) });
   const d = q.data;
   const home = d?.home_currency;
+  const { wide } = useLayout();
 
   return (
     <View style={s.root} testID="rent-roll-screen">
@@ -38,9 +40,11 @@ export default function RentRollScreen() {
         <View style={s.center}><Text style={s.muted}>Could not load the rent roll.</Text><Button small title="Retry" onPress={() => q.refetch()} testID="rent-roll-retry" /></View>
       ) : (
         <ScrollView
-          contentContainerStyle={{ padding: space.lg, gap: space.lg, paddingBottom: insets.bottom + space.xxl }}
+          contentContainerStyle={[{ padding: wide ? space.xl : space.lg, gap: space.lg, paddingBottom: insets.bottom + space.xxl }, wide && s.contained]}
           refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => q.refetch()} tintColor={colors.brand} />}
         >
+          <View style={wide ? s.cols : s.stack}>
+          <View style={wide ? s.colSide : s.stack} testID={wide ? "rent-roll-side-column" : undefined}>
           <Card style={{ gap: space.md }} testID="rent-roll-totals">
             <Text style={s.label}>Portfolio net cashflow {year} · {home}</Text>
             <Text style={[s.big, { color: d.totals.net < 0 ? colors.error : colors.success }]} testID="rent-roll-net">{gbp(d.totals.net, 0, home)}</Text>
@@ -58,11 +62,15 @@ export default function RentRollScreen() {
               <Text style={s.muted}>Converted to {home} at rates from {d.rate_date}{d.stale ? " (cached)" : ""}.</Text>
             )}
           </Card>
+          </View>
+          <View style={wide ? s.colMain : s.stack}>
           {d.properties.length === 0 ? (
             <EmptyState icon="key-round" title="No rental records yet" subtitle={`Add tenancies under Rent & tenancy on any property to see them rolled up here for ${year}.`} testID="rent-roll-empty" />
           ) : (
             d.properties.map((p) => <PropertyRow key={p.id} p={p} home={home!} />)
           )}
+          </View>
+          </View>
         </ScrollView>
       )}
     </View>
@@ -123,6 +131,11 @@ function PropertyRow({ p, home }: { p: RentRollRow; home: RentRoll["home_currenc
 
 const useStyles = makeStyles((c) => ({
   root: { flex: 1, backgroundColor: c.surfaceSecondary },
+  contained: { width: "100%", maxWidth: MAX_CONTENT, alignSelf: "center" },
+  stack: { gap: space.lg },
+  cols: { flexDirection: "row", alignItems: "flex-start", gap: space.xl },
+  colSide: { width: 420, gap: space.lg },
+  colMain: { flex: 1, minWidth: 0, gap: space.lg },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.lg, paddingBottom: space.sm, backgroundColor: c.surface },
   iconBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.surfaceTertiary, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontFamily: fonts.bold, fontSize: 17, color: c.onSurface },

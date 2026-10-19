@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api, fileUrl, gbp, MediaItem, Receipt } from "@/src/api";
 import { Button, Chip, EmptyState, fonts, Icon, radius, space, tap } from "@/src/components/ui";
+import { MAX_CONTENT, useLayout } from "@/src/layout";
 import { usesNativeTabs } from "@/src/navigation";
 import { invalidate, useMedia, useReceipts } from "@/src/queries";
 import { useCanSeeMoney } from "@/src/money";
@@ -26,6 +27,7 @@ export default function MediaScreen() {
   const { colors } = useTheme();
   const toast = useToast();
   const { width } = useWindowDimensions();
+  const { wide, tablet } = useLayout();
   const [tab, setTab] = useState<Tab>("photos");
   const [preview, setPreview] = useState<{ kind: Tab; item: MediaItem | Receipt } | null>(null);
   const media = useMedia();
@@ -45,7 +47,11 @@ export default function MediaScreen() {
     },
   });
 
-  const cell = (Math.min(width, 700) - space.lg * 2 - space.md) / 2;
+  const cols = wide ? 4 : tablet ? 3 : 2;
+  const pad = wide ? space.xl : space.lg;
+  const avail = wide ? Math.min(width - 240, MAX_CONTENT) : tablet ? width : Math.min(width, 700);
+  const cell = Math.floor((avail - pad * 2 - space.md * (cols - 1)) / cols);
+  const contained = wide ? { width: "100%" as const, maxWidth: MAX_CONTENT, alignSelf: "center" as const } : null;
   const q = tab === "photos" ? media : receipts;
   const phaseColor = { before: colors.surfaceInverse, progress: colors.accent, after: colors.success };
 
@@ -79,12 +85,12 @@ export default function MediaScreen() {
         </View>
       ) : tab === "photos" ? (
         <FlatList
-          key="photos"
+          key={`photos-${cols}`}
           data={media.data}
-          numColumns={2}
+          numColumns={cols}
           keyExtractor={(i) => i.id}
           columnWrapperStyle={{ gap: space.md }}
-          contentContainerStyle={{ padding: space.lg, paddingBottom: bottomChrome + 100, gap: space.md }}
+          contentContainerStyle={[{ padding: pad, paddingBottom: bottomChrome + 100, gap: space.md }, contained]}
           refreshControl={<RefreshControl refreshing={media.isRefetching} onRefresh={() => invalidate("media")} tintColor={colors.brand} />}
           renderItem={({ item }) => (
             <Animated.View entering={FadeIn}>
@@ -104,13 +110,15 @@ export default function MediaScreen() {
         />
       ) : (
         <FlatList
-          key="receipts"
+          key={wide ? "receipts-grid" : "receipts"}
           data={receipts.data}
+          numColumns={wide ? 2 : 1}
+          columnWrapperStyle={wide ? { gap: space.md } : undefined}
           keyExtractor={(i) => i.id}
-          contentContainerStyle={{ padding: space.lg, paddingBottom: bottomChrome + 100, gap: space.sm }}
+          contentContainerStyle={[{ padding: pad, paddingBottom: bottomChrome + 100, gap: space.sm }, contained]}
           refreshControl={<RefreshControl refreshing={receipts.isRefetching} onRefresh={() => invalidate("receipts")} tintColor={colors.brand} />}
           renderItem={({ item }) => (
-            <Pressable testID={`receipt-item-${item.id}`} onPress={() => { tap(); setPreview({ kind: "receipts", item }); }} style={s.receipt}>
+            <Pressable testID={`receipt-item-${item.id}`} onPress={() => { tap(); setPreview({ kind: "receipts", item }); }} style={[s.receipt, wide && { flex: 1, maxWidth: "50%" }]}>
               {item.storage_path ? (
                 <Image source={{ uri: imgSrc(item) }} style={s.thumb} contentFit="cover" />
               ) : (
@@ -205,7 +213,7 @@ const useStyles = makeStyles((c) => ({
     elevation: 6,
   },
   overlay: { flex: 1, backgroundColor: c.overlay, justifyContent: "center", padding: space.lg },
-  sheet: { backgroundColor: c.surface, borderRadius: radius.lg, padding: space.lg, gap: space.xs },
+  sheet: { backgroundColor: c.surface, borderRadius: radius.lg, padding: space.lg, gap: space.xs, width: "100%", maxWidth: 640, alignSelf: "center" },
   big: { width: "100%", height: 260, borderRadius: radius.md, backgroundColor: c.surfaceTertiary, marginBottom: space.sm },
   sheetTitle: { fontFamily: fonts.bold, fontSize: 18, color: c.onSurface },
 }));

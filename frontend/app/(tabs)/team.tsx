@@ -9,6 +9,7 @@ import { api, Contact, ContactKind, logMessage } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Button, Chip, EmptyState, fonts, Icon, IconName, LockedPro, ProBadge, radius, space, tap } from "@/src/components/ui";
 import { Stars, useTrustedTrades } from "@/src/components/rating";
+import { MAX_CONTENT, useLayout } from "@/src/layout";
 import { usesNativeTabs } from "@/src/navigation";
 import { invalidate, useContacts } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -38,6 +39,7 @@ export default function Team() {
   const toast = useToast();
   const { user } = useAuth();
   const isPro = user?.plan === "pro";
+  const { wide } = useLayout();
   const [kind, setKind] = useState<ContactKind>("trade");
   const seg = SEGMENTS.find((x) => x.kind === kind)!;
   const locked = seg.pro && !isPro;
@@ -58,7 +60,7 @@ export default function Team() {
     const initials = item.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
     const wa = item.phone.replace(/[^\d]/g, "");
     return (
-      <Animated.View entering={FadeInDown.delay(Math.min(index, 8) * 50)} style={s.row} testID={`contact-row-${item.id}`}>
+      <Animated.View entering={FadeInDown.delay(Math.min(index, 8) * 50)} style={[s.row, wide && { width: "49%" }]} testID={`contact-row-${item.id}`}>
         <View style={{ flexDirection: "row", gap: space.md, alignItems: "center" }}>
           <View style={[s.avatar, kind === "stakeholder" && { backgroundColor: colors.orangeTint }]}>
             <Text style={[s.initials, kind === "stakeholder" && { color: colors.brandPrimary }]}>{initials}</Text>
@@ -101,6 +103,31 @@ export default function Team() {
     );
   };
 
+  const listHeader = (
+            seg.pro ? (
+              <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}><ProBadge /><Text style={s.role}>Pro portal</Text></View>
+            ) : (
+              <View style={{ gap: space.md }}>
+                <Pressable testID="trades-finder-banner" onPress={() => { tap(); router.push("/trades-finder"); }} style={s.finder}>
+                  <View style={s.finderIcon}><Icon name="search" size={20} color={colors.onBrand} /></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.finderTitle}>Find local trades</Text>
+                    <Text style={s.finderSub}>Search electricians, plumbers & builders by postcode</Text>
+                  </View>
+                  <Icon name="chevron-right" size={20} color={colors.onBrand} />
+                </Pressable>
+                <Pressable testID="quote-requests-banner" onPress={() => { tap(); router.push("/quotes"); }} style={[s.finder, { backgroundColor: colors.surfaceInverse }]}>
+                  <View style={s.finderIcon}><Icon name="file-text" size={20} color={colors.onBrand} /></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.finderTitle}>Request & compare quotes</Text>
+                    <Text style={s.finderSub}>Send one brief to several trades, compare side by side</Text>
+                  </View>
+                  <Icon name="chevron-right" size={20} color={colors.onBrand} />
+                </Pressable>
+              </View>
+            )
+  );
+
   return (
     <View style={s.root} testID="team-screen">
       <View style={[s.header, { paddingTop: insets.top + space.sm }]}>
@@ -141,38 +168,24 @@ export default function Team() {
           <Button small title="Retry" onPress={() => q.refetch()} testID="team-retry-button" />
         </View>
       ) : (
+        <View style={wide ? s.wideRow : { flex: 1 }}>
+        {wide && !seg.pro && (
+          <ScrollView style={s.side} contentContainerStyle={{ padding: space.xl, paddingRight: 0 }} testID="team-side-column">{listHeader}</ScrollView>
+        )}
         <FlatList
+          key={wide ? "team-grid" : "team-list"}
+          style={{ flex: 1 }}
+          numColumns={wide ? 2 : 1}
+          columnWrapperStyle={wide ? { justifyContent: "space-between" } : undefined}
           data={rows}
           keyExtractor={(i) => i.id}
           renderItem={renderItem}
-          contentContainerStyle={{ padding: space.lg, paddingBottom: bottomChrome + space.xl, gap: space.md }}
+          contentContainerStyle={{ padding: wide ? space.xl : space.lg, paddingBottom: bottomChrome + space.xl, gap: space.md }}
           refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => invalidate("contacts", "trusted-trades")} tintColor={colors.brand} />}
-          ListHeaderComponent={
-            seg.pro ? (
-              <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}><ProBadge /><Text style={s.role}>Pro portal</Text></View>
-            ) : (
-              <View style={{ gap: space.md }}>
-                <Pressable testID="trades-finder-banner" onPress={() => { tap(); router.push("/trades-finder"); }} style={s.finder}>
-                  <View style={s.finderIcon}><Icon name="search" size={20} color={colors.onBrand} /></View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.finderTitle}>Find local trades</Text>
-                    <Text style={s.finderSub}>Search electricians, plumbers & builders by postcode</Text>
-                  </View>
-                  <Icon name="chevron-right" size={20} color={colors.onBrand} />
-                </Pressable>
-                <Pressable testID="quote-requests-banner" onPress={() => { tap(); router.push("/quotes"); }} style={[s.finder, { backgroundColor: colors.surfaceInverse }]}>
-                  <View style={s.finderIcon}><Icon name="file-text" size={20} color={colors.onBrand} /></View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.finderTitle}>Request & compare quotes</Text>
-                    <Text style={s.finderSub}>Send one brief to several trades, compare side by side</Text>
-                  </View>
-                  <Icon name="chevron-right" size={20} color={colors.onBrand} />
-                </Pressable>
-              </View>
-            )
-          }
+          ListHeaderComponent={wide && !seg.pro ? undefined : listHeader}
           ListEmptyComponent={<EmptyState icon="hard-hat" title="No team members yet" subtitle="Add your first trade to call or WhatsApp them in one tap." testID="team-empty" action="Add contact" onAction={() => router.push({ pathname: "/contact-form", params: { kind } })} />}
         />
+        </View>
       )}
     </View>
   );
@@ -180,6 +193,8 @@ export default function Team() {
 
 const useStyles = makeStyles((c) => ({
   root: { flex: 1, backgroundColor: c.surfaceSecondary },
+  wideRow: { flex: 1, flexDirection: "row", width: "100%", maxWidth: MAX_CONTENT, alignSelf: "center" },
+  side: { width: 380, flexGrow: 0 },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: space.lg, paddingBottom: space.sm, backgroundColor: c.surface },
   title: { fontFamily: fonts.extrabold, fontSize: 28, color: c.onSurface, letterSpacing: -0.5 },
   addBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.brandPrimary, alignItems: "center", justifyContent: "center" },

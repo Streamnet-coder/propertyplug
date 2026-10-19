@@ -287,3 +287,8 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - routes/payment_plans.py: agree weekly/monthly instalments for current overdue total; instalments applied to rent ledger oldest month first; 3-day grace; broken plan resumes reminders + push to landlord; cancel; completes when paid.
 - Tenant emailed schedule + "Your payment plan" card in tenant portal. /arrears card shows plan progress, Log instalment, Cancel.
 - Still pending from user: google-services.json, Twilio keys.
+
+## Jun 2026 — Responsive desktop layouts (DONE, iter 54-55)
+- src/layout.ts useLayout (wide >=1024, MAX_CONTENT 1280). Tabs become left sidebar on wide web.
+- Two-column wide layouts: Home, Budget, Rent & tenancy, Team (2-col contacts), Media (4-col photos, 2-col receipts; 3-col on tablet), Arrears, Rent roll.
+- Landing page responsive (hero + preview card on desktop, 2/3-col feature grid).

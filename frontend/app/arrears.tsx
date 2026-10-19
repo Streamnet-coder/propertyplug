@@ -8,6 +8,7 @@ import { api, ArrearsList, ArrearsTenancy, gbp } from "@/src/api";
 import { PaymentPlanSheet } from "@/src/components/payment-plan-sheet";
 import { Button, Card, EmptyState, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { queryClient } from "@/src/query-client";
+import { MAX_CONTENT, useLayout } from "@/src/layout";
 import { MONTHS } from "@/src/rentals";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
@@ -21,6 +22,7 @@ export default function ArrearsScreen() {
   const insets = useSafeAreaInsets();
   const q = useQuery({ queryKey: ["arrears"], queryFn: () => api<ArrearsList>("/portfolio/arrears") });
   const d = q.data;
+  const { wide } = useLayout();
   const [sheet, setSheet] = useState<{ t: ArrearsTenancy; mode: "create" | "log" } | null>(null);
 
   return (
@@ -36,9 +38,11 @@ export default function ArrearsScreen() {
         <View style={s.center}><Text style={s.muted}>Could not load arrears.</Text><Button small title="Retry" onPress={() => q.refetch()} testID="arrears-retry" /></View>
       ) : (
         <ScrollView
-          contentContainerStyle={{ padding: space.lg, gap: space.lg, paddingBottom: insets.bottom + space.xxl }}
+          contentContainerStyle={[{ padding: wide ? space.xl : space.lg, gap: space.lg, paddingBottom: insets.bottom + space.xxl }, wide && s.contained]}
           refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => q.refetch()} tintColor={colors.brand} />}
         >
+          <View style={wide ? s.cols : s.stack}>
+          <View style={wide ? s.colSide : s.stack} testID={wide ? "arrears-side-column" : undefined}>
           <Card style={{ gap: space.md }} testID="arrears-totals">
             <Text style={s.label}>Overdue rent · all properties</Text>
             <Text style={[s.big, { color: d.total > 0 ? colors.error : colors.success }]} testID="arrears-total">{gbp(d.total, 2, d.home_currency)}</Text>
@@ -48,11 +52,15 @@ export default function ArrearsScreen() {
             </View>
             <Text style={s.muted}>Automatic reminders email the tenant the day after rent is missed, then every 7 days until it&apos;s paid.</Text>
           </Card>
+          </View>
+          <View style={wide ? s.colMain : s.stack}>
           {d.tenancies.length === 0 ? (
             <EmptyState icon="badge-check" title="Everyone is up to date" subtitle="No tenant has overdue rent right now. Missed payments will appear here automatically." testID="arrears-empty" />
           ) : (
             d.tenancies.map((t) => <ArrearsCard key={t.tenancy_id} t={t} onPlan={(mode) => setSheet({ t, mode })} />)
           )}
+          </View>
+          </View>
         </ScrollView>
       )}
       <PaymentPlanSheet t={sheet?.t ?? null} mode={sheet?.mode ?? "create"} onClose={() => setSheet(null)} />
@@ -172,6 +180,11 @@ function ArrearsCard({ t, onPlan }: { t: ArrearsTenancy; onPlan: (mode: "create"
 
 const useStyles = makeStyles((c) => ({
   root: { flex: 1, backgroundColor: c.surfaceSecondary },
+  contained: { width: "100%", maxWidth: MAX_CONTENT, alignSelf: "center" },
+  stack: { gap: space.lg },
+  cols: { flexDirection: "row", alignItems: "flex-start", gap: space.xl },
+  colSide: { width: 400, gap: space.lg },
+  colMain: { flex: 1, minWidth: 0, gap: space.lg },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.lg, paddingBottom: space.md, backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border },
   iconBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.surfaceTertiary, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontFamily: fonts.bold, fontSize: 17, color: c.onSurface },

@@ -1,0 +1,23 @@
+{
+  "summary": "Frontend-only responsive layout verification for the four screens updated in this iteration (Team, Media, Arrears, Rent roll) across desktop 1440x900, tablet 820x1180 and mobile 390x844. Every wide-only testID is present and bbox-correct at >=1024; is correctly absent at <1024. All interactive buttons/chips/FABs/segment chips/year arrows work and the media preview modal opens at the expected max-width 640 and closes cleanly.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Pre-existing (not from this change): console warnings 'shadow* style props are deprecated. Use boxShadow.' from RN Web and 'props.pointerEvents is deprecated'. Worth batching in a future UI pass but non-blocking.",
+    "Pre-existing (not from this change): expo-notifications 'Listening to push token changes is not yet fully supported on web' warning on load; expected on web preview."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "seed_data_creation": "None - used demo@mybuilder.app / demo1234 (seeded 'Nottingham Victorian Refurb' project with 'Plan Test' tenancy that is in arrears so /arrears and /rent-roll each have 1 card/row).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Wide (>=1024) now also applies to /team, /media, /arrears, /rent-roll. Stable wide-only testIDs that must remain: team-side-column (width 380), arrears-side-column (width 400), rent-roll-side-column (width 420). Media uses no side-column testID - it just switches column counts: 4-col photo grid and 2-col receipt grid at wide, 3-col photos at tablet, 2-col photos / 1-col receipts at mobile. Media preview modal has maxWidth 640. Demo user is on basic plan so Subcontractors + Stakeholders team segments show the Pro lock (expected). Rentals/Home/Budget wide layouts were verified in iteration 54 and were not re-tested here.",
+  "rca_of_issue": "N/A - no bugs found. Verified bboxes at desktop 1440: team side (x=360,w=380) with trades-finder-banner + quote-requests-banner visible; 4 contact-rows laid out 2-up (x=764 and x=1097). Media photos first row has 4 columns (x=384,675,966,1257); media-preview-modal renders at (x=400,w=640); media-tab-receipts shows 2-column receipts (x=384,906). Arrears side (x=104,w=400) with arrears-totals; main column has arrears-card for Plan Test at (x=528,w=808). Rent-roll side (x=104,w=420) with rent-roll-totals; rent-roll-row for Nottingham property at (x=548,w=788); year arrows cycle 2026->2025->2026 correctly. Mobile 390: side columns absent on all four, media photos 2-col, team single column (all rows at x=16). Tablet 820: side columns correctly absent on all four, media photos 3-col (x=16,282,548)."
+}
