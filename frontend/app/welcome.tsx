@@ -1,11 +1,11 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { ScrollView, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BrandLogo } from "@/src/components/brand";
-import { Button, Card, fonts, Icon, IconName, radius, space } from "@/src/components/ui";
+import { Card, fonts, Icon, IconName, radius, space, tap } from "@/src/components/ui";
 import { makeStyles, useTheme } from "@/src/theme";
 
 const FEATURES: { icon: IconName; title: string; body: string; pro?: boolean }[] = [
@@ -24,40 +24,57 @@ export default function Welcome() {
   const s = useStyles();
   const { colors } = useTheme();
 
+  const { width } = useWindowDimensions();
+  const wide = width >= 768;
+  const go = (mode: "register" | "login") => router.push({ pathname: "/auth", params: { mode } });
+
   return (
     <View style={s.root}>
-      <LinearGradient colors={[colors.brandTertiary, colors.heroEnd]} style={{ position: "absolute", top: 0, left: 0, right: 0, height: 520 }} />
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + space.lg, paddingBottom: insets.bottom + space.xl }} showsVerticalScrollIndicator={false}>
-        <View style={s.pad}>
-          <BrandLogo />
-          <Animated.View entering={FadeInDown.duration(500)} style={{ marginTop: space.xxl, gap: space.lg }}>
+      <View style={[s.topStripe, { height: insets.top + 4 }]} />
+      <View style={s.nav}>
+        <BrandLogo />
+        <Pressable onPress={() => { tap(); go("login"); }} hitSlop={8} style={s.navLink} testID="nav-login-link">
+          <Text style={s.navLinkText}>Login</Text>
+        </Pressable>
+      </View>
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + space.xl }} showsVerticalScrollIndicator={false}>
+        <View style={[s.hero, { minHeight: wide ? 560 : 520 }]} testID="welcome-hero">
+          <Image source={require("../assets/images/hero.jpg")} style={s.heroImg} resizeMode="cover" accessibilityIgnoresInvertColors />
+          <LinearGradient colors={["rgba(15,23,42,0.35)", colors.scrim]} start={{ x: 0, y: 0 }} end={{ x: wide ? 1 : 0, y: 1 }} style={s.heroImg} />
+          <Animated.View entering={FadeInDown.duration(500)} style={[s.heroInner, wide && { alignSelf: "flex-end", maxWidth: 620 }]}>
             <View style={s.pill}>
               <Icon name="sparkles" size={14} color={colors.brandPrimary} />
               <Text style={s.pillText}>FOR UK LANDLORDS, INVESTORS & RENOVATORS</Text>
             </View>
-            <Text style={s.h1} testID="welcome-headline">
-              EVERY PROPERTY, ONE APP:
-              <Text style={{ color: colors.brand }}> RENT, TENANTS & REFURBS SORTED</Text>
+            <Text style={[s.h1, wide && { fontSize: 52, lineHeight: 56 }]} testID="welcome-headline">
+              PROPERTY PROJECTS, REIMAGINED. <Text style={{ color: colors.accent }}>PROPERTYPLUG</Text>
             </Text>
             <Text style={s.lead}>
-              Collect rent, keep tenants informed and run refurbs on budget, from purchase to the day it lets. Built for landlords, BRRR investors and DIY renovators.
+              Effortlessly manage, track and optimise your rentals, tenants and refurbs from one platform. Built for landlords, BRRR investors and DIY renovators.
             </Text>
+            <View style={[s.ctas, wide && { flexDirection: "row" }]}>
+              <Pressable onPress={() => { tap(); go("register"); }} testID="start-trial-button"
+                style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}>
+                <Text style={s.ctaPrimaryText}>START FREE TRIAL</Text>
+                <View style={s.ctaIcon}><Icon name="play" size={12} color={colors.brand} /></View>
+              </Pressable>
+              <Pressable onPress={() => { tap(); go("login"); }} testID="sign-in-button"
+                style={({ pressed }) => [s.ctaGhost, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}>
+                <Text style={s.ctaGhostText}>SIGN IN</Text>
+              </Pressable>
+            </View>
+            <View style={s.checks}>
+              {["1-month free trial", "No card required", "Tenant portal included"].map((t) => (
+                <View key={t} style={s.check}>
+                  <Icon name="circle-check" size={14} color={colors.accent} />
+                  <Text style={s.checkText}>{t}</Text>
+                </View>
+              ))}
+            </View>
           </Animated.View>
+        </View>
 
-          <Animated.View entering={FadeInDown.delay(150).duration(500)} style={{ gap: space.md, marginTop: space.xl }}>
-            <Button title="START YOUR FREE TRIAL" onPress={() => router.push({ pathname: "/auth", params: { mode: "register" } })} testID="start-trial-button" />
-            <Button title="Sign in" variant="outline" onPress={() => router.push({ pathname: "/auth", params: { mode: "login" } })} testID="sign-in-button" />
-          </Animated.View>
-
-          <View style={s.checks}>
-            {["1-month free trial", "No card required", "Tenant portal included"].map((t) => (
-              <View key={t} style={s.check}>
-                <Icon name="circle-check" size={14} color={colors.brand} />
-                <Text style={s.checkText}>{t}</Text>
-              </View>
-            ))}
-          </View>
-
+        <View style={[s.pad, wide && { maxWidth: 900, alignSelf: "center", width: "100%" }]}>
           <Text style={s.section}>Everything a landlord needs</Text>
           <View style={{ gap: space.md }}>
             {FEATURES.map((f, i) => (
@@ -89,6 +106,19 @@ export default function Welcome() {
 
 const useStyles = makeStyles((c) => ({
   root: { flex: 1, backgroundColor: c.surfaceSecondary },
+  topStripe: { backgroundColor: c.surface, borderBottomWidth: 4, borderBottomColor: c.brand },
+  nav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.xl, paddingVertical: space.md, backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border },
+  navLink: { minHeight: 44, justifyContent: "center", paddingHorizontal: space.sm },
+  navLinkText: { fontFamily: fonts.semibold, fontSize: 16, color: c.brand },
+  hero: { justifyContent: "flex-end", overflow: "hidden", backgroundColor: c.surfaceInverse },
+  heroImg: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, width: "100%", height: "100%" },
+  heroInner: { paddingHorizontal: space.xl, paddingTop: space.xxxl, paddingBottom: space.xxl, gap: space.lg },
+  ctas: { gap: space.md, marginTop: space.sm },
+  ctaPrimary: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.sm, minHeight: 52, paddingHorizontal: space.xl, borderRadius: radius.md, backgroundColor: c.brand },
+  ctaPrimaryText: { fontFamily: fonts.bold, fontSize: 15, letterSpacing: 0.8, color: c.onBrand },
+  ctaIcon: { width: 22, height: 22, borderRadius: 11, backgroundColor: c.onBrand, alignItems: "center", justifyContent: "center", paddingLeft: 2 },
+  ctaGhost: { alignItems: "center", justifyContent: "center", minHeight: 52, paddingHorizontal: space.xl, borderRadius: radius.md, borderWidth: 1.5, borderColor: c.onBrand, backgroundColor: "rgba(15,23,42,0.25)" },
+  ctaGhostText: { fontFamily: fonts.bold, fontSize: 15, letterSpacing: 0.8, color: c.onBrand },
   pad: { paddingHorizontal: space.xl },
   pill: {
     flexDirection: "row",
@@ -101,11 +131,11 @@ const useStyles = makeStyles((c) => ({
     borderRadius: radius.pill,
   },
   pillText: { fontFamily: fonts.bold, fontSize: 10, color: c.brandPrimary, letterSpacing: 0.6 },
-  h1: { fontFamily: fonts.extrabold, fontSize: 32, lineHeight: 38, color: c.onSurface, letterSpacing: -0.8 },
-  lead: { fontFamily: fonts.regular, fontSize: 16, lineHeight: 24, color: c.onSurfaceTertiary },
-  checks: { flexDirection: "row", flexWrap: "wrap", gap: space.md, marginTop: space.lg },
+  h1: { fontFamily: fonts.extrabold, fontSize: 36, lineHeight: 40, color: c.onBrand, letterSpacing: -1, textTransform: "uppercase" },
+  lead: { fontFamily: fonts.regular, fontSize: 16, lineHeight: 24, color: c.surfaceTertiary },
+  checks: { flexDirection: "row", flexWrap: "wrap", gap: space.md },
   check: { flexDirection: "row", alignItems: "center", gap: 4 },
-  checkText: { fontFamily: fonts.semibold, fontSize: 12, color: c.muted },
+  checkText: { fontFamily: fonts.semibold, fontSize: 12, color: c.surfaceTertiary },
   section: { fontFamily: fonts.bold, fontSize: 18, color: c.onSurface, marginTop: space.xxl, marginBottom: space.md },
   feature: { flexDirection: "row", gap: space.md, alignItems: "center" },
   fIcon: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: c.brandTertiary, alignItems: "center", justifyContent: "center" },
