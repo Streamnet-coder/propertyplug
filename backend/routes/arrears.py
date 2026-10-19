@@ -13,6 +13,7 @@ from email_service import EMAIL_FROM_NAME, EmailError, send_email
 from models import User
 from routes.email_settings import owner_reply_to
 from routes.messages import log_message
+from routes.payment_plans import active_plan, plan_out
 from routes.rentals import _ctx, _wrap, build_schedule
 
 router = APIRouter()
@@ -33,6 +34,14 @@ async def overdue_rows(t: dict, today: date) -> list:
     rows = [r for y in years for r in build_schedule(t, y, pays, reminded, today)]
     return [{**r, "owed": round(r["due"] - r["paid"], 2), "days_late": (today - date.fromisoformat(r["due_on"])).days}
             for r in rows if r["paid"] < r["due"] and r["due_on"] < today.isoformat()]
+
+
+async def chaseable(tid: str, rows: list):
+    """(rows to chase, plan): months covered by an on-track payment plan are left alone."""
+    plan = await active_plan(tid)
+    if plan and plan["status"] == "active":
+        rows = [r for r in rows if r["month"] not in plan["months"]]
+    return rows, plan
 
 
 async def _chase_state(tid: str, rows: list):
@@ -81,7 +90,7 @@ async def run_auto_reminders():
     async for t in db.tenancies.find({"arrears_auto": True, "tenant_email": {"$nin": ["", None]}}):
         if (t.get("arrears_attempt_at") or "") > retry_cutoff:
             continue
-        rows = [r for r in await overdue_rows(t, today) if r["days_late"] <= 365]
+        rows, _ = await chaseable(str(t["_id"]), [r for r in await overdue_rows(t, today) if r["days_late"] <= 365])
         if not rows:
             continue
         _, next_on = await _chase_state(str(t["_id"]), rows)
@@ -121,15 +130,17 @@ async def portfolio_arrears(user: User = Depends(real_user)):
             owed = round(sum(r["owed"] for r in rows), 2)
             total += owed * factor
             tid = str(t["_id"])
-            last, next_on = await _chase_state(tid, rows)
+            chase, plan = await chaseable(tid, rows)
+            _, next_on = await _chase_state(tid, chase) if chase else (None, None)
             any_last = await db.rent_reminders.find_one({"tenancy_id": tid}, sort=[("sent_at", -1)])
-            auto = bool(t.get("arrears_auto")) and bool(t.get("tenant_email"))
+            auto = bool(t.get("arrears_auto")) and bool(t.get("tenant_email")) and bool(chase)
             out.append({"tenancy_id": tid, "project_id": s["id"], "project_name": s["name"], "address": s["address"], "currency": cur,
                         "tenant_name": t["tenant_name"], "tenant_email": t.get("tenant_email") or "", "tenant_phone": t.get("tenant_phone") or "",
                         "owed": owed, "owed_home": round(owed * factor, 2), "months": [{k: r[k] for k in ("month", "due_on", "due", "paid", "owed", "days_late")} for r in rows],
                         "oldest_days": max(r["days_late"] for r in rows), "arrears_auto": bool(t.get("arrears_auto")),
                         "last_reminder_at": any_last["sent_at"] if any_last else None, "next_auto_on": next_on.isoformat() if auto else None,
-                        "can_manage": t["user_id"] == user.id, "shared": s.get("shared", False)})
+                        "can_manage": t["user_id"] == user.id, "shared": s.get("shared", False),
+                        "plan": plan_out(plan) if plan else None})
     out.sort(key=lambda x: (-x["owed_home"], -x["oldest_days"]))
     return {"home_currency": home, "total": round(total, 2), "count": len(out), "auto_on": sum(x["arrears_auto"] for x in out), "tenancies": out}
 
@@ -161,9 +172,9 @@ async def remind_arrears(tid: str, user: User = Depends(current_user)):
     t = await _own_tenancy(tid, user)
     if not t.get("tenant_email"):
         raise HTTPException(400, "Add the tenant's email address first")
-    rows = await overdue_rows(t, date.today())
+    rows, plan = await chaseable(tid, await overdue_rows(t, date.today()))
     if not rows:
-        raise HTTPException(400, "This tenancy has no overdue rent")
+        raise HTTPException(400, "Nothing to chase: no overdue rent outside the payment plan" if plan else "This tenancy has no overdue rent")
     last = await db.rent_reminders.find_one({"tenancy_id": tid}, sort=[("sent_at", -1)])
     if last and (datetime.now(timezone.utc) - datetime.fromisoformat(last["sent_at"])).total_seconds() < 600:
         raise HTTPException(429, "Reminder already sent, try again in 10 minutes")

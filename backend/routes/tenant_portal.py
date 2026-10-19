@@ -264,6 +264,18 @@ async def tenant_portal(token: str, year: Optional[int] = None, reported: Option
     body += (f"<div class='card' id='rent-schedule'>{nav}" + (f"<table style='margin-top:8px'><tr><th>Month</th><th class='n'>Due</th><th class='n'>Paid</th><th class='n'>Status</th></tr>{lines}</table>"
              f"<p class='cap' id='rent-summary'>Paid {money(sum(r['paid'] for r in rows), 2)} of {money(sum(r['due'] for r in rows), 2)} due"
              + (f" · <b style='color:#ef4444'>{money(arrears, 2)} overdue</b>" if arrears > 0 else "") + "</p>" if rows else f"<p class='cap'>No rent due in {year}.</p>") + "</div>")
+    from routes.payment_plans import active_plan, evaluate
+    plan = await active_plan(str(t["_id"]))
+    if plan:
+        ev = evaluate(plan)
+        every = "week" if plan["frequency"] == "weekly" else "month"
+        col = {"paid": "#10b981", "missed": "#ef4444", "due": "#f97316"}
+        body += (f"<div class='card' id='payment-plan'><h2>Your payment plan</h2><p class='cap'>{money(plan['instalment'], 2)} every {every} on top of your normal rent · "
+                 f"paid {money(plan.get('paid', 0), 2)} of {money(plan['amount'], 2)}</p>"
+                 + ("<p class='cap' style='color:#ef4444'><b>An instalment is overdue. Please pay as soon as possible or contact your landlord.</b></p>" if not ev["on_track"] else "")
+                 + "<table><tr><th>Instalment</th><th class='n'>Due</th><th class='n'>Amount</th><th class='n'>Status</th></tr>" + "".join(
+                     f"<tr><td>{r['n']}</td><td class='n'>{fmt(r['due_on'])}</td><td class='n'>{money(r['amount'], 2)}</td>"
+                     f"<td class='n'><span class='tag' style='color:{col[r['status']]}'>{r['status'].upper()}</span></td></tr>" for r in ev["rows"]) + "</table></div>")
     docs = await db.documents.find({"_id": {"$in": [oid(i) for i in (t.get("shared_doc_ids") or [])]}, "project_id": t["project_id"]}).sort("doc_type", 1).to_list(100)
     if docs:
         items = ""

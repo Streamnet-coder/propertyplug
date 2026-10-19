@@ -216,9 +216,13 @@ export type RentMonth = { month: string; due_on: string; due: number; paid: numb
 export type Tenancy = { id: string; tenant_name: string; tenant_email: string; tenant_phone: string; rent: number; deposit: number; deposit_scheme: string; deposit_protected: boolean; start_date: string; end_date: string | null; rent_day: number; notes: string;
   status: "active" | "upcoming" | "ended"; schedule: RentMonth[]; arrears: number; late_count: number; days_to_end: number | null;
   receipts_auto: boolean; statements_auto: boolean; arrears_auto?: boolean; portal_url: string | null; shared_doc_ids: string[]; current_rent: number; rent_changes: { from_month: string; rent: number }[]; renewals: { at: string; end_date: string | null; new_rent: number | null; rent_from: string | null }[] };
+export type PlanInstalment = { n: number; due_on: string; amount: number; status: "paid" | "missed" | "due" };
+export type PaymentPlan = { id: string; tenancy_id: string; status: "active" | "broken" | "completed" | "cancelled"; amount: number; paid: number; remaining: number; instalment: number;
+  frequency: "weekly" | "monthly"; start_date: string; months: string[]; on_track: boolean; behind: number; next: PlanInstalment | null; schedule: PlanInstalment[];
+  payments: { amount: number; paid_on: string; at: string }[]; created_at: string };
 export type ArrearsMonth = { month: string; due_on: string; due: number; paid: number; owed: number; days_late: number };
 export type ArrearsTenancy = { tenancy_id: string; project_id: string; project_name: string; address: string; currency: CurrencyCode; tenant_name: string; tenant_email: string; tenant_phone: string;
-  owed: number; owed_home: number; months: ArrearsMonth[]; oldest_days: number; arrears_auto: boolean; last_reminder_at: string | null; next_auto_on: string | null; can_manage: boolean; shared: boolean };
+  owed: number; owed_home: number; months: ArrearsMonth[]; oldest_days: number; arrears_auto: boolean; last_reminder_at: string | null; next_auto_on: string | null; can_manage: boolean; shared: boolean; plan: PaymentPlan | null };
 export type ArrearsList = { home_currency: CurrencyCode; total: number; count: number; auto_on: number; tenancies: ArrearsTenancy[] };
 export type BrrrDealInputs = { purchase: number; fees: number; refurb: number; valuation: number; ltv: number; rate: number; rent: number; costs: number; months: number; bridge_pct: number; bridge_rate: number; bridge_fee: number; holding: number };
 export type BrrrDeal = { id: string; name: string; inputs: BrrrDealInputs; created_at: string; updated_at: string };

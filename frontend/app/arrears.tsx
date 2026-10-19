@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Switch, Text,
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api, ArrearsList, ArrearsTenancy, gbp } from "@/src/api";
+import { PaymentPlanSheet } from "@/src/components/payment-plan-sheet";
 import { Button, Card, EmptyState, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { queryClient } from "@/src/query-client";
 import { MONTHS } from "@/src/rentals";
@@ -20,6 +21,7 @@ export default function ArrearsScreen() {
   const insets = useSafeAreaInsets();
   const q = useQuery({ queryKey: ["arrears"], queryFn: () => api<ArrearsList>("/portfolio/arrears") });
   const d = q.data;
+  const [sheet, setSheet] = useState<{ t: ArrearsTenancy; mode: "create" | "log" } | null>(null);
 
   return (
     <View style={s.root} testID="arrears-screen">
@@ -49,15 +51,16 @@ export default function ArrearsScreen() {
           {d.tenancies.length === 0 ? (
             <EmptyState icon="badge-check" title="Everyone is up to date" subtitle="No tenant has overdue rent right now. Missed payments will appear here automatically." testID="arrears-empty" />
           ) : (
-            d.tenancies.map((t) => <ArrearsCard key={t.tenancy_id} t={t} />)
+            d.tenancies.map((t) => <ArrearsCard key={t.tenancy_id} t={t} onPlan={(mode) => setSheet({ t, mode })} />)
           )}
         </ScrollView>
       )}
+      <PaymentPlanSheet t={sheet?.t ?? null} mode={sheet?.mode ?? "create"} onClose={() => setSheet(null)} />
     </View>
   );
 }
 
-function ArrearsCard({ t }: { t: ArrearsTenancy }) {
+function ArrearsCard({ t, onPlan }: { t: ArrearsTenancy; onPlan: (mode: "create" | "log") => void }) {
   const s = useStyles();
   const { colors } = useTheme();
   const router = useRouter();
@@ -74,6 +77,13 @@ function ArrearsCard({ t }: { t: ArrearsTenancy }) {
     onSuccess: async () => { await refresh(); toast(`Reminder sent to ${t.tenant_name}`); },
     onError: (e: Error) => toast(e.message, "error"),
   });
+  const cancel = useMutation({
+    mutationFn: () => api(`/payment-plans/${t.plan!.id}`, { method: "DELETE" }),
+    onSuccess: async () => { setConfirmCancel(false); await refresh(); toast("Payment plan cancelled · reminders resume"); },
+    onError: (e: Error) => toast(e.message, "error"),
+  });
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const plan = t.plan;
   const open = async () => {
     tap();
     setOpening(true);
@@ -109,13 +119,37 @@ function ArrearsCard({ t }: { t: ArrearsTenancy }) {
           </View>
         ))}
       </View>
+      {plan && (
+        <View style={[s.planBox, !plan.on_track && { borderColor: colors.error }]} testID={`arrears-plan-${t.tenancy_id}`}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+            <Icon name="calendar-check" size={16} color={plan.on_track ? colors.success : colors.error} />
+            <Text style={[s.autoTitle, { flex: 1 }]}>Payment plan · {gbp(plan.instalment, 0, t.currency)}/{plan.frequency === "weekly" ? "wk" : "mo"}</Text>
+            <Text style={[s.planTag, { color: plan.on_track ? colors.success : colors.error }]} testID={`arrears-plan-status-${t.tenancy_id}`}>{plan.on_track ? "ON TRACK" : "MISSED"}</Text>
+          </View>
+          <View style={s.bar}><View style={[s.barFill, { width: `${Math.min(100, (plan.paid / plan.amount) * 100)}%` }]} /></View>
+          <Text style={s.muted}>
+            {gbp(plan.paid, 0, t.currency)} of {gbp(plan.amount, 0, t.currency)} paid
+            {plan.next ? ` · next ${gbp(plan.next.amount, 0, t.currency)} ${fmtDate(plan.next.due_on)}` : ""}
+            {!plan.on_track ? ` · ${gbp(plan.behind, 0, t.currency)} behind, reminders resumed` : " · reminders paused"}
+          </Text>
+          {t.can_manage && (
+            <View style={{ flexDirection: "row", gap: space.sm }}>
+              <Button small icon="banknote" title="Log instalment" style={{ flex: 1 }} onPress={() => onPlan("log")} testID={`arrears-plan-log-${t.tenancy_id}`} />
+              <Button small variant={confirmCancel ? "danger" : "outline"} title={confirmCancel ? "Tap to confirm" : "Cancel plan"} style={{ flex: 1 }} loading={cancel.isPending}
+                onPress={() => (confirmCancel ? cancel.mutate() : setConfirmCancel(true))} testID={`arrears-plan-cancel-${t.tenancy_id}`} />
+            </View>
+          )}
+        </View>
+      )}
       {t.can_manage ? (
         <>
+          {!plan && <Button small variant="secondary" icon="calendar-plus" title="Agree a payment plan" onPress={() => onPlan("create")} testID={`arrears-plan-create-${t.tenancy_id}`} />}
           <View style={s.autoRow}>
             <View style={{ flex: 1 }}>
               <Text style={s.autoTitle}>Automatic reminders</Text>
               <Text style={s.muted} testID={`arrears-auto-status-${t.tenancy_id}`}>
                 {!t.tenant_email ? "Add the tenant's email to turn this on"
+                  : plan?.on_track && !t.next_auto_on && t.arrears_auto ? "Paused while the payment plan is on track"
                   : t.next_auto_on ? (t.next_auto_on <= today ? "Next reminder goes out within the hour" : `Next reminder ${fmtDate(t.next_auto_on)}`)
                   : "Off · you'll need to chase manually"}
               </Text>
@@ -156,5 +190,9 @@ const useStyles = makeStyles((c) => ({
   chip: { backgroundColor: c.errorTint, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
   chipText: { fontFamily: fonts.semibold, fontSize: 12, color: c.error },
   autoRow: { flexDirection: "row", alignItems: "center", gap: space.md, backgroundColor: c.surfaceSecondary, borderRadius: radius.md, padding: space.md },
+  planBox: { gap: space.sm, borderWidth: 1, borderColor: c.border, borderRadius: radius.md, padding: space.md },
+  planTag: { fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.6 },
+  bar: { height: 6, borderRadius: 3, backgroundColor: c.surfaceTertiary, overflow: "hidden" },
+  barFill: { height: 6, backgroundColor: c.success },
   autoTitle: { fontFamily: fonts.semibold, fontSize: 14, color: c.onSurface },
 }));

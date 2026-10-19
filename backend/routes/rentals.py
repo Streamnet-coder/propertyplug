@@ -195,6 +195,7 @@ async def delete_tenancy(tid: str, user: User = Depends(current_user)):
     await db.rent_payments.delete_many({"tenancy_id": tid, "user_id": user.id})
     await db.rent_reminders.delete_many({"tenancy_id": tid, "user_id": user.id})
     await db.rent_statements.delete_many({"tenancy_id": tid, "user_id": user.id})
+    await db.payment_plans.delete_many({"tenancy_id": tid, "user_id": user.id})
     return {"ok": True}
 
 

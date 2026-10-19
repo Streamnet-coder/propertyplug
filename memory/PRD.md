@@ -282,3 +282,8 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Auto reminders (routes/arrears.py scheduler, hourly): day after rent is missed, then every 7 days while unpaid; tenancy field arrears_auto (new tenancies default on, form toggle).
 - BRRR: bridging loan %, monthly rate, arrangement fee, holding costs, months to refinance; cash needed upfront; saved named deals (/api/brrr/deals) and /brrr-deals side-by-side compare (up to 3, best value ticked).
 - Pending: Android push needs google-services.json (package com.emergent.propertyplug.abwzec); Twilio keys.
+
+## Jun 2026 — Arrears Payment Plans (DONE, iter 53)
+- routes/payment_plans.py: agree weekly/monthly instalments for current overdue total; instalments applied to rent ledger oldest month first; 3-day grace; broken plan resumes reminders + push to landlord; cancel; completes when paid.
+- Tenant emailed schedule + "Your payment plan" card in tenant portal. /arrears card shows plan progress, Log instalment, Cancel.
+- Still pending from user: google-services.json, Twilio keys.
