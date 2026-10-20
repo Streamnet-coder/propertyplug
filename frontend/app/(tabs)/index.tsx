@@ -12,8 +12,9 @@ import { useQuery } from "@tanstack/react-query";
 import { api, DocItem, expiryLabel, fileUrl, gbp } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { BrandLogo } from "@/src/components/brand";
-import { Button, Card, fonts, Icon, IconName, ProBadge, radius, SectionTitle, space, tap } from "@/src/components/ui";
+import { Button, Card, fonts, Icon, ProBadge, radius, SectionTitle, space, tap } from "@/src/components/ui";
 import { MAX_CONTENT, useLayout } from "@/src/layout";
+import { useQuickActions } from "@/src/quick-actions";
 import { usesNativeTabs } from "@/src/navigation";
 import { PdfButton } from "@/src/components/pdf-button";
 import { invalidate, prefetchProjects, useDigest, useLineItems, useProject, useReceipts } from "@/src/queries";
@@ -63,21 +64,12 @@ export default function Home() {
 
   const msPct = p && p.milestones_total ? Math.round((p.milestones_done / p.milestones_total) * 100) : 0;
 
-  const allActions: { icon: IconName; label: string; onPress: () => void; pro?: boolean; id: string }[] = [
-    { id: "ai", icon: "sparkles", label: "AI cost", onPress: () => router.push("/ai-estimate") },
-    { id: "brrr", icon: "calculator", label: "BRRR", onPress: () => router.push("/brrr"), pro: true },
-    { id: "sold", icon: "map-pinned", label: "Sold prices", onPress: () => router.push("/sold-map") },
-    { id: "report", icon: "share-2", label: "Share", onPress: () => router.push("/share-report") },
-    { id: "receipt", icon: "receipt", label: "Receipt", onPress: () => router.push("/receipt-form") },
-    { id: "snags", icon: "list-checks", label: "Snags", onPress: () => router.push("/snags") },
-    { id: "inbox", icon: "inbox", label: "My tasks", onPress: () => router.push("/inbox") },
-  ];
-  const actions = allActions.filter((a) => !(a.id === "brrr" && (p?.property_type === "land" || p?.purpose === "personal")) && (money || !["ai", "brrr", "report", "receipt", "sold"].includes(a.id)));
+  const { actions } = useQuickActions();
 
   return (
     <View style={s.root} testID="home-screen">
       <View style={[s.header, { paddingTop: insets.top + space.sm }]}>
-        <BrandLogo />
+        {!wide && <BrandLogo />}
         <View style={{ flex: 1 }} />
         <PdfButton onGenerate={shareProgressReport} testID="dashboard-pdf-button" />
         <Pressable testID="profile-button" onPress={() => { tap(); router.push("/profile"); }} style={s.avatar}>
@@ -171,7 +163,7 @@ export default function Home() {
             </Pressable>
           )}
 
-          <View style={s.actions}>
+          {!wide && <View style={s.actions}>
             {actions.map((a, i) => (
               <Animated.View key={a.id} entering={FadeInDown.delay(80 + i * 60)} style={{ flex: 1 }}>
                 <Pressable testID={`quick-action-${a.id}`} onPress={() => { tap(); a.onPress(); }} style={({ pressed }) => [s.action, pressed && { transform: [{ scale: 0.96 }] }]}>
@@ -183,7 +175,7 @@ export default function Home() {
                 </Pressable>
               </Animated.View>
             ))}
-          </View>
+          </View>}
 
           <Pressable testID="timeline-card" onPress={() => { tap(); router.push("/timeline"); }} style={({ pressed }) => [s.timeline, pressed && { opacity: 0.9 }]}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>

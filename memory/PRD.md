@@ -306,3 +306,8 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - sold-map: £/sq ft per sale + median; "Use £X as BRRR valuation" -> /brrr?valuation=X.
 - Lender pack: "Local sold prices" section (½ mile, 3 yrs, SVG dot plot, by type, recent sales with £/sq ft).
 - Still pending: Android google-services.json, Twilio keys.
+
+## Jun 2026 — EPC planner, size valuation, desktop nav (DONE, iter 59-60)
+- /project/epc (match/pin certificate, improvements with costs), add-to-budget creates "EPC: ..." Hard Cost lines. /epc screen + Home "EPC plan".
+- Sold map "Value by size": floor area (prefilled from EPC) × median £/sq ft, use as BRRR valuation.
+- Desktop (>=1024): left sidebar = project tools (src/quick-actions.ts), header Menu dropdown = Home/Budget/Team/Media (src/components/desktop-nav.tsx).

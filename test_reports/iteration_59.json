@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 59 (EPC Upgrade Planner + Size-Based Valuation). Backend: 17/17 pytest in /app/backend/tests/test_iteration59.py pass against live GOV.UK EPC API (bearer EPC_API_KEY). GET /api/project/epc for demo (14 Mapperley Road NG3 5AP, pinned to 4836-5623-9600-0320-4222) returns status='ok' with band D 57 -> potential C 73, 667 sq ft (62 m²), address '5 Malcolm Close', and 2 improvements: 'Cavity wall insulation' (£900-£1,500) and 'High heat retention storage heaters' (£1,200-£2,400); candidates[] contains the pinned cert plus others. PUT /api/project/epc {certificate_number:null} unpins and returns status='pick' with candidates; re-pinning to 4836-... returns status='ok' + pinned=true. POST /api/project/epc/add-to-budget {sequences:[1,2]} creates 2 Hard Cost line items ('EPC: Cavity wall insulation' budgeted 1200, 'EPC: High heat retention storage heaters' budgeted 1800, supplier 'EPC recommendation'); calling again returns {count:0, added:[]} (idempotent via name match); items visible in GET /api/line-items; both improvements then show in_budget=true in the EPC response; DELETE /api/line-items/{id} tidies up and in_budget flips back to false. POST /api/auth/plan toggles pro<->basic. Frontend (Expo web, mobile 390x844, demo@mybuilder.app): Home quick-action-epc 'EPC plan' navigates to /epc; epc-screen -> epc-summary with epc-current='D 57' and epc-potential='C 73', '5 MALCOLM CLOSE · NG3 5AP' label, '667 sq ft (62 m²) · Registered 2026-07-20 · heating about £1,378/yr'. Both epc-imp-1 and epc-imp-2 render with cost ranges, savings, and after-band badges (D 65, C 73). epc-change-cert opens epc-picker and epc-cand-4836-5623-9600-0320-4222 is listed; tapping it re-pins. Deselecting epc-imp-2 then tapping epc-add-budget ('Add 1 to refurb budget', about £1,200) succeeds and the item flips to 'In your refurb budget' banner. Sold-map (/sold-map): postcode prefilled with 'NG3 5AP' from project; Search button loads sold-stats and after EPC floor-area lookup sold-ppsf-median shows '£206 per sq ft median across 38 sales shown with an EPC floor area'. sold-size-valuation box renders with sold-size-input prefilled to '667' (from project EPC sqft) and sold-size-value='£137,000' (667 * 206 = 137,402 rounded to £1,000). Editing input to 1000 recalculates sold-size-value to '£206,000' (1000 * 206). sold-use-size-gdv button labelled 'Use £206,000 as BRRR valuation' navigates to /brrr?valuation=206000. On BRRR screen (plan='pro'), brrr-valuation-input='206000' and brrr-gdv-from-sold hint 'Valuation taken from the local sold-prices median. Adjust it for size and condition.' renders. All testIDs present and tappable. No deprecated expo packages or SafeAreaView issues detected in epc.tsx / sold-map.tsx. Demo state restored at end: 0 EPC line items, plan=basic, cert re-pinned to 4836-5623-9600-0320-4222.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration59.py",
+    "/app/test_reports/pytest/pytest_iteration59.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/epc.py add_to_budget: idempotency relies on exact name match 'EPC: <name>' already in line_items (same project). This is fine today but is case/whitespace-sensitive - if a user renames the line item (e.g. 'Epc: Cavity wall insulation') they can re-add it. Consider tagging with a source/code field (e.g. source='epc', code=x.code) and matching on that.",
+    "routes/epc.py pin_epc has no validation that body.certificate_number actually exists for the current postcode - a malformed cert id silently stores and then GET returns status='pick' because next((...)) misses. Acceptable for a self-serve pinning flow (user picked from candidates), but worth a 400 for obviously bad input.",
+    "epc.tsx L39: `const sel = picked ?? open.map((x) => x.sequence)` means by default every suggested improvement is pre-selected. When all improvements are already in_budget `open` is [] and sel is [] - the add-budget card is correctly hidden by the open.length>0 guard. Good.",
+    "sold-map.tsx L58-62: still the setState-during-render merge for areas; works but a useEffect keyed on fa.data would be cleaner (same note as iteration_58).",
+    "sold-map.tsx L68-69: size = sizeIn ?? (epc.data?.sqft ? String(epc.data.sqft) : '') correctly falls back to the project EPC floor area and lets the user edit free-form; sizeVal = round(Number(size) * medianPpsf / 1000) * 1000 matches the spec."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration59.py",
+    "/app/test_reports/iteration_59.json",
+    "/app/test_reports/pytest/pytest_iteration59.xml"
+  ],
+  "success_rate": { "backend": "100% (17/17)", "frontend": "100% - EPC quick-action -> /epc, summary + both improvements + picker + add-to-budget + 'In your refurb budget' banner all verified; /sold-map ppsf-median, sold-size-valuation prefilled from EPC sqft, edit recalculates, Use as BRRR valuation navigates to /brrr?valuation=206000 and brrr-gdv-from-sold hint shows in BRRR screen." },
+  "seed_data_creation": "Added 1 'EPC: Cavity wall insulation' line item via UI during testing then deleted it. Final state: 0 EPC line items, demo cert 4836-5623-9600-0320-4222 pinned on demo project, plan=basic.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Demo project (14 Mapperley Road NG3 5AP) is left pinned to EPC 4836-5623-9600-0320-4222 (5 Malcolm Close, D 57 -> C 73, 667 sq ft) with 0 'EPC: ...' line items and plan=basic. GET /api/project/epc returns ok instantly thanks to epc_detail_cache. To test as pro user via the UI, run POST /api/auth/plan {plan:'pro'} before tapping sold-use-size-gdv or use a direct goto('/brrr?valuation=X') after login. The frontend stores the JWT in AsyncStorage (IndexedDB on web) under key 'mba_auth_token' - window.localStorage won't see it, so cleanup via a separate `requests` session is easiest.",
+  "rca_of_issue": "No bugs - all flows match the spec."
+}

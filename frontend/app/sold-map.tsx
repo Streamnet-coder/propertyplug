@@ -5,7 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-nati
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { api, FloorAreas, gbp, SoldPrices } from "@/src/api";
+import { api, FloorAreas, gbp, ProjectEpc, SoldPrices } from "@/src/api";
 import { PortfolioMapView } from "@/src/components/portfolio-map-view";
 import { soldMapHtml } from "@/src/components/sold-map-html";
 import { Button, Card, Chip, Field, fonts, Icon, radius, space, tap } from "@/src/components/ui";
@@ -63,6 +63,10 @@ export default function SoldMap() {
   const ppsfAll = visible.map((x) => areas[rowKey(x)]?.price_per_sqft).filter((v): v is number => !!v).sort((a, b) => a - b);
   const medianPpsf = ppsfAll.length ? ppsfAll[Math.floor(ppsfAll.length / 2)] : null;
   const typeStats = type && d ? d.stats.by_type[type] : null;
+  const epc = useQuery({ queryKey: ["project-epc"], queryFn: () => api<ProjectEpc>("/project/epc"), retry: false, staleTime: 60 * 60 * 1000 });
+  const [sizeIn, setSizeIn] = useState<string | null>(null);
+  const size = sizeIn ?? (epc.data?.sqft ? String(epc.data.sqft) : "");
+  const sizeVal = medianPpsf && Number(size) > 0 ? Math.round((Number(size) * medianPpsf) / 1000) * 1000 : 0;
   const median = typeStats ? typeStats.median : d?.stats.median ?? 0;
   const gdv = p?.estimated_valuation ?? 0;
   const search = () => { tap(); const v = (input ?? pc).trim().toUpperCase(); if (v) { setPostcode(v); setShown(PAGE); } };
@@ -98,6 +102,22 @@ export default function SoldMap() {
         <Text style={s.muted} testID="sold-ppsf-median">
           <Text style={{ fontFamily: fonts.bold, color: colors.brand }}>£{medianPpsf.toLocaleString()} per sq ft</Text> median across {ppsfAll.length} sales shown with an EPC floor area.
         </Text>
+      )}
+      {medianPpsf && (
+        <View style={s.sizeBox} testID="sold-size-valuation">
+          <Text style={s.label}>Value by size</Text>
+          <View style={{ flexDirection: "row", gap: space.sm, alignItems: "flex-end" }}>
+            <View style={{ flex: 1 }}>
+              <Field label="Your floor area (sq ft)" value={size} onChangeText={setSizeIn} keyboardType="number-pad" placeholder="e.g. 950" maxLength={6} testID="sold-size-input" />
+            </View>
+            <View style={{ flex: 1, paddingBottom: space.sm }}>
+              <Text style={s.muted}>At £{medianPpsf.toLocaleString()}/sq ft</Text>
+              <Text style={[s.cellVal, { color: colors.brand }]} testID="sold-size-value">{sizeVal ? gbp(sizeVal) : "–"}</Text>
+            </View>
+          </View>
+          <Text style={s.muted}>{!sizeIn && epc.data?.sqft ? "Floor area taken from your property's EPC. " : ""}1 m² = 10.76 sq ft.</Text>
+          {sizeVal > 0 && <Button small icon="calculator" title={`Use ${gbp(sizeVal)} as BRRR valuation`} onPress={() => router.push({ pathname: "/brrr", params: { valuation: String(sizeVal) } })} testID="sold-use-size-gdv" />}
+        </View>
       )}
       {median > 0 && (
         <Button small variant="secondary" icon="calculator" title={`Use ${gbp(median)} as BRRR valuation`} onPress={() => router.push({ pathname: "/brrr", params: { valuation: String(median) } })} testID="sold-use-gdv" />
@@ -201,6 +221,7 @@ const useStyles = makeStyles((c) => ({
   cell: { flex: 1, backgroundColor: c.surfaceSecondary, borderRadius: radius.md, padding: space.sm, gap: 2 },
   cellVal: { fontFamily: fonts.bold, fontSize: 16, color: c.onSurface },
   section: { fontFamily: fonts.bold, fontSize: 16, color: c.onSurface },
+  sizeBox: { gap: space.sm, backgroundColor: c.surfaceSecondary, borderRadius: radius.md, padding: space.md },
   sale: { flexDirection: "row", alignItems: "center", gap: space.md, backgroundColor: c.surface, borderRadius: radius.md, borderWidth: 1, borderColor: c.border, padding: space.md },
   addr: { fontFamily: fonts.semibold, fontSize: 14, color: c.onSurface },
   price: { fontFamily: fonts.bold, fontSize: 15, color: c.onSurface },

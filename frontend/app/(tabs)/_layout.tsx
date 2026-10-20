@@ -1,8 +1,9 @@
 import { Redirect, Tabs } from "expo-router";
 import { NativeTabs } from "expo-router/unstable-native-tabs";
-import { Platform } from "react-native";
+import { Platform, View } from "react-native";
 
 import { useAuth } from "@/src/auth";
+import { DesktopHeader, DesktopSidebar } from "@/src/components/desktop-nav";
 import { useCanSeeMoney } from "@/src/money";
 import { fonts, Icon, IconName, tap } from "@/src/components/ui";
 import { useLayout } from "@/src/layout";
@@ -36,22 +37,19 @@ export default function TabsLayout() {
     );
   }
 
-  return (
+  // Desktop: Home/Budget/Team/Media live in a header Menu dropdown; project tools sit in a left sidebar.
+  const tabs = (
     <Tabs
       screenListeners={{ tabPress: () => tap() }}
+      tabBar={wide ? (props) => <DesktopHeader {...props} tabs={TABS} /> : undefined}
       screenOptions={{
         headerShown: false,
-        tabBarPosition: wide ? "left" : "bottom",
-        tabBarVariant: wide ? "material" : "uikit",
-        tabBarLabelPosition: wide ? "beside-icon" : "below-icon",
+        tabBarPosition: wide ? "top" : "bottom",
         tabBarActiveTintColor: colors.brand,
-        tabBarActiveBackgroundColor: wide ? colors.brandTertiary : undefined,
         tabBarInactiveTintColor: colors.muted,
-        tabBarStyle: wide
-          ? { backgroundColor: colors.surface, borderRightColor: colors.border, width: 240, maxWidth: 240, paddingTop: 24, paddingHorizontal: 8 }
-          : { backgroundColor: colors.surface, borderTopColor: colors.border, ...(Platform.OS === "web" ? { height: 64 } : {}) },
-        tabBarItemStyle: wide ? { borderRadius: 12, marginVertical: 2, justifyContent: "flex-start", paddingHorizontal: 12, minHeight: 48 } : { alignSelf: "center" },
-        tabBarLabelStyle: { fontFamily: fonts.semibold, fontSize: wide ? 14 : 11 },
+        tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border, ...(Platform.OS === "web" ? { height: 64 } : {}) },
+        tabBarItemStyle: { alignSelf: "center" },
+        tabBarLabelStyle: { fontFamily: fonts.semibold, fontSize: 11 },
       }}
     >
       {TABS.map((t) => (
@@ -67,5 +65,12 @@ export default function TabsLayout() {
         />
       ))}
     </Tabs>
+  );
+  if (!wide) return tabs;
+  return (
+    <View style={{ flex: 1, flexDirection: "row" }}>
+      <DesktopSidebar />
+      <View style={{ flex: 1 }}>{tabs}</View>
+    </View>
   );
 }
