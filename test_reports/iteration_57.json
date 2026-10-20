@@ -1,0 +1,51 @@
+{
+  "summary": "Iteration 57 (Sold prices map, free for Basic plan). Backend: 18/18 pytest tests passed covering GET /api/sold-prices (auth required, basic plan allowed, response shape with postcode/lat/lon/radius_m/miles/years/since/sales[]/truncated/stats/source, radius scales with miles (0.25->~402, 1->~1609, 5->~8047), each sale's distance_m <= radius_m, sales capped at 1500, stats.by_type keys limited to {Detached, Semi-detached, Terraced, Flat, Other}, source mentions 'Land Registry', NG7 1AA lat/lon within Nottingham, cache hit under 5s, 400 for malformed, 404 for unknown, 400 for Scottish EH1 2NG with 'England and Wales' message, 422 for miles=10 or years=99) and that GET /api/project/comparables now works for basic users (does NOT return 402). Frontend (Expo web): logged in via /api/auth/login + localStorage mba_auth_token (basic plan). Mobile 390x844: home-screen renders, quick-action-sold is present with label 'Sold prices' for the basic-plan demo user (previously money-gated flows allow it now), sold-map-screen opens, sold-controls + sold-postcode-input + sold-search-button render, all distance chips (sold-miles-0.25/0.5/1/2/3/5) and year chips (sold-years-1/2/3/5) are mounted, Scottish postcode EH1 2NG shows sold-error card with 'Sold prices are only available for England and Wales (HM Land Registry)' within ~1s. Landing /welcome (logged out): pricing-basic text contains 'Sold prices map' and 'up to 5 miles'; pricing-pro no longer mentions '1/4 mile' or 'sold comparables'. Desktop 1440 layout opened (two-column exists in code: s.cols w/ flex 1.4 : 1).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "sold-map.tsx Field (sold-postcode-input)",
+        "issue": "The input is prefilled from the project's postcode (demo project returns NG3 5AP, so sold-no-postcode never shows) but when a user focuses the field it does not select-all. Typing a new postcode without first clearing concatenates onto the existing text (e.g. 'NG3 5APNG7 1AA'), which trips backend max_length=10 and surfaces as 'String should have at most 10 characters' in sold-error. Repro: open /sold-map, tap Postcode, type 'NG7 1AA', tap Search.",
+        "testID": "sold-postcode-input",
+        "priority": "LOW"
+      },
+      {
+        "component": "sold-map.tsx / routes/sold_prices.py validation",
+        "issue": "When /sold-prices returns 422 (postcode exceeds max_length=10, or any Pydantic validation), the raw Pydantic detail is rendered inside sold-error. A friendlier guard client-side ('Enter a full UK postcode, e.g. NG7 1AA' before firing the query, or trimming/normalising the stored value) would avoid the cryptic 'String should have at most 10 characters'.",
+        "testID": "sold-error",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration57.py",
+    "/app/test_reports/pytest/pytest_iteration57.xml"
+  ],
+  "action_items": [
+    "Minor UX: in sold-map.tsx select-all on focus for the postcode Field, or reset `input` to '' when the user taps the field so a fresh postcode doesn't get appended to the prefilled project value.",
+    "Minor UX: handle 422 responses from /sold-prices in sold-map.tsx with a friendly message (currently the raw Pydantic 'String should have at most 10 characters' is shown in sold-error).",
+    "Optional: the demo-project note in the request ('demo project may not have a postcode -> sold-no-postcode card') no longer matches reality - the demo project address contains NG3 5AP, so sold-no-postcode is unreachable through the demo user. If you want to exercise that branch in testing, add a project without a postcode in the address."
+  ],
+  "critical_code_review_comments": [
+    "routes/sold_prices.py: good use of Literal for miles/years giving 422 for invalid enum values. SPARQL query is single-shot per 400-pcs chunk and chunks run with asyncio.Semaphore(2) + exponential backoff on 429 - robust to Land Registry rate limits.",
+    "routes/sold_prices.py: median/avg exclude type == 'Other' (commercial/bulk sales) which prevents skewed averages, this is correctly surfaced in the UI muted note.",
+    "routes/sold_prices.py: cache key = `{pc}|{years}|{miles}` with 24h TTL via sold_price_cache collection; second call for the same key is sub-second (verified).",
+    "sold-map.tsx: good testID coverage (sold-map-screen, sold-controls, sold-postcode-input, sold-search-button, sold-miles-*, sold-years-*, sold-loading, sold-map, sold-stats, sold-median/avg/count, sold-gdv-compare, sold-type-all/{Type}, sold-list, sold-sale-{i}, sold-show-more, sold-error, sold-retry, sold-no-postcode, sold-empty, sold-back-button).",
+    "sold-map.tsx: PC_RE on the client only EXTRACTS a postcode from the project address; it does not validate the user-typed value before firing. Combined with no clear-on-focus on the Field this is the root of the 422 UX issue above.",
+    "sold-map.tsx: `useQuery.retry: false` is correct - avoid hammering the Land Registry if a long 5-mile lookup fails."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration57.py",
+    "/app/test_reports/iteration_57.json",
+    "/app/test_reports/pytest/pytest_iteration57.xml"
+  ],
+  "success_rate": { "backend": "100% (18/18)", "frontend": "~90% - all testIDs/pricing/error paths verified; data-loaded stats + map iframe render verified only via backend contract + Scottish error path (NG7 1AA data-load on the sold-map screen was blocked in this run by the Field-prefill UX quirk, not a backend failure; backend returns the same payload the UI consumes)" },
+  "seed_data_creation": "None - reused the demo user and the already-cached NG7 1AA / {0.25, 1, 5} miles / 3 years entries in sold_price_cache.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Demo project address contains postcode NG3 5AP, so /sold-map opens with input prefilled and sold-no-postcode is unreachable through the demo user. When typing a postcode via Playwright use locator.press_sequentially after click_count=3 + Backspace to clear the prefilled value, otherwise you'll concatenate and hit backend 422 'String should have at most 10 characters'. The Land Registry endpoint rate-limits bursts - reuse the already-cached (NG7 1AA, {0.25,1,5}, 3) tuples; avoid cold 5-mile queries in CI. mba_auth_token in localStorage is JSON.stringified string.",
+  "rca_of_issue": "Field prefill behaviour: const projectPc = p?.address.match(PC_RE)?.[1]?.toUpperCase() ?? ''; const [input, setInput] = useState<string | null>(null); and Field value={input ?? pc}. Because `input` starts null, the Field shows `pc` (the project postcode), but the underlying TextInput value is still the prefilled string. React Native Web does not select-all on focus by default, so any typed chars are appended. Fix is either (a) set the initial `input` state to projectPc so the TextInput value is user-owned from the start and selectTextOnFocus works, or (b) wire `selectTextOnFocus` + `onFocus={() => setInput('')}` on the Field."
+}

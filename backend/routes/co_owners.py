@@ -67,7 +67,9 @@ async def _out(c: dict) -> dict:
     u = await db.users.find_one({"email": c["email"]}, {"name": 1})
     pids = c.get("project_ids")
     names = [p["name"] async for p in db.projects.find({"_id": {"$in": [oid(i) for i in pids]}}, {"name": 1})] if pids is not None else None
-    return {"id": str(c["_id"]), "email": c["email"], "name": u["name"] if u else None, "has_account": bool(u), "invited_at": c["invited_at"],
+    cid = str(c["_id"])
+    shares = {d["project_id"]: d["shares"][cid] async for d in db.ownership_shares.find({"owner_id": c["owner_id"], f"shares.{cid}": {"$gt": 0}}, {"project_id": 1, "shares": 1})}
+    return {"id": cid, "email": c["email"], "name": u["name"] if u else None, "has_account": bool(u), "invited_at": c["invited_at"], "shares": shares,
             "role": _role(c), "project_ids": pids, "project_names": names,
             "money_access": c.get("money_access", True) is not False, "auto_add": bool(c.get("auto_add"))}
 
@@ -122,7 +124,35 @@ async def remove_co_owner(cid: str, user: User = Depends(real_user)):
     r = await db.co_owners.delete_one({"_id": oid(cid), "owner_id": user.id})
     if not r.deleted_count:
         raise HTTPException(404, "Not found")
+    await db.ownership_shares.update_many({"owner_id": user.id}, {"$unset": {f"shares.{cid}": "", f"contributions.{cid}": ""}})
     return {"ok": True}
+
+
+class ShareAllIn(BaseModel):
+    pct: float = Field(ge=0, le=100)
+
+
+@router.post("/co-owners/{cid}/apply-share")
+async def apply_share_everywhere(cid: str, body: ShareAllIn, user: User = Depends(real_user)):
+    """Give this person the same % on every project they can access. The owner's share shrinks to fit;
+    blocked (nothing changed) if any project would go over 100% with the other co-owners' shares."""
+    c = await db.co_owners.find_one({"_id": oid(cid), "owner_id": user.id})
+    if not c:
+        raise HTTPException(404, "Not found")
+    pids = c.get("project_ids")
+    q = {"user_id": user.id} if pids is None else {"user_id": user.id, "_id": {"$in": [oid(i) for i in pids]}}
+    projects = [(str(p["_id"]), p["name"]) async for p in db.projects.find(q, {"name": 1})]
+    if not projects:
+        raise HTTPException(400, "They don't have access to any projects yet")
+    pct = round(body.pct, 2)
+    docs = {d["project_id"]: d async for d in db.ownership_shares.find({"project_id": {"$in": [p for p, _ in projects]}})}
+    over = [name for pid, name in projects if sum(v for k, v in (docs.get(pid, {}).get("shares") or {}).items() if k != cid) + pct > 100]
+    if over:
+        raise HTTPException(400, f"Not applied: other co-owners already hold too much of {', '.join(over)}. Lower their shares there first")
+    for pid, _ in projects:
+        upd = {"$set": {f"shares.{cid}": pct, "owner_id": user.id, "project_id": pid}} if pct > 0 else {"$unset": {f"shares.{cid}": ""}, "$set": {"owner_id": user.id, "project_id": pid}}
+        await db.ownership_shares.update_one({"project_id": pid}, upd, upsert=True)
+    return {"pct": pct, "projects": [n for _, n in projects], "count": len(projects)}
 
 
 @router.get("/co-owners/shared-with-me")

@@ -25,8 +25,8 @@ const PREVIEW: { icon: IconName; label: string; value: string; note: string; ton
   { icon: "wallet", label: "Refurb spend vs budget", value: "£18.2k / £22k", note: "On budget · 3 snags open", tone: "brand" },
 ];
 
-const BASIC = ["Rent & tenancy tracker with auto receipts", "Tenant portal & repair reporting", "Refurb budgets, snags & milestones", "AI cost estimates", "Portfolio rent roll & arrears chasing"];
-const PRO = ["Everything in Basic", "BRRR calculator, saved deals & compare", "1/4 mile sold comparables", "Subcontractor & stakeholder portals", "Lender-ready PDF report packs"];
+const BASIC = ["Rent & tenancy tracker with auto receipts", "Tenant portal & repair reporting", "Refurb budgets, snags & milestones", "AI cost estimates", "Sold prices map up to 5 miles", "Portfolio rent roll & arrears chasing"];
+const PRO = ["Everything in Basic", "BRRR calculator, saved deals & compare", "Subcontractor & stakeholder portals", "Lender-ready PDF report packs"];
 const PERIODS = [
   { id: "monthly", label: "Monthly", price: "£19.99", per: "/month", note: "Cancel anytime" },
   { id: "yearly", label: "Yearly", price: "£199", per: "/year", note: "Save 17% · about £16.58/month" },

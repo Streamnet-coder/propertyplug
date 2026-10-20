@@ -167,7 +167,7 @@ export default function Brrr() {
           </Card>
 
           <View>
-            <SectionTitle title="1/4 mile comparables" />
+            <SectionTitle title="1/4 mile comparables" action="Sold prices map" onAction={() => router.push("/sold-map")} testID="brrr-sold-map-link" />
             <Card style={{ paddingVertical: space.xs }} testID="comparables-card">
               {comps.isLoading ? (
                 <ActivityIndicator color={colors.brand} style={{ padding: space.lg }} />

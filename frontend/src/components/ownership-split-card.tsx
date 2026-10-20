@@ -1,9 +1,9 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 
 import { api, gbp } from "@/src/api";
-import { Button, Card, fonts, radius, SectionTitle, space } from "@/src/components/ui";
+import { Button, Card, fonts, Icon, radius, SectionTitle, space } from "@/src/components/ui";
 import { StatementsPanel } from "@/src/components/coowner-statements";
 import { PayoutsPanel } from "@/src/components/payouts-panel";
 import { queryClient } from "@/src/query-client";
@@ -32,6 +32,17 @@ export function OwnershipSplitCard() {
   const save = useMutation({
     mutationFn: (b: { shares: Record<string, number>; contributions: Record<string, number> }) => api<Split>("/project/split", { method: "PUT", body: b }),
     onSuccess: (d) => { queryClient.setQueryData(["split"], d); queryClient.invalidateQueries({ queryKey: ["statements"] }); queryClient.invalidateQueries({ queryKey: ["payouts"] }); setDraft(null); toast("Ownership split saved"); },
+    onError: (e: Error) => toast(e.message, "error"),
+  });
+  const [removing, setRemoving] = useState<string | null>(null);
+  const remove = useMutation({
+    mutationFn: (cid: string) => api(`/co-owners/${cid}`, { method: "DELETE" }),
+    onSuccess: async () => {
+      setRemoving(null);
+      setDraft(null);
+      await Promise.all(["split", "co-owners", "payouts", "statements", "ownership-portfolio"].map((k) => queryClient.invalidateQueries({ queryKey: [k] })));
+      toast("Co-owner removed");
+    },
     onError: (e: Error) => toast(e.message, "error"),
   });
   const d = q.data;
@@ -75,6 +86,7 @@ export function OwnershipSplitCard() {
           <Text style={[s.th, s.n]}>Share</Text>
           {showProfit && <Text style={[s.th, s.n]}>Profit</Text>}
           <Text style={[s.th, s.n]}>Cashflow/mo</Text>
+          {d.can_edit && <View style={s.bin} />}
         </View>
         {d.rows.map((r) => {
           const k = key(r);
@@ -97,7 +109,21 @@ export function OwnershipSplitCard() {
                 )}
                 {showProfit && <Text style={[s.val, s.n]}>{part(d.figures.profit)}</Text>}
                 <Text style={[s.val, s.n, { color: d.figures.monthly_cashflow < 0 ? colors.error : colors.onSurface }]}>{part(d.figures.monthly_cashflow)}</Text>
+                {d.can_edit && (r.is_owner ? <View style={s.bin} /> : (
+                  <Pressable onPress={() => setRemoving(removing === k ? null : k)} hitSlop={6} style={[s.bin, s.binOn]} accessibilityLabel={`Remove ${r.name}`} testID={`split-remove-${k}`}>
+                    <Icon name="trash-2" size={16} color={colors.error} />
+                  </Pressable>
+                ))}
               </View>
+              {removing === k && (
+                <View style={s.confirm} testID={`split-remove-confirm-box-${k}`}>
+                  <Text style={[s.muted, { color: colors.error }]}>Remove {r.name}? They lose access to every project you shared with them and their shares are cleared.</Text>
+                  <View style={{ flexDirection: "row", gap: space.sm }}>
+                    <Button small variant="outline" title="Cancel" onPress={() => setRemoving(null)} style={{ flex: 1 }} testID={`split-remove-cancel-${k}`} />
+                    <Button small variant="danger" title="Remove access" loading={remove.isPending} onPress={() => remove.mutate(k)} style={{ flex: 1 }} testID={`split-remove-confirm-${k}`} />
+                  </View>
+                </View>
+              )}
               {draft ? (
                 <View style={s.putRow}>
                   <Text style={s.muted}>Put in</Text>
@@ -135,6 +161,9 @@ export function OwnershipSplitCard() {
 }
 
 const useStyles = makeStyles((c) => ({
+  bin: { width: 36, height: 36, marginLeft: space.xs },
+  binOn: { borderRadius: 18, backgroundColor: c.errorTint, alignItems: "center", justifyContent: "center" },
+  confirm: { gap: space.sm, backgroundColor: c.errorTint, borderRadius: radius.md, padding: space.md },
   headRow: { flexDirection: "row", gap: space.sm, borderBottomWidth: 1, borderBottomColor: c.border, paddingBottom: space.xs },
   th: { fontFamily: fonts.semibold, fontSize: 11, color: c.muted, textTransform: "uppercase" },
   row: { flexDirection: "row", gap: space.sm, alignItems: "center", minHeight: 44 },

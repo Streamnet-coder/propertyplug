@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 
 import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
@@ -12,7 +12,7 @@ import { queryClient } from "@/src/query-client";
 import { makeStyles, useTheme } from "@/src/theme";
 import { useToast } from "@/src/toast";
 
-type CoOwner = { id: string; email: string; name: string | null; has_account: boolean; invited_at: string; role: "co_owner" | "manager"; project_ids: string[] | null; project_names: string[] | null; money_access: boolean; auto_add: boolean };
+type CoOwner = { id: string; email: string; name: string | null; has_account: boolean; invited_at: string; role: "co_owner" | "manager"; project_ids: string[] | null; project_names: string[] | null; money_access: boolean; auto_add: boolean; shares: Record<string, number> };
 type Shared = { owner_id: string; owner_name: string; owner_email: string; since: string; projects: number; role: "co_owner" | "manager"; money_access: boolean };
 
 export default function CoOwners() {
@@ -49,7 +49,7 @@ export default function CoOwners() {
   });
   const remove = useMutation({
     mutationFn: (id: string) => api(`/co-owners/${id}`, { method: "DELETE" }),
-    onSuccess: async () => { setConfirm(null); await queryClient.invalidateQueries({ queryKey: ["co-owners"] }); toast("Co-owner removed"); },
+    onSuccess: async () => { setConfirm(null); await queryClient.invalidateQueries({ queryKey: ["co-owners"] }); queryClient.invalidateQueries({ queryKey: ["split"] }); toast("Co-owner removed"); },
     onError: (e: Error) => toast(e.message, "error"),
   });
   const scope = useMutation({
@@ -99,9 +99,12 @@ export default function CoOwners() {
               </Text>
             </View>
             {confirm !== c.id && (
-              <Pressable onPress={() => setConfirm(c.id)} hitSlop={8} testID={`co-owner-remove-${c.id}`}><Text style={[s.muted, { color: colors.error }]}>Remove</Text></Pressable>
+              <Pressable onPress={() => setConfirm(c.id)} hitSlop={6} style={({ pressed }) => [s.binBtn, pressed && { opacity: 0.7 }]} accessibilityLabel={`Remove ${c.name || c.email}`} testID={`co-owner-remove-${c.id}`}>
+                <Icon name="trash-2" size={20} color={colors.error} />
+              </Pressable>
             )}
           </View>
+          {confirm !== c.id && editing?.id !== c.id && <ShareAll c={c} projects={ownProjects} />}
           {editing?.id === c.id ? (
             <View style={{ gap: space.sm }}>
               <AccessPicker role={editing.role} all={editing.all} pids={editing.pids} money={editing.money} auto={editing.auto} projects={ownProjects} testPrefix={`edit-${c.id}`}
@@ -115,9 +118,12 @@ export default function CoOwners() {
             <Button small variant="ghost" icon="briefcase" title="Change access" onPress={() => setEditing({ id: c.id, role: c.role, all: c.project_ids === null, pids: c.project_ids ?? [], money: c.money_access, auto: c.auto_add })} testID={`co-owner-scope-${c.id}`} />
           )}
           {confirm === c.id && (
+            <View style={{ gap: space.sm }}>
+            <Text style={[s.muted, { color: colors.error }]}>Remove {c.name || c.email}? They lose access to every shared project straight away and their ownership shares are cleared.</Text>
             <View style={{ flexDirection: "row", gap: space.sm }}>
               <Button small variant="outline" title="Cancel" onPress={() => setConfirm(null)} style={{ flex: 1 }} testID={`co-owner-remove-cancel-${c.id}`} />
               <Button small variant="danger" title="Remove access" loading={remove.isPending} onPress={() => remove.mutate(c.id)} style={{ flex: 1 }} testID={`co-owner-remove-confirm-${c.id}`} />
+            </View>
             </View>
           )}
         </Card>
@@ -148,6 +154,43 @@ export default function CoOwners() {
         </Card>
       ))}
     </FormScreen>
+  );
+}
+
+/** One % for this person on every project they can access; the owner's share shrinks to fit. */
+function ShareAll({ c, projects }: { c: CoOwner; projects: ProjectRow[] }) {
+  const s = useStyles();
+  const { colors } = useTheme();
+  const toast = useToast();
+  const [pct, setPct] = useState("");
+  const scoped = c.project_ids === null ? projects : projects.filter((p) => c.project_ids!.includes(p.id));
+  const vals = scoped.map((p) => c.shares[p.id] ?? 0);
+  const same = vals.length > 0 && vals.every((v) => v === vals[0]);
+  const summary = !vals.some((v) => v > 0) ? "No ownership share yet" : same ? `${vals[0]}% of all ${vals.length} project${vals.length === 1 ? "" : "s"}` : `Varies: ${scoped.map((p) => `${p.name} ${c.shares[p.id] ?? 0}%`).join(" · ")}`;
+  const n = Number(pct);
+  const apply = useMutation({
+    mutationFn: () => api<{ pct: number; count: number }>(`/co-owners/${c.id}/apply-share`, { body: { pct: n } }),
+    onSuccess: async (r) => {
+      setPct("");
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["co-owners"] }), queryClient.invalidateQueries({ queryKey: ["split"] }), queryClient.invalidateQueries({ queryKey: ["ownership-portfolio"] })]);
+      toast(`${r.pct}% applied to ${r.count} project${r.count === 1 ? "" : "s"}`);
+    },
+    onError: (e: Error) => toast(e.message, "error"),
+  });
+  return (
+    <View style={s.shareBox} testID={`co-owner-share-${c.id}`}>
+      <Text style={s.name}>Ownership share</Text>
+      <Text style={s.muted} testID={`co-owner-share-summary-${c.id}`}>{summary}</Text>
+      <View style={{ flexDirection: "row", gap: space.sm, alignItems: "center" }}>
+        <View style={s.pctWrap}>
+          <TextInput value={pct} onChangeText={setPct} keyboardType="decimal-pad" placeholder="25" placeholderTextColor={colors.muted} style={s.pctInput} maxLength={6} testID={`co-owner-share-input-${c.id}`} />
+          <Text style={s.muted}>%</Text>
+        </View>
+        <Button small icon="layers" title="Apply to all their projects" style={{ flex: 1 }} disabled={pct.trim() === "" || !Number.isFinite(n) || n < 0 || n > 100}
+          loading={apply.isPending} onPress={() => apply.mutate()} testID={`co-owner-share-apply-${c.id}`} />
+      </View>
+      <Text style={s.muted}>Your share shrinks to fit. You can still fine-tune each project from its Ownership split.</Text>
+    </View>
   );
 }
 
@@ -220,6 +263,10 @@ function ProjectPicker({ projects, picked, onChange, testPrefix, label }: { proj
 }
 
 const useStyles = makeStyles((c) => ({
+  binBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.errorTint, alignItems: "center", justifyContent: "center" },
+  shareBox: { gap: space.sm, backgroundColor: c.surfaceSecondary, borderRadius: radius.md, padding: space.md },
+  pctWrap: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderColor: c.border, borderRadius: radius.md, paddingHorizontal: space.sm, backgroundColor: c.surface, minHeight: 44 },
+  pctInput: { width: 56, fontFamily: fonts.semibold, fontSize: 15, color: c.onSurface, paddingVertical: space.sm },
   pick: { flexDirection: "row", alignItems: "center", gap: space.md, minHeight: 48, paddingVertical: space.xs },
   box: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: c.border, alignItems: "center", justifyContent: "center" },
   title: { fontFamily: fonts.bold, fontSize: 16, color: c.onSurface },

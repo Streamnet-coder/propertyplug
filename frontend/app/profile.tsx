@@ -14,7 +14,6 @@ import { useToast } from "@/src/toast";
 
 const PRO_FEATURES: { icon: IconName; text: string }[] = [
   { icon: "calculator", text: "BRRR ROI calculator with refinance & cashflow" },
-  { icon: "map-pin", text: "1/4 mile sold comparables" },
   { icon: "message-circle", text: "Subcontractor portal & WhatsApp" },
   { icon: "building-2", text: "Stakeholder & solicitor link" },
 ];

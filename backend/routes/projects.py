@@ -176,7 +176,7 @@ async def update_project(body: ProjectUpdate, user: User = Depends(current_user)
 
 
 @router.get("/project/comparables", dependencies=[Depends(block_money)])
-async def comparables(user: User = Depends(pro_user)):
+async def comparables(user: User = Depends(current_user)):
     p = await get_project_doc(user)
     return [c.model_dump() for c in p.comparables]
 

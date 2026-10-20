@@ -292,3 +292,11 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - src/layout.ts useLayout (wide >=1024, MAX_CONTENT 1280). Tabs become left sidebar on wide web.
 - Two-column wide layouts: Home, Budget, Rent & tenancy, Team (2-col contacts), Media (4-col photos, 2-col receipts; 3-col on tablet), Arrears, Rent roll.
 - Landing page responsive (hero + preview card on desktop, 2/3-col feature grid).
+
+## Jun 2026 — Co-owner remove + share across projects (DONE, iter 56)
+- Bin button + confirm on Co-owners screen and in Ownership split card; removal clears shares/contributions.
+- POST /api/co-owners/{cid}/apply-share {pct}: same % on all their projects; blocks (no change) if any project would exceed 100%.
+
+## Jun 2026 — Sold prices map (DONE, iter 57)
+- routes/sold_prices.py: real HM Land Registry Price Paid (SPARQL) + postcodes.io grid lookup; radius 0.25/0.5/1/2/3/5 miles, 1/2/3/5 years; cached 24h (sold_price_cache); max 1500 sales returned; stats exclude "Other".
+- /sold-map screen (Leaflet map, radius ring, dots coloured vs median, type filters, GDV compare, list). Free for all plans; /project/comparables also free now.
