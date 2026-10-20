@@ -1,5 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import { Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -24,6 +25,14 @@ const PREVIEW: { icon: IconName; label: string; value: string; note: string; ton
   { icon: "wallet", label: "Refurb spend vs budget", value: "£18.2k / £22k", note: "On budget · 3 snags open", tone: "brand" },
 ];
 
+const BASIC = ["Rent & tenancy tracker with auto receipts", "Tenant portal & repair reporting", "Refurb budgets, snags & milestones", "AI cost estimates", "Portfolio rent roll & arrears chasing"];
+const PRO = ["Everything in Basic", "BRRR calculator, saved deals & compare", "1/4 mile sold comparables", "Subcontractor & stakeholder portals", "Lender-ready PDF report packs"];
+const PERIODS = [
+  { id: "monthly", label: "Monthly", price: "£19.99", per: "/month", note: "Cancel anytime" },
+  { id: "yearly", label: "Yearly", price: "£199", per: "/year", note: "Save 17% · about £16.58/month" },
+  { id: "lifetime", label: "Lifetime", price: "£499", per: " one-off", note: "Pay once, Pro forever" },
+] as const;
+
 const MAX_W = 1160;
 
 export default function Welcome() {
@@ -36,6 +45,8 @@ export default function Welcome() {
   const desktop = width >= 1024;
   const cols = desktop ? 3 : tablet ? 2 : 1;
   const go = (mode: "register" | "login") => router.push({ pathname: "/auth", params: { mode } });
+  const [period, setPeriod] = useState<(typeof PERIODS)[number]["id"]>("yearly");
+  const pro = PERIODS.find((x) => x.id === period)!;
   const container = [s.pad, { maxWidth: MAX_W, width: "100%" as const, alignSelf: "center" as const }, tablet && { paddingHorizontal: space.xxl }];
 
   return (
@@ -125,6 +136,39 @@ export default function Welcome() {
             ))}
           </View>
 
+          <View testID="welcome-pricing">
+            <Text style={[s.section, tablet && { fontSize: 24, marginTop: space.xxxl }, { textAlign: tablet ? "center" : "left", marginBottom: space.xs }]}>Simple pricing</Text>
+            <Text style={[s.fBody, { textAlign: tablet ? "center" : "left", marginBottom: space.lg }]}>Every account starts with a 30-day free trial. No card required.</Text>
+            <View style={[s.periods, tablet && { alignSelf: "center" }]}>
+              {PERIODS.map((x) => (
+                <Pressable key={x.id} onPress={() => { tap(); setPeriod(x.id); }} style={[s.period, period === x.id && s.periodOn]} testID={`pricing-period-${x.id}`}>
+                  <Text style={[s.periodText, period === x.id && { color: colors.onBrand }]}>{x.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={[s.plans, tablet && { flexDirection: "row" }]}>
+              <Card style={[s.plan, tablet && { flex: 1 }]} testID="pricing-basic">
+                <Text style={s.planName}>Basic</Text>
+                <Text style={s.planPrice}>Free</Text>
+                <Text style={s.fBody}>For landlords getting organised</Text>
+                <View style={s.planList}>
+                  {BASIC.map((t) => <PlanLine key={t} text={t} />)}
+                </View>
+                <Button title="Start free" variant="outline" onPress={() => go("register")} testID="pricing-basic-button" />
+              </Card>
+              <Card style={[s.plan, s.planPro, tablet && { flex: 1 }]} testID="pricing-pro">
+                <View style={s.popular}><Text style={s.popularText}>MOST POPULAR</Text></View>
+                <Text style={[s.planName, { color: colors.brandPrimary }]}>Pro</Text>
+                <Text style={s.planPrice} testID="pricing-pro-price">{pro.price}<Text style={s.planPer}>{pro.per}</Text></Text>
+                <Text style={s.fBody}>{pro.note}</Text>
+                <View style={s.planList}>
+                  {PRO.map((t) => <PlanLine key={t} text={t} pro />)}
+                </View>
+                <Button title="START 30-DAY FREE TRIAL" onPress={() => go("register")} testID="pricing-pro-button" />
+              </Card>
+            </View>
+          </View>
+
           {tablet && (
             <View style={s.band}>
               <Text style={s.bandTitle}>Ready to run your portfolio from one place?</Text>
@@ -141,7 +185,33 @@ export default function Welcome() {
   );
 }
 
+function PlanLine({ text, pro }: { text: string; pro?: boolean }) {
+  const s = useStyles();
+  const { colors } = useTheme();
+  return (
+    <View style={s.planLine}>
+      <Icon name="circle-check" size={16} color={pro ? colors.brandPrimary : colors.brand} />
+      <Text style={s.planLineText}>{text}</Text>
+    </View>
+  );
+}
+
 const useStyles = makeStyles((c) => ({
+  periods: { flexDirection: "row", alignSelf: "flex-start", backgroundColor: c.surface, borderRadius: radius.pill, borderWidth: 1, borderColor: c.border, padding: 4, gap: 4, marginBottom: space.lg },
+  period: { minHeight: 40, paddingHorizontal: space.lg, borderRadius: radius.pill, justifyContent: "center" },
+  periodOn: { backgroundColor: c.brand },
+  periodText: { fontFamily: fonts.semibold, fontSize: 13, color: c.onSurfaceTertiary },
+  plans: { gap: space.lg, alignItems: "stretch" },
+  plan: { gap: space.sm, padding: space.xl },
+  planPro: { borderWidth: 2, borderColor: c.brandPrimary },
+  popular: { position: "absolute", top: -12, right: space.xl, backgroundColor: c.brandPrimary, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: 4 },
+  popularText: { fontFamily: fonts.bold, fontSize: 10, letterSpacing: 0.6, color: c.onBrandPrimary },
+  planName: { fontFamily: fonts.bold, fontSize: 16, color: c.brand },
+  planPrice: { fontFamily: fonts.extrabold, fontSize: 36, color: c.onSurface, letterSpacing: -1 },
+  planPer: { fontFamily: fonts.medium, fontSize: 15, color: c.muted, letterSpacing: 0 },
+  planList: { gap: space.sm, marginVertical: space.md, flexGrow: 1 },
+  planLine: { flexDirection: "row", gap: space.sm, alignItems: "flex-start" },
+  planLineText: { flex: 1, fontFamily: fonts.medium, fontSize: 14, color: c.onSurfaceSecondary, lineHeight: 20 },
   root: { flex: 1, backgroundColor: c.surfaceSecondary },
   pad: { paddingHorizontal: space.xl },
   nav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
