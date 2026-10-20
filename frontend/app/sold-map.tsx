@@ -5,7 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-nati
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { api, gbp, SoldPrices } from "@/src/api";
+import { api, FloorAreas, gbp, SoldPrices } from "@/src/api";
 import { PortfolioMapView } from "@/src/components/portfolio-map-view";
 import { soldMapHtml } from "@/src/components/sold-map-html";
 import { Button, Card, Chip, Field, fonts, Icon, radius, space, tap } from "@/src/components/ui";
@@ -44,6 +44,24 @@ export default function SoldMap() {
   const d = q.data;
   const sales = useMemo(() => (d ? d.sales.filter((x) => !type || x.type === type) : []), [d, type]);
   const html = useMemo(() => (d ? soldMapHtml(d, sales, { brand: colors.brand, low: colors.success, high: colors.brandPrimary, centre: colors.onSurface }) : ""), [d, sales, colors]);
+  const visible = useMemo(() => sales.slice(0, shown), [sales, shown]);
+  const fa = useQuery({
+    queryKey: ["floor-areas", d?.postcode, miles, years, type, shown],
+    queryFn: () => api<FloorAreas>("/sold-prices/floor-areas", { body: { sales: visible.slice(-PAGE).map((x) => ({ postcode: x.postcode, address: x.address || x.postcode, price: x.price })) } }),
+    enabled: visible.length > 0,
+    staleTime: 60 * 60 * 1000,
+    retry: false,
+  });
+  // Each page is looked up separately; merge pages so earlier rows keep their figures.
+  const [areas, setAreas] = useState<Record<string, FloorAreas["items"][number]>>({});
+  const rowKey = (x: SoldPrices["sales"][number]) => `${x.postcode}|${x.address}|${x.date}|${x.price}`;
+  if (fa.data && visible.length) {
+    const page = visible.slice(-PAGE);
+    const k0 = rowKey(page[0]);
+    if (!(k0 in areas)) setAreas({ ...areas, ...Object.fromEntries(page.map((x, i) => [rowKey(x), fa.data!.items[i]])) });
+  }
+  const ppsfAll = visible.map((x) => areas[rowKey(x)]?.price_per_sqft).filter((v): v is number => !!v).sort((a, b) => a - b);
+  const medianPpsf = ppsfAll.length ? ppsfAll[Math.floor(ppsfAll.length / 2)] : null;
   const typeStats = type && d ? d.stats.by_type[type] : null;
   const median = typeStats ? typeStats.median : d?.stats.median ?? 0;
   const gdv = p?.estimated_valuation ?? 0;
@@ -76,6 +94,14 @@ export default function SoldMap() {
         <Stat v={gbp(typeStats ? typeStats.avg : d.stats.avg)} l="average" id="sold-avg" />
         <Stat v={String(typeStats ? typeStats.count : d.stats.count)} l="sales" id="sold-count" />
       </View>
+      {medianPpsf && (
+        <Text style={s.muted} testID="sold-ppsf-median">
+          <Text style={{ fontFamily: fonts.bold, color: colors.brand }}>£{medianPpsf.toLocaleString()} per sq ft</Text> median across {ppsfAll.length} sales shown with an EPC floor area.
+        </Text>
+      )}
+      {median > 0 && (
+        <Button small variant="secondary" icon="calculator" title={`Use ${gbp(median)} as BRRR valuation`} onPress={() => router.push({ pathname: "/brrr", params: { valuation: String(median) } })} testID="sold-use-gdv" />
+      )}
       {gdv > 0 && median > 0 && (
         <Text style={[s.muted, { color: gdv > median * 1.15 ? colors.brandPrimary : colors.brand }]} testID="sold-gdv-compare">
           Your valuation {gbp(gdv)} is {Math.abs(Math.round((gdv / median - 1) * 100))}% {gdv >= median ? "above" : "below"} the local median{type ? ` for ${type.toLowerCase()} homes` : ""}.
@@ -97,17 +123,22 @@ export default function SoldMap() {
   const list = d && (
     <View style={{ gap: space.sm }} testID="sold-list">
       <Text style={s.section}>Recent sales ({sales.length.toLocaleString()})</Text>
-      {sales.slice(0, shown).map((x, i) => (
+      {visible.map((x, i) => (
+        (() => { const a = areas[rowKey(x)]; return (
         <View key={`${x.postcode}-${x.address}-${x.date}-${i}`} style={s.sale} testID={`sold-sale-${i}`}>
           <View style={{ flex: 1 }}>
             <Text style={s.addr} numberOfLines={1}>{x.address || x.postcode}</Text>
             <Text style={s.muted} numberOfLines={1}>{x.postcode} · {x.type}{x.tenure ? ` · ${x.tenure}` : ""}{x.new_build ? " · New build" : ""} · {fmtDist(x.distance_m)}</Text>
+            {a?.sqft ? (
+              <Text style={[s.muted, { color: colors.brand, fontFamily: fonts.semibold }]} testID={`sold-ppsf-${i}`}>£{a.price_per_sqft?.toLocaleString()}/sq ft · {a.sqft.toLocaleString()} sq ft{a.epc_band ? ` · EPC ${a.epc_band}` : ""}</Text>
+            ) : a ? <Text style={s.muted}>No EPC floor area found</Text> : fa.isFetching ? <Text style={s.muted}>Checking floor area…</Text> : null}
           </View>
           <View style={{ alignItems: "flex-end" }}>
             <Text style={s.price}>{gbp(x.price)}</Text>
             <Text style={s.muted}>{new Date(x.date).toLocaleDateString("en-GB", { month: "short", year: "numeric" })}</Text>
           </View>
         </View>
+        ); })()
       ))}
       {shown < sales.length && <Button small variant="outline" title={`Show more (${sales.length - shown} left)`} onPress={() => setShown(shown + PAGE)} testID="sold-show-more" />}
       <Text style={s.muted}>{d.source}</Text>

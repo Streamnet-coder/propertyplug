@@ -178,6 +178,7 @@ export type Comparable = { address: string; beds: number; price: number; distanc
 export type SoldSale = { price: number; date: string; type: string; postcode: string; address: string; new_build: boolean; tenure: string; lat: number; lon: number; distance_m: number };
 export type SoldPrices = { postcode: string; lat: number; lon: number; radius_m: number; miles: number; years: number; since: string; postcodes_searched: number; truncated: boolean;
   sales: SoldSale[]; stats: { count: number; median: number; avg: number; min: number; max: number; by_type: Record<string, { count: number; median: number; avg: number }> }; source: string };
+export type FloorAreas = { items: { sqm: number | null; sqft: number | null; price_per_sqft: number | null; epc_band: string | null }[]; matched: number; median_ppsf: number | null };
 export type Estimate = { items: { name: string; spec?: string; category: string; low: number; high: number; supplier: string; visible?: boolean }[]; total_low: number; total_high: number; notes: string };
 export type RentYield = { gross_yield: number; yield_on_cost: number; invested: number; refinance_amount: number; cash_left_in: number; monthly_mortgage: number; monthly_cashflow: number };
 export type ShoppingItem = { id: string; line_item_id?: string | null; name: string; supplier: string; qty: string; est_cost: number; checked: boolean; actual_cost?: number | null; receipt_id?: string | null };

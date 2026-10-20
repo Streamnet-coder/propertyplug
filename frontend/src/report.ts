@@ -2,7 +2,7 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
 
-import { api, Branding, Comparable, fileUrl, gbp, LineItem, MediaItem, Milestone, Project, Receipt, Rentals, Signature, Snag, SnagSignoff } from "@/src/api";
+import { api, Branding, Comparable, fileUrl, FloorAreas, gbp, LineItem, MediaItem, Milestone, Project, Receipt, Rentals, Signature, Snag, SnagSignoff, SoldPrices } from "@/src/api";
 import { colors } from "@/src/theme";
 import type { Split } from "@/src/components/ownership-split-card";
 
@@ -318,6 +318,35 @@ export function calcBrrr(i: BrrrInputs): BrrrFigures {
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** Rental income proof for lenders: tenancies, rent received vs due, letting costs and net cashflow (year to date). */
+/** Local sold prices (HM Land Registry, ½ mile, 3 years) with a dot plot around the property and recent sales with £/sq ft. */
+async function soldBody(p: Project): Promise<string> {
+  const pc = p.address.match(/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i)?.[1];
+  if (!pc) return "";
+  const d = await api<SoldPrices>(`/sold-prices?postcode=${encodeURIComponent(pc)}&miles=0.5&years=3`).catch(() => null);
+  if (!d || !d.sales.length) return "";
+  const recent = d.sales.slice(0, 15);
+  const fa = await api<FloorAreas>("/sold-prices/floor-areas", { body: { sales: recent.map((x) => ({ postcode: x.postcode, address: x.address || x.postcode, price: x.price })) } }).catch(() => null);
+  const W = 420, R = 190, k = R / d.radius_m, cos = Math.cos((d.lat * Math.PI) / 180), med = d.stats.median || 1;
+  const dots = d.sales.slice(0, 600).map((x) => {
+    const cx = W / 2 + (x.lon - d.lon) * cos * 111320 * k, cy = W / 2 - (x.lat - d.lat) * 111320 * k;
+    const col = x.price < med * 0.85 ? "#10b981" : x.price > med * 1.15 ? "#f97316" : "#0f766e";
+    return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="4" fill="${col}" fill-opacity="0.8" stroke="#fff" stroke-width="1"/>`;
+  }).join("");
+  const svg = `<svg width="${W}" height="${W}" viewBox="0 0 ${W} ${W}" style="display:block;margin:8px auto;background:#f1f5f9;border-radius:12px">
+<circle cx="${W / 2}" cy="${W / 2}" r="${R}" fill="#ffffff" stroke="#0f766e" stroke-width="2"/>${dots}
+<circle cx="${W / 2}" cy="${W / 2}" r="8" fill="#0f172a" stroke="#fff" stroke-width="3"/><text x="${W / 2 + 12}" y="${W / 2 + 4}" font-size="11" font-weight="bold" fill="#0f172a">${esc(d.postcode)}</text>
+<text x="8" y="${W - 10}" font-size="10" fill="#475569">● green below median · teal around · orange above · ring = ½ mile</text></svg>`;
+  const types = Object.entries(d.stats.by_type).filter(([t]) => t !== "Other").map(([t, v]) => `<tr><td>${t}</td><td class="n">${v.count}</td><td class="n">${gbp(v.median)}</td><td class="n">${gbp(v.avg)}</td></tr>`).join("");
+  const rows = recent.map((x, i) => { const a = fa?.items[i]; return `<tr><td>${esc(x.address || x.postcode)}<div class="bd">${esc(x.postcode)} · ${esc(x.type)}${x.tenure ? ` · ${esc(x.tenure)}` : ""}</div></td><td class="n">${esc(x.date)}</td><td class="n">${a?.sqft ? a.sqft.toLocaleString() : "–"}</td><td class="n">${a?.price_per_sqft ? `£${a.price_per_sqft}` : "–"}</td><td class="n"><b>${gbp(x.price)}</b></td></tr>`; }).join("");
+  const gdvVs = p.estimated_valuation ? `<p class="bd">End valuation ${gbp(p.estimated_valuation)} is ${Math.abs(Math.round((p.estimated_valuation / med - 1) * 100))}% ${p.estimated_valuation >= med ? "above" : "below"} the local median sold price.</p>` : "";
+  return `<h1>Local sold prices</h1><p class="bd">Sales within ½ mile of ${esc(d.postcode)} since ${esc(d.since)}.</p>
+${kpis([["Median sold", gbp(d.stats.median)], ["Average sold", gbp(d.stats.avg)], ["Sales", d.stats.count.toLocaleString()], ["Median £/sq ft", fa?.median_ppsf ? `£${fa.median_ppsf}` : "–"]])}
+${gdvVs}${svg}
+<h2>By property type</h2><table><tr><th>Type</th><th class="n">Sales</th><th class="n">Median</th><th class="n">Average</th></tr>${types}</table>
+<h2>Most recent sales</h2><table><tr><th>Address</th><th class="n">Sold</th><th class="n">Sq ft</th><th class="n">£/sq ft</th><th class="n">Price</th></tr>${rows}</table>
+<p class="bd">Source: HM Land Registry Price Paid Data (Open Government Licence v3.0); floor areas from EPC register where available. Medians exclude commercial and bulk sales.</p>`;
+}
+
 function rentalBody(r: Rentals) {
   const sm = r.summary;
   const nowM = new Date().toISOString().slice(0, 7);
@@ -352,10 +381,11 @@ export async function shareLenderPack(includeBrrr: boolean) {
   const comps = includeBrrr ? await api<Comparable[]>("/project/comparables").catch(() => [] as Comparable[]) : [];
   const rentals = await api<Rentals>(`/rentals?year=${new Date().getFullYear()}`).catch(() => null);
   const hasRent = !!rentals?.tenancies.length;
-  const [progress, budget, brrr] = await Promise.all([progressBody(), budgetBody(), includeBrrr ? brrrBody(p, f, comps) : Promise.resolve("")]);
+  const [progress, budget, brrr, sold] = await Promise.all([progressBody(), budgetBody(), includeBrrr ? brrrBody(p, f, comps) : Promise.resolve(""), p.property_type === "land" ? Promise.resolve("") : soldBody(p)]);
   const sections = [["Progress report", "Milestones, budget usage, receipts and before & after photos"], ["Budget estimate", "Itemised costs by category with variance"],
     ...(hasRent ? [["Rental income", "Rent received, tenancies, letting costs and net cashflow"]] : []),
-    ...(includeBrrr ? [["BRRR analysis", "Refinance, money left in, cashflow and local comparables"]] : [])].map(([t, d], i) => [String(i + 1), t, d]);
+    ...(includeBrrr ? [["BRRR analysis", "Refinance, money left in, cashflow and local comparables"]] : []),
+    ...(sold ? [["Local sold prices", "Land Registry sales within ½ mile, map, £ per sq ft and median vs valuation"]] : [])].map(([t, d], i) => [String(i + 1), t, d]);
   const cover = `${await brandHeader("LENDER REPORT PACK", p)}
 <p style="margin:18px 0 6px;font-size:13px">Prepared for ${p.purpose === "personal" ? "remortgage" : "refinance"} application · ${esc(p.target_type)} · ${esc(p.finish_type)}</p>
 ${p.purpose === "personal" ? homeKpis(p) : `${kpis([["Purchase price", gbp(p.purchase_price)], ["End valuation (GDV)", gbp(p.estimated_valuation)], [`Refinance at ${p.refinance_ltv}% LTV`, gbp(f.refi)], [f.leftIn > 0 ? "Money left in" : "Cash pulled out", gbp(Math.abs(f.leftIn))]])}
@@ -365,5 +395,5 @@ ${hasRent ? kpis([["Rent received (YTD)", gbp(rentals!.summary.received)], ["Let
 <h2>Contents</h2><table>${sections.map(([n, t, d]) => `<tr><td style="width:24px"><b>${n}</b></td><td><b>${t}</b><div class="bd">${d}</div></td></tr>`).join("")}</table>
 ${p.purpose === "personal" ? `<p class="bd" style="margin-top:14px">Mortgage: ${p.mortgage_type === "repayment" ? "repayment" : "interest-only"} over ${p.mortgage_term} years at ${p.mortgage_rate}%. Remortgage assumes up to ${p.remortgage_ltv}% LTV on the end valuation.` : `<p class="bd" style="margin-top:14px">Money left in assumes ${gbp(BRRR_DEFAULT_FEES)} purchase fees and the full refurb budget. Mortgage is interest-only at ${p.refinance_rate}%.`}</p>`;
   const brk = (h: string) => `<div style="page-break-before:always"></div>${h}`;
-  await printPdf(doc(cover + brk(progress) + brk(budget) + (hasRent ? brk(rentalBody(rentals!)) : "") + (brrr ? brk(brrr) : "")), `${p.name} lender report pack`);
+  await printPdf(doc(cover + brk(progress) + brk(budget) + (hasRent ? brk(rentalBody(rentals!)) : "") + (brrr ? brk(brrr) : "") + (sold ? brk(sold) : "")), `${p.name} lender report pack`);
 }

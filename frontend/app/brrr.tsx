@@ -27,7 +27,7 @@ export default function Brrr() {
   const { data: p } = useProject();
   const comps = useComparables(isPro);
   const toast = useToast();
-  const { deal } = useLocalSearchParams<{ deal?: string }>();
+  const { deal, valuation: soldValuation } = useLocalSearchParams<{ deal?: string; valuation?: string }>();
   const deals = useQuery({ queryKey: ["brrr-deals"], queryFn: () => api<BrrrDeal[]>("/brrr/deals"), enabled: isPro });
   const loaded = deals.data?.find((d) => d.id === deal);
   const [name, setName] = useState("");
@@ -43,7 +43,7 @@ export default function Brrr() {
   }, [loaded]);
 
   useEffect(() => {
-    if (p && !deal) setV((x) => ({ ...x, purchase: String(p.purchase_price), refurb: String(p.total_budget), valuation: String(p.estimated_valuation), rent: String(p.monthly_rent), ltv: String(p.refinance_ltv), rate: String(p.refinance_rate) }));
+    if (p && !deal) setV((x) => ({ ...x, purchase: String(p.purchase_price), refurb: String(p.total_budget), valuation: soldValuation || String(p.estimated_valuation), rent: String(p.monthly_rent), ltv: String(p.refinance_ltv), rate: String(p.refinance_rate) }));
   }, [p]);
 
   const n = (k: keyof Inputs) => Number(v[k]) || 0;
@@ -151,6 +151,7 @@ export default function Brrr() {
           <Card style={{ gap: space.md }}>
             <SectionTitle title="Refinance & rent" />
             {input("End valuation (GDV)", "valuation")}
+            {soldValuation && v.valuation === soldValuation ? <Text style={s.hint} testID="brrr-gdv-from-sold">Valuation taken from the local sold-prices median. Adjust it for size and condition.</Text> : null}
             <View style={s.row2}>{input("LTV", "ltv", "%")}{input("Interest rate", "rate", "%")}</View>
             <View style={s.row2}>{input("Monthly rent", "rent")}{input("Monthly costs", "costs")}</View>
             <Text style={s.hint}>Mortgage (interest-only): <Text style={{ fontFamily: fonts.bold, color: colors.onSurface }}>{gbp(r.mortgage)}/mo</Text> · Equity retained {gbp(r.equity)}</Text>

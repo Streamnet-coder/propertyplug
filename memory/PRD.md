@@ -300,3 +300,9 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 ## Jun 2026 — Sold prices map (DONE, iter 57)
 - routes/sold_prices.py: real HM Land Registry Price Paid (SPARQL) + postcodes.io grid lookup; radius 0.25/0.5/1/2/3/5 miles, 1/2/3/5 years; cached 24h (sold_price_cache); max 1500 sales returned; stats exclude "Other".
 - /sold-map screen (Leaflet map, radius ring, dots coloured vs median, type filters, GDV compare, list). Free for all plans; /project/comparables also free now.
+
+## Jun 2026 — £/sq ft, Use as GDV, Sold prices in lender PDF (DONE, iter 58)
+- routes/epc.py: POST /api/sold-prices/floor-areas (GOV.UK Get energy performance data API, bearer EPC_API_KEY in backend .env); address matching; caches epc_postcode_cache (30d) and epc_cert_cache.
+- sold-map: £/sq ft per sale + median; "Use £X as BRRR valuation" -> /brrr?valuation=X.
+- Lender pack: "Local sold prices" section (½ mile, 3 yrs, SVG dot plot, by type, recent sales with £/sq ft).
+- Still pending: Android google-services.json, Twilio keys.

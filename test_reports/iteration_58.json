@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 58 (Price per sq ft via EPC floor areas, 'Use as GDV' into BRRR, Sold prices section in lender PDF). Backend: 8/8 pytest in /app/backend/tests/test_iteration58.py pass - POST /api/sold-prices/floor-areas (requires auth, 422 when sales > 60, empty sales returns {items:[], matched:0, median_ppsf:null}, response items[] match input order, each item has {sqm, sqft, price_per_sqft, epc_band}, matched count is accurate and median_ppsf is int when any sales matched, EPC match rate on NG7 1AA/0.25mi/3y was 100% (25/25 picked) using the live GOV.UK 'Get energy performance of buildings data' API with EPC_API_KEY). /api/auth/plan {plan:'pro'|'basic'} toggle verified for BRRR access. Frontend (Expo web, mobile 390x844, demo@mybuilder.app pro-switched): /sold-map renders, search for NG7 1AA returns stats + 40 sales; floor-area badges render as '£X/sq ft · N sq ft · EPC B' with testID sold-ppsf-0..13 populated (14 ppsf rows out of 40 in first page, 2 'No EPC floor area found'); sold-ppsf-median shows '£221 per sq ft median across 38 sales shown with an EPC floor area'. 'Use £246,000 as BRRR valuation' button (sold-use-gdv) navigates to /brrr?valuation=246000; brrr-screen loads, brrr-valuation-input is 246000, and brrr-gdv-from-sold hint 'Valuation taken from the local sold-prices median. Adjust it for size and condition.' renders. Regression: switching to sold-miles-1 refetches (1735 sales), sold-years-2 refetches (983), sold-show-more loads next 40 rows and the new page gets its own /sold-prices/floor-areas call (14 ppsf rows populated for rows 40..79). Lender PDF: tapping lender-pack-button on /share-report fires both /api/sold-prices?postcode=NG3%205AP&miles=0.5&years=3 and POST /api/sold-prices/floor-areas, with no error toasts, confirming the new 'Local sold prices' section in report.ts shareLenderPack is wired correctly.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "/sold-map",
+        "issues": [
+          "Occasional outlier £/sq ft values (e.g. '£54/sq ft · 743 sq ft · EPC B' on NG7 1AA 0.25mi) suggest the EPC _match in routes/epc.py sometimes attaches an unrelated certificate (likely a garage/annex/outbuilding on the same address). Consider clamping or filtering items where price_per_sqft is <<< local median (e.g. drop values < 25% of median_ppsf) before computing the median shown in sold-ppsf-median, or require a stronger token-overlap score (>0.7) in epc._match for small floor areas."
+        ]
+      }
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration58.py",
+    "/app/test_reports/pytest/pytest_iteration58.xml"
+  ],
+  "action_items": [
+    "Minor accuracy: filter outlier £/sq ft rows in sold-map.tsx (and the lender PDF's £/sq ft column) when price_per_sqft is clearly incompatible with the local median - today a mis-matched EPC produces visible £54/sq ft rows. Alternatively tighten epc._match (require higher token overlap, or discard matches when the resulting ppsf is < 50% of the already-computed median).",
+    "Consider validating sales list is non-empty client-side before firing /sold-prices/floor-areas; today an empty list returns 200 with [] which is fine, but useQuery is already guarded by `enabled: visible.length > 0`."
+  ],
+  "critical_code_review_comments": [
+    "routes/epc.py: good caching (epc_postcode_cache 30d TTL for postcode->certs, epc_cert_cache for cert->sqm) and asyncio.Semaphore(6) to stay polite to the EPC endpoint. Request order preserved via asyncio.gather over body.sales.",
+    "routes/epc.py _match: token Jaccard >= 0.5 + exact numeric-tokens match is sensible, but a 1-bed flat EPC can still slip in and give a 743-sqft figure that doesn't match the sold address. Consider using (addressLine1, postcode) as a stronger key.",
+    "report.ts soldBody: `.catch(() => null)` on the sold-prices call and `.catch(() => null)` on floor-areas means a transient failure silently drops the whole 'Local sold prices' section (user sees PDF without it). Fine for lenders but worth logging.",
+    "sold-map.tsx: the pagewise merge of `areas` via setState during render on L58-62 is unusual but works because the key check prevents infinite loops; a useEffect would be cleaner.",
+    "brrr.tsx L46: `soldValuation || String(p.estimated_valuation)` correctly uses the median passed through router params and the hint testID brrr-gdv-from-sold renders when valuation still equals the sold value - good."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration58.py",
+    "/app/test_reports/iteration_58.json",
+    "/app/test_reports/pytest/pytest_iteration58.xml"
+  ],
+  "success_rate": { "backend": "100% (8/8)", "frontend": "100% - all flows verified: /sold-map ppsf rows, median, 'Use as BRRR valuation' -> /brrr?valuation=X with hint, chip regression, Show more floor areas, lender-pack-button fires /sold-prices + /sold-prices/floor-areas." },
+  "seed_data_creation": "None. Reused cached NG7 1AA / {0.25,1} miles / {2,3}yr entries in sold_price_cache and EPC caches.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "To test as a Pro user, after login POST /api/auth/plan {plan:'pro'} with the demo token (then reset with 'basic' when done). Demo project address contains NG3 5AP, so the lender pack soldBody() will query that postcode (miles=0.5, years=3) - the first cold call can take 20-30s because Land Registry wait is cumulative. The EPC endpoint matched 100% of the first 25 NG7 1AA sales during this iteration, so cached. Playwright: when typing into the Field prefilled with projectPc, use `pc.click(click_count=3)` then `page.keyboard.press('Backspace')` then `pc.press_sequentially('NG71AA')` (RN Web does not select-all on focus despite selectTextOnFocus - see iteration_57 RCA).",
+  "rca_of_issue": "No regressions identified. Possible accuracy nit: epc._match pairs an unrelated certificate for a small number of addresses (observed one row with £54/sq ft on NG7 1AA 0.25mi), which pulls median_ppsf down. Harden _match or filter outliers client-side before the median is computed."
+}
