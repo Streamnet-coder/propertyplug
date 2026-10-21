@@ -1,3 +1,4 @@
+const path = require ('path');
 const express = require('express');
 const mongoose = require('mongoose'); // Optional: if using MongoDB
 const cors = require('cors');
@@ -34,7 +35,19 @@ app.get('/', (req, res) => {
 // Import and mount your feature routes here later, for example:
 // const propertyRoutes = require('./routes/propertyRoutes');
 // app.use('/api/properties', propertyRoutes);
+//
+3. SERVE REACT FRONTEND STATIC FILES
+// This tells Express to look inside your 'client/build' (or 'client/dist' for Vite) folder
+app.use(express.static(path.join(__dirname, 'client/build')));
 
+
+// ==========================================
+// 4. CATCH-ALL ROUTE (Must be LAST)
+// ==========================================
+// Any request that doesn't match an API route above will be redirected to React's index.html
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
+});
 // ==========================================
 // 4. ERROR HANDLING MIDDLEWARE
 // ==========================================
@@ -54,4 +67,5 @@ app.use((err, req, res, next) => {
 // ==========================================
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+  
 });
