@@ -35,9 +35,6 @@ app.include_router(api)
 @app.middleware("http")
 async def activity_middleware(request, call_next):
     response = await call_next(request)
-    if request.url.path.startswith("/api/") and request.method != "GET":
-        from routes.activity import log_write
-        await log_write(request, response.status_code)
     return response
 
 
