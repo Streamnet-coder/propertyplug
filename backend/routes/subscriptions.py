@@ -164,8 +164,10 @@ async def billing_history(user: User = Depends(real_user)):
     """One-off Pro payments recorded here + Stripe invoices for auto-renewing plans (with Stripe's own receipt links)."""
     out = []
     async for t in db.payment_transactions.find({"user_id": user.id, "payment_status": "paid", "kind": {"$ne": "subscription"}}).sort("created_at", -1):
-        tier = (t.get("metadata") or {}).get("tier", "lifetime")
-        out.append({"id": t["session_id"], "date": t.get("paid_at") or t["created_at"], "description": f"PropertyPlug Pro ({PRO_TIERS.get(tier, PRO_TIERS['lifetime'])['label']})",
+        md = t.get("metadata") or {}
+        tier = md.get("tier", "lifetime")
+        desc = f"Credit top-up ({md.get('credits')} credits)" if md.get("kind") == "credits" else f"PropertyPlug Pro ({PRO_TIERS.get(tier, PRO_TIERS['lifetime'])['label']})"
+        out.append({"id": t["session_id"], "date": t.get("paid_at") or t["created_at"], "description": desc,
                     "amount": float(t["amount"]), "currency": t.get("currency", "gbp").upper(), "status": "paid", "receipt": "local", "url": None})
     if user.stripe_customer_id and stripe.api_key:
         try:

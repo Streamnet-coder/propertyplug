@@ -10,7 +10,7 @@ import { Button, fonts, Icon, radius, space, tap } from "@/src/components/ui";
 import { Listing } from "@/src/listings";
 import { makeStyles, useTheme } from "@/src/theme";
 
-export type Credits = { unlimited: boolean; allowance: number; used: number; remaining: number; resets_on: string; costs: { tool: string; cost: number }[] };
+export type Credits = { unlimited: boolean; allowance: number; used: number; remaining: number; bonus: number; total_remaining: number; resets_on: string; costs: { tool: string; cost: number }[]; packs: { id: string; credits: number; price: number }[] };
 
 export function useCredits() {
   const { user } = useAuth();
@@ -24,11 +24,11 @@ export function CreditsPill() {
   const router = useRouter();
   const q = useCredits();
   if (!q.data || q.data.unlimited) return null;
-  const low = q.data.remaining < 20;
+  const low = q.data.total_remaining < 20;
   return (
     <Pressable onPress={() => { tap(); router.push("/profile"); }} style={[s.pill, low && { backgroundColor: colors.orangeTint }]} testID="credits-pill" accessibilityLabel="Free credits left">
       <Icon name="coins" size={14} color={low ? colors.brandPrimary : colors.brand} />
-      <Text style={[s.pillText, low && { color: colors.brandPrimary }]}>{q.data.remaining} credits</Text>
+      <Text style={[s.pillText, low && { color: colors.brandPrimary }]}>{q.data.total_remaining} credits</Text>
     </Pressable>
   );
 }
@@ -48,6 +48,7 @@ export function CreditsPrompt() {
           <Text style={s.title}>Out of free credits</Text>
           <Text style={s.body}>{msg}</Text>
           <Button title="Upgrade to Pro" icon="crown" onPress={() => { setMsg(null); router.push("/profile"); }} testID="credits-upgrade-button" />
+          <Button title="Buy a credit top-up" icon="coins" variant="outline" onPress={() => { setMsg(null); router.push("/profile"); }} testID="credits-topup-button" />
           <Button title="Not now" variant="ghost" onPress={() => setMsg(null)} testID="credits-dismiss-button" />
         </Pressable>
       </Pressable>

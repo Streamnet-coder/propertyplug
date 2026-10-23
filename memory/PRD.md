@@ -318,3 +318,4 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - Listing deep links (src/listings.ts): Rightmove/Zoopla/OnTheMarket for sale & to rent; Rightmove sold history per sale postcode.
 - Credits (routes/credits.py): Basic 100/month (sold 5, rent 2, EPC 2, AI estimate 10; same lookup free within 24h); Pro unlimited; 402 -> global CreditsPrompt upgrade modal; CreditsPill + profile card.
 - Tools collapsed: Home shows 3 group buttons (Research/Analyse/Manage) expanding a panel; desktop sidebar accordion (sidebar-group-toggle-*).
+- Remember open tool group (AsyncStorage pp_open_tool_group). Credit top-ups: POST /api/credits/checkout {pack small 50/£2.99, medium 150/£6.99, large 500/£14.99}; bonus_credits on user, used after monthly allowance; mark_paid handles kind=credits; billing history labels top-ups.

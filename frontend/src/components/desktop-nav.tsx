@@ -5,7 +5,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { BrandLogo } from "@/src/components/brand";
 import { fonts, Icon, IconName, ProBadge, radius, space, tap } from "@/src/components/ui";
 import { CreditsPill } from "@/src/components/credits";
-import { GROUP_ICONS, GROUPS, ToolGroup, useQuickActions } from "@/src/quick-actions";
+import { GROUP_ICONS, GROUPS, useOpenGroup, useQuickActions } from "@/src/quick-actions";
 import { makeStyles, useTheme } from "@/src/theme";
 
 export type DesktopTab = { name: string; title: string; icon: IconName };
@@ -53,7 +53,7 @@ export function DesktopSidebar() {
   const s = useStyles();
   const { colors } = useTheme();
   const { actions, isPro } = useQuickActions();
-  const [openGroup, setOpenGroup] = useState<ToolGroup | null>(null);
+  const [openGroup, setOpenGroup] = useOpenGroup();
   return (
     <View style={s.sidebar} testID="desktop-sidebar">
       <ScrollView contentContainerStyle={{ padding: space.md, gap: 4 }}>

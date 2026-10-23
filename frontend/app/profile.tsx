@@ -310,17 +310,47 @@ const useStyles = makeStyles((c) => ({
 function CreditsCard() {
   const q = useCredits();
   const { colors } = useTheme();
+  const toast = useToast();
+  const [buying, setBuying] = useState<string | null>(null);
   if (!q.data || q.data.unlimited) return null;
   const c = q.data;
+  const buy = async (pack: string) => {
+    setBuying(pack);
+    try {
+      const { url, session_id } = await api<{ url: string; session_id: string }>("/credits/checkout", { body: { origin_url: BACKEND_URL, pack } });
+      let tries = 0;
+      const t = setInterval(async () => {
+        tries += 1;
+        try {
+          const st = await api<{ status: string; payment_status: string }>(`/payments/status/${session_id}`);
+          if (st.payment_status === "paid") { clearInterval(t); setBuying(null); await q.refetch(); toast("Credits added to your account"); }
+          else if (st.status === "expired" || tries > 90) { clearInterval(t); setBuying(null); }
+        } catch { /* keep polling */ }
+      }, 2500);
+      await WebBrowser.openBrowserAsync(url);
+    } catch (e) {
+      setBuying(null);
+      toast((e as Error).message, "error");
+    }
+  };
   return (
     <Card style={{ gap: space.sm, marginBottom: space.md }} testID="credits-card">
-      <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.onSurface }}>Free credits: {c.remaining} of {c.allowance} left</Text>
+      <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.onSurface }}>Free credits: {c.remaining} of {c.allowance} left this month</Text>
       <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.surfaceTertiary, overflow: "hidden" }}>
         <View style={{ height: 8, width: `${(c.remaining / c.allowance) * 100}%`, backgroundColor: c.remaining < 20 ? colors.brandPrimary : colors.brand }} />
       </View>
+      {c.bonus > 0 && <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.brand }} testID="credits-bonus">+ {c.bonus} top-up credits (never expire)</Text>}
       <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted }}>
         Resets {c.resets_on}. {c.costs.map((x) => `${x.tool} ${x.cost}`).join(" · ")}. Repeat look-ups within 24 hours are free. Pro is unlimited.
       </Text>
+      <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.onSurface, marginTop: space.xs }}>Need more? Top up</Text>
+      <View style={{ flexDirection: "row", gap: space.sm }}>
+        {c.packs.map((p) => (
+          <Button key={p.id} small variant="outline" style={{ flex: 1 }} title={`${p.credits} · £${p.price.toFixed(2)}`} loading={buying === p.id} disabled={!!buying && buying !== p.id}
+            onPress={() => buy(p.id)} testID={`credits-pack-${p.id}`} />
+        ))}
+      </View>
+      <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted }}>Top-up credits are used after your monthly allowance runs out.</Text>
     </Card>
   );
 }

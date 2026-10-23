@@ -1,4 +1,6 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 
 import { useAuth } from "@/src/auth";
 import { IconName } from "@/src/components/ui";
@@ -30,4 +32,20 @@ export function useQuickActions() {
   const actions = all.filter((a) => !(a.id === "brrr" && (p?.property_type === "land" || p?.purpose === "personal"))
     && (money || !["ai", "brrr", "report", "receipt", "sold", "epc", "rent"].includes(a.id)));
   return { actions, isPro: user?.plan === "pro" };
+}
+
+const OPEN_KEY = "pp_open_tool_group";
+
+/** Which tool group is expanded; remembered across visits and app restarts. */
+export function useOpenGroup(): [ToolGroup | null, (g: ToolGroup | null) => void] {
+  const [open, setOpen] = useState<ToolGroup | null>(null);
+  useEffect(() => {
+    AsyncStorage.getItem(OPEN_KEY).then((v) => { if (v && (GROUPS as string[]).includes(v)) setOpen(v as ToolGroup); });
+  }, []);
+  const set = (g: ToolGroup | null) => {
+    setOpen(g);
+    if (g) AsyncStorage.setItem(OPEN_KEY, g);
+    else AsyncStorage.removeItem(OPEN_KEY);
+  };
+  return [open, set];
 }

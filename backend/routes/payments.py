@@ -52,7 +52,12 @@ async def mark_paid(session_id: str):
     tx = await db.payment_transactions.find_one({"session_id": session_id})
     if not tx or tx.get("payment_status") == "paid":
         return
-    await db.payment_transactions.update_one({"session_id": session_id}, {"$set": {"payment_status": "paid", "paid_at": now_iso()}})
+    r = await db.payment_transactions.update_one({"session_id": session_id, "payment_status": {"$ne": "paid"}}, {"$set": {"payment_status": "paid", "paid_at": now_iso()}})
+    if not r.modified_count:
+        return  # another poll/webhook already applied it
+    if (tx.get("metadata") or {}).get("kind") == "credits":
+        await db.users.update_one({"_id": ObjectId(tx["user_id"])}, {"$inc": {"bonus_credits": int(tx["metadata"]["credits"])}})
+        return
     tier = (tx.get("metadata") or {}).get("tier", "lifetime")  # pre-tier purchases were one-off lifetime upgrades
     u = await db.users.find_one({"_id": ObjectId(tx["user_id"])}, {"pro_until": 1, "pro_tier": 1, "stripe_subscription_id": 1, "sub_status": 1})
     upd = {"plan": "pro", "paid_pro": True, "pro_tier": tier}

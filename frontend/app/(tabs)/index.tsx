@@ -14,7 +14,7 @@ import { useAuth } from "@/src/auth";
 import { BrandLogo } from "@/src/components/brand";
 import { Button, Card, fonts, Icon, ProBadge, radius, SectionTitle, space, tap } from "@/src/components/ui";
 import { MAX_CONTENT, useLayout } from "@/src/layout";
-import { GROUP_ICONS, GROUPS, ToolGroup, useQuickActions } from "@/src/quick-actions";
+import { GROUP_ICONS, GROUPS, useOpenGroup, useQuickActions } from "@/src/quick-actions";
 import { CreditsPill } from "@/src/components/credits";
 import { usesNativeTabs } from "@/src/navigation";
 import { PdfButton } from "@/src/components/pdf-button";
@@ -66,7 +66,7 @@ export default function Home() {
   const msPct = p && p.milestones_total ? Math.round((p.milestones_done / p.milestones_total) * 100) : 0;
 
   const { actions } = useQuickActions();
-  const [openGroup, setOpenGroup] = useState<ToolGroup | null>(null);
+  const [openGroup, setOpenGroup] = useOpenGroup();
 
   return (
     <View style={s.root} testID="home-screen">
