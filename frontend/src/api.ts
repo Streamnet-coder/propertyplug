@@ -16,6 +16,13 @@ export class ApiError extends Error {
 
 type Opts = { method?: string; body?: unknown; form?: FormData };
 
+// Screens subscribe to show the upgrade prompt when free credits run out (HTTP 402).
+const creditListeners = new Set<(msg: string) => void>();
+export function onOutOfCredits(fn: (msg: string) => void) {
+  creditListeners.add(fn);
+  return () => { creditListeners.delete(fn); };
+}
+
 export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
   const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -34,6 +41,7 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
   }
   if (!res.ok) {
     const d = data?.detail;
+    if (res.status === 402 && typeof d === "string") creditListeners.forEach((fn) => fn(d));
     throw new ApiError(typeof d === "string" ? d : Array.isArray(d) ? d[0]?.msg ?? "Request failed" : `Error ${res.status}`, res.status);
   }
   return data as T;
@@ -183,6 +191,8 @@ export type EpcImprovement = { sequence: number; code: string; name: string; cos
 export type ProjectEpc = { status: "ok" | "pick" | "no_postcode"; postcode?: string; certificate_number?: string; pinned?: boolean; address?: string; registration_date?: string;
   band?: string | null; rating?: number | null; potential_band?: string | null; potential_rating?: number | null; sqm?: number | null; sqft?: number | null;
   heating_cost?: { value: number } | null; improvements: EpcImprovement[]; candidates?: { certificate_number: string; address: string; band: string | null; date: string }[] };
+export type RentArea = { code: string; name: string; region: string; month: string; annual_change: number | null; prices: Record<string, number | null> };
+export type RentComps = { postcode: string; district: string; local: RentArea; region: RentArea | null; uk: RentArea | null; source: string };
 export type Estimate = { items: { name: string; spec?: string; category: string; low: number; high: number; supplier: string; visible?: boolean }[]; total_low: number; total_high: number; notes: string };
 export type RentYield = { gross_yield: number; yield_on_cost: number; invested: number; refinance_amount: number; cash_left_in: number; monthly_mortgage: number; monthly_cashflow: number };
 export type ShoppingItem = { id: string; line_item_id?: string | null; name: string; supplier: string; qty: string; est_cost: number; checked: boolean; actual_cost?: number | null; receipt_id?: string | null };

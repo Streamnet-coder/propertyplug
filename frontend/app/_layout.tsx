@@ -8,6 +8,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 
 import { AuthProvider } from "@/src/auth";
 import { ErrorBoundary } from "@/src/components/error-boundary";
+import { CreditsPrompt } from "@/src/components/credits";
 import { PushManager } from "@/src/components/push-manager";
 import { queryClient } from "@/src/query-client";
 import { colors } from "@/src/theme";
@@ -55,6 +56,7 @@ export default function RootLayout() {
             <ToastProvider>
               <StatusBar style="dark" />
               <PushManager />
+              <CreditsPrompt />
               <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.surfaceSecondary } }}>
                 <Stack.Screen name="index" />
                 <Stack.Screen name="welcome" />
@@ -66,6 +68,7 @@ export default function RootLayout() {
                 <Stack.Screen name="arrears" />
                 <Stack.Screen name="sold-map" />
                 <Stack.Screen name="epc" />
+                <Stack.Screen name="rent-comps" />
                 <Stack.Screen name="item-form" options={{ presentation: "modal" }} />
                 <Stack.Screen name="contact-form" options={{ presentation: "modal" }} />
                 <Stack.Screen name="receipt-form" options={{ presentation: "modal" }} />

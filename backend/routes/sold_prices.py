@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from core import db, logger
 from deps import block_money, current_user
 from models import User
+from routes.credits import charge
 
 router = APIRouter(dependencies=[Depends(block_money)])
 MILE_M = 1609.34
@@ -104,6 +105,7 @@ async def sold_prices(postcode: str = Query(..., max_length=20), years: Literal[
         raise HTTPException(400, "Enter a full UK postcode, e.g. NG7 1AA")
     radius_m = round(float(miles) * MILE_M)
     key = f"{pc}|{years}|{miles}"
+    await charge(user, "sold_prices", key)
     hit = await db.sold_price_cache.find_one({"key": key})
     if hit and hit["at"] > (datetime.now(timezone.utc) - timedelta(hours=CACHE_HOURS)).isoformat():
         return hit["data"]

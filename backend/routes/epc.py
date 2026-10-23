@@ -189,6 +189,8 @@ async def project_epc(user: User = Depends(current_user)):
                       "band": x.get("currentEnergyEfficiencyBand"), "date": x.get("registrationDate")} for x in sorted(certs, key=lambda x: x["registrationDate"], reverse=True)][:60]
             if not cert:
                 return {"status": "pick", "postcode": pc, "candidates": cands}
+            from routes.credits import charge
+            await charge(user, "epc", cert["certificateNumber"])
             d = await _cert_detail(c, cert["certificateNumber"])
     except httpx.HTTPError as e:
         logger.warning(f"EPC project lookup failed: {e}")

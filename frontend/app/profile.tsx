@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api, BACKEND_URL, User } from "@/src/api";
 import { useAuth } from "@/src/auth";
+import { useCredits } from "@/src/components/credits";
 import { Button, Card, fonts, Icon, IconName, radius, space, tap } from "@/src/components/ui";
 import { invalidate, useProject, useReferrals } from "@/src/queries";
 import { useCanSeeMoney } from "@/src/money";
@@ -155,6 +156,7 @@ export default function Profile() {
             <Button small variant={user.auto_renew ? "outline" : "primary"} title={user.auto_renew ? "Cancel auto-renew" : "Turn auto-renew back on"} loading={renewBusy} onPress={() => setAutoRenew(!user.auto_renew)} testID={user.auto_renew ? "cancel-auto-renew-button" : "resume-auto-renew-button"} />
           </Card>
         )}
+        <CreditsCard />
         {!lifetime && (
           <View style={s.pro} testID="upgrade-card">
             <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
@@ -304,3 +306,21 @@ const useStyles = makeStyles((c) => ({
   refStats: { flexDirection: "row", gap: space.sm, backgroundColor: c.surfaceSecondary, borderRadius: radius.md, padding: space.md },
   refVal: { fontFamily: fonts.extrabold, fontSize: 18, color: c.onSurface, marginTop: 2 },
 }));
+
+function CreditsCard() {
+  const q = useCredits();
+  const { colors } = useTheme();
+  if (!q.data || q.data.unlimited) return null;
+  const c = q.data;
+  return (
+    <Card style={{ gap: space.sm, marginBottom: space.md }} testID="credits-card">
+      <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.onSurface }}>Free credits: {c.remaining} of {c.allowance} left</Text>
+      <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.surfaceTertiary, overflow: "hidden" }}>
+        <View style={{ height: 8, width: `${(c.remaining / c.allowance) * 100}%`, backgroundColor: c.remaining < 20 ? colors.brandPrimary : colors.brand }} />
+      </View>
+      <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted }}>
+        Resets {c.resets_on}. {c.costs.map((x) => `${x.tool} ${x.cost}`).join(" · ")}. Repeat look-ups within 24 hours are free. Pro is unlimited.
+      </Text>
+    </Card>
+  );
+}

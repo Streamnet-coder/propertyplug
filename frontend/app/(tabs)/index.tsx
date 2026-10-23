@@ -2,7 +2,7 @@ import { Image } from "expo-image";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -14,7 +14,8 @@ import { useAuth } from "@/src/auth";
 import { BrandLogo } from "@/src/components/brand";
 import { Button, Card, fonts, Icon, ProBadge, radius, SectionTitle, space, tap } from "@/src/components/ui";
 import { MAX_CONTENT, useLayout } from "@/src/layout";
-import { useQuickActions } from "@/src/quick-actions";
+import { GROUP_ICONS, GROUPS, ToolGroup, useQuickActions } from "@/src/quick-actions";
+import { CreditsPill } from "@/src/components/credits";
 import { usesNativeTabs } from "@/src/navigation";
 import { PdfButton } from "@/src/components/pdf-button";
 import { invalidate, prefetchProjects, useDigest, useLineItems, useProject, useReceipts } from "@/src/queries";
@@ -65,12 +66,14 @@ export default function Home() {
   const msPct = p && p.milestones_total ? Math.round((p.milestones_done / p.milestones_total) * 100) : 0;
 
   const { actions } = useQuickActions();
+  const [openGroup, setOpenGroup] = useState<ToolGroup | null>(null);
 
   return (
     <View style={s.root} testID="home-screen">
       <View style={[s.header, { paddingTop: insets.top + space.sm }]}>
         {!wide && <BrandLogo />}
         <View style={{ flex: 1 }} />
+        {!wide && <CreditsPill />}
         <PdfButton onGenerate={shareProgressReport} testID="dashboard-pdf-button" />
         <Pressable testID="profile-button" onPress={() => { tap(); router.push("/profile"); }} style={s.avatar}>
           <Text style={s.avatarText}>{user?.name?.charAt(0).toUpperCase()}</Text>
@@ -163,19 +166,39 @@ export default function Home() {
             </Pressable>
           )}
 
-          {!wide && <View style={s.actions}>
-            {actions.map((a, i) => (
-              <Animated.View key={a.id} entering={FadeInDown.delay(80 + i * 60)} style={{ flex: 1 }}>
-                <Pressable testID={`quick-action-${a.id}`} onPress={() => { tap(); a.onPress(); }} style={({ pressed }) => [s.action, pressed && { transform: [{ scale: 0.96 }] }]}>
-                  <View style={[s.actionIcon, a.pro && { backgroundColor: colors.orangeTint }]}>
-                    <Icon name={a.icon} size={20} color={a.pro ? colors.brandPrimary : colors.brand} />
-                  </View>
-                  <Text style={s.actionLabel} numberOfLines={1}>{a.label}</Text>
-                  {a.pro && !isPro && <View style={{ position: "absolute", top: 6, right: 6 }}><ProBadge locked /></View>}
-                </Pressable>
-              </Animated.View>
-            ))}
-          </View>}
+          {!wide && (
+            <View style={{ gap: space.sm }} testID="tools-groups">
+              <View style={s.actions}>
+                {GROUPS.filter((g) => actions.some((a) => a.group === g)).map((g) => {
+                  const on = openGroup === g;
+                  return (
+                    <Pressable key={g} testID={`tools-group-${g.toLowerCase()}`} onPress={() => { tap(); setOpenGroup(on ? null : g); }}
+                      style={({ pressed }) => [s.groupBtn, on && s.groupBtnOn, pressed && { transform: [{ scale: 0.97 }] }]} accessibilityState={{ expanded: on }}>
+                      <Icon name={GROUP_ICONS[g]} size={18} color={on ? colors.onBrand : colors.brand} />
+                      <Text style={[s.groupBtnText, on && { color: colors.onBrand }]}>{g}</Text>
+                      <Icon name={on ? "chevron-up" : "chevron-down"} size={14} color={on ? colors.onBrand : colors.muted} />
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {openGroup && (
+                <Animated.View entering={FadeInDown.duration(220)} style={s.actions} testID={`tools-panel-${openGroup.toLowerCase()}`}>
+                  {actions.filter((a) => a.group === openGroup).map((a) => (
+                    <View key={a.id} style={{ flex: 1 }}>
+                      <Pressable testID={`quick-action-${a.id}`} onPress={() => { tap(); a.onPress(); }} style={({ pressed }) => [s.action, pressed && { transform: [{ scale: 0.96 }] }]}>
+                        <View style={[s.actionIcon, a.pro && { backgroundColor: colors.orangeTint }]}>
+                          <Icon name={a.icon} size={20} color={a.pro ? colors.brandPrimary : colors.brand} />
+                        </View>
+                        <Text style={s.actionLabel} numberOfLines={1}>{a.label}</Text>
+                        {a.pro && !isPro && <View style={{ position: "absolute", top: 6, right: 6 }}><ProBadge locked /></View>}
+                      </Pressable>
+                    </View>
+                  ))}
+                  {Array.from({ length: Math.max(0, 4 - actions.filter((a) => a.group === openGroup).length) }).map((_, i) => <View key={`pad-${i}`} style={{ flex: 1 }} />)}
+                </Animated.View>
+              )}
+            </View>
+          )}
 
           <Pressable testID="timeline-card" onPress={() => { tap(); router.push("/timeline"); }} style={({ pressed }) => [s.timeline, pressed && { opacity: 0.9 }]}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
@@ -459,6 +482,10 @@ const useStyles = makeStyles((c) => ({
   },
   trialText: { flex: 1, fontFamily: fonts.medium, fontSize: 13, color: c.onSurfaceSecondary },
   actions: { flexDirection: "row", gap: space.sm },
+  groupBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 48, borderRadius: radius.md, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border },
+  groupBtnOn: { backgroundColor: c.brand, borderColor: c.brand },
+  groupBtnText: { fontFamily: fonts.bold, fontSize: 13, color: c.onSurface },
+  groupLabel: { fontFamily: fonts.semibold, fontSize: 11, color: c.muted, textTransform: "uppercase", letterSpacing: 0.6 },
   action: {
     backgroundColor: c.surface,
     borderRadius: radius.md,

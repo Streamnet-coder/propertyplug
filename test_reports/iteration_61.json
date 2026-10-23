@@ -1,0 +1,76 @@
+{
+  "summary": "Full backend + frontend verification of iteration 61 (credits system + rent-comparables + grouped tools). All 8 backend pytests pass and all 7 frontend review items verified green on mobile 390 and desktop 1440. Demo user left on basic plan with credit_log cleaned for current period.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration61.py",
+    "/app/test_reports/pytest/pytest_iteration61.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "credits.charge raises HTTPException(402) with a plain-string detail; frontend api.ts only fires the credit listener when `typeof data.detail === 'string'`. During simulation, returning `{detail: '...'}` triggered the modal correctly — confirms contract. No change needed.",
+    "rent_comps.py performs postcode -> admin_district lookup via api.postcodes.io for every call (even for identical postcode). The in-memory react-query cache (staleTime 1h) protects client-side, but back-to-back API calls from a different client still hit postcodes.io. Low priority; data is small and public.",
+    "quick-actions.ts still filters 'rent' alongside the money-gated tools (`['ai','brrr','report','receipt','sold','epc','rent']`). This means stakeholder/co-owner viewers (money hidden) cannot see Rent comps either — expected but worth confirming vs product intent since Rent comps is informational and does not surface money of the owner's project."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100%"},
+  "seed_data_creation": "None persisted. Backend tests seeded transient credit_log docs for exhaustion scenarios and cleaned them up. Final cleanup also executed via mongo to remove any demo credit_log in the current period.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login via UI uses testIDs auth-email-input and auth-password-input then the 'Sign in' text button; the preview URL is EXPO_PUBLIC_BACKEND_URL in /app/frontend/.env. The credits-prompt modal is mounted in the root layout and listens via onOutOfCredits — to simulate without exhausting the real allowance, monkey-patch window.fetch to return 402 with a JSON body `{detail: '...'}`. In Mongo, credit_log stores user_id as the string _id of users (not the uuid id); when inserting via the pytest fixture, use /api/auth/me which returns the correct id field consumed by the backend. The backend `used_this_month` aggregation matches on the uuid style user.id so the pytest flow works end-to-end.",
+  "rca_of_issue": "N/A",
+  "verifications": {
+    "backend_pytest": {
+      "credits_shape_basic": "pass (unlimited=false, allowance=100, resets_on=1st of next month, 4 cost rows: sold_prices=5, rent_comps=2, epc=2, ai_estimate=10)",
+      "credits_shape_pro": "pass (unlimited=true after /api/auth/plan to pro)",
+      "rent_comparables_shape": "pass (NG3 5AP -> local E06000018 Nottingham, prices all/1/2/3/4/detached/semi/terraced/flat present, annual_change present, region East Midlands, uk K02000001, charged 2 credits)",
+      "rent_comparables_dedup_24h": "pass (same postcode within 24h re-queried -> no additional charge)",
+      "rent_comparables_400_invalid": "pass (`NOTAPC` -> 400)",
+      "rent_comparables_404_unknown": "pass (`ZZ99 9ZZ` -> 404)",
+      "exhaustion_402": "pass (seeded 99 credit_log, new rent_comps call -> 402 with detail containing 'Upgrade to Pro' and '100 free credits')",
+      "pro_never_charged": "pass (seeded 100 credits, pro plan still 200)"
+    },
+    "mobile_390x844": {
+      "credits_pill_in_header": true,
+      "credits_pill_text": "100 credits",
+      "tools_group_research_children": ["quick-action-sold","quick-action-rent","quick-action-epc"],
+      "tools_group_analyse_children": ["quick-action-ai"],
+      "tools_group_manage_children": ["quick-action-report","quick-action-receipt","quick-action-snags","quick-action-inbox"],
+      "brrr_hidden_for_personal_project": true,
+      "rent_comps_screen": {
+        "default_postcode_from_project": "NG3 5AP",
+        "rent_average_all_homes": "£1,015 /month",
+        "rent_beds_2_chip_changes_figure_to": "£916 /month",
+        "rent_breakdown_present": true,
+        "rent_yield_200000_value": "5.5%",
+        "rent_listings_rightmove_zoopla_onthemarket": true
+      },
+      "sold_map_screen": {
+        "sold_listings_rightmove_zoopla_onthemarket": true,
+        "sold_sale_link_present": true
+      },
+      "credits_prompt_modal": {
+        "visible_on_402": true,
+        "upgrade_button_present": true,
+        "dismiss_button_present": true,
+        "dismiss_button_closes_modal": true,
+        "upgrade_button_routes_to_profile": true
+      },
+      "profile_credits_card_for_basic_user": true
+    },
+    "desktop_1440x900": {
+      "desktop_header_present": true,
+      "credits_pill_in_desktop_header": true,
+      "desktop_sidebar_present": true,
+      "sidebar_group_research_children": ["sidebar-action-sold","sidebar-action-rent","sidebar-action-epc"],
+      "sidebar_group_analyse_children": ["sidebar-action-ai"],
+      "sidebar_group_manage_children": ["sidebar-action-report","sidebar-action-receipt","sidebar-action-snags","sidebar-action-inbox"],
+      "sidebar_action_brrr_hidden": true
+    }
+  }
+}

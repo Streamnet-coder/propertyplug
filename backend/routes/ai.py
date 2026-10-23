@@ -42,6 +42,8 @@ async def _photo_b64(path: str, user: User) -> str:
 async def ai_estimate(body: EstimateIn, user: User = Depends(current_user)):
     if not body.description.strip():
         raise HTTPException(400, "Please describe the work")
+    from routes.credits import charge
+    await charge(user, "ai_estimate", body.description.strip()[:200])
     system = ("You are a UK renovation quantity surveyor. Estimate realistic 2026 UK costs in GBP, referencing suppliers "
               "like B&Q, Wickes, Toolstation, Screwfix, Wren Kitchens, DIY Kitchens, eBay and typical UK trade day rates. "
               "If a photo of the space is provided, use it to judge size, condition and what needs replacing. "

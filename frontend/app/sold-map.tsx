@@ -9,7 +9,10 @@ import { api, FloorAreas, gbp, ProjectEpc, SoldPrices } from "@/src/api";
 import { PortfolioMapView } from "@/src/components/portfolio-map-view";
 import { soldMapHtml } from "@/src/components/sold-map-html";
 import { Button, Card, Chip, Field, fonts, Icon, radius, space, tap } from "@/src/components/ui";
+import { ListingButtons } from "@/src/components/credits";
 import { useLayout } from "@/src/layout";
+import { listingLinks, rightmoveSoldUrl } from "@/src/listings";
+import * as WebBrowser from "expo-web-browser";
 import { useProject } from "@/src/queries";
 import { makeStyles, useTheme } from "@/src/theme";
 
@@ -83,6 +86,7 @@ export default function SoldMap() {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
         {MILES.map((m) => <Chip key={m.v} label={m.l} selected={miles === m.v} onPress={() => { setMiles(m.v); setShown(PAGE); }} testID={`sold-miles-${m.v}`} />)}
       </ScrollView>
+      {pc ? <ListingButtons links={listingLinks(pc, Number(miles), "sale")} title="Live listings for sale nearby" testID="sold-listings" /> : null}
       <Text style={s.label}>Sold in the last</Text>
       <View style={s.chips}>
         {YEARS.map((y) => <Chip key={y} label={`${y} yr${y === "1" ? "" : "s"}`} selected={years === y} onPress={() => { setYears(y); setShown(PAGE); }} testID={`sold-years-${y}`} />)}
@@ -147,7 +151,9 @@ export default function SoldMap() {
         (() => { const a = areas[rowKey(x)]; return (
         <View key={`${x.postcode}-${x.address}-${x.date}-${i}`} style={s.sale} testID={`sold-sale-${i}`}>
           <View style={{ flex: 1 }}>
-            <Text style={s.addr} numberOfLines={1}>{x.address || x.postcode}</Text>
+            <Pressable onPress={() => { tap(); WebBrowser.openBrowserAsync(rightmoveSoldUrl(x.postcode)); }} hitSlop={4} testID={`sold-sale-link-${i}`}>
+              <Text style={[s.addr, { textDecorationLine: "underline" }]} numberOfLines={1}>{x.address || x.postcode}</Text>
+            </Pressable>
             <Text style={s.muted} numberOfLines={1}>{x.postcode} · {x.type}{x.tenure ? ` · ${x.tenure}` : ""}{x.new_build ? " · New build" : ""} · {fmtDist(x.distance_m)}</Text>
             {a?.sqft ? (
               <Text style={[s.muted, { color: colors.brand, fontFamily: fonts.semibold }]} testID={`sold-ppsf-${i}`}>£{a.price_per_sqft?.toLocaleString()}/sq ft · {a.sqft.toLocaleString()} sq ft{a.epc_band ? ` · EPC ${a.epc_band}` : ""}</Text>

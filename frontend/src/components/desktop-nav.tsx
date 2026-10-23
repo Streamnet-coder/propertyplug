@@ -4,7 +4,8 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { BrandLogo } from "@/src/components/brand";
 import { fonts, Icon, IconName, ProBadge, radius, space, tap } from "@/src/components/ui";
-import { useQuickActions } from "@/src/quick-actions";
+import { CreditsPill } from "@/src/components/credits";
+import { GROUP_ICONS, GROUPS, ToolGroup, useQuickActions } from "@/src/quick-actions";
 import { makeStyles, useTheme } from "@/src/theme";
 
 export type DesktopTab = { name: string; title: string; icon: IconName };
@@ -21,6 +22,7 @@ export function DesktopHeader({ state, navigation, tabs }: BottomTabBarProps & {
     <View style={s.header} testID="desktop-header">
       <BrandLogo />
       <View style={{ flex: 1 }} />
+      <View style={{ marginRight: space.md }}><CreditsPill /></View>
       <View style={{ position: "relative", zIndex: 20 }}>
         <Pressable onPress={() => { tap(); setOpen(!open); }} style={({ pressed }) => [s.menuBtn, pressed && { opacity: 0.85 }]} testID="desktop-menu-button" accessibilityRole="button" accessibilityLabel="Menu">
           <Icon name="menu" size={18} color={colors.brand} />
@@ -51,18 +53,29 @@ export function DesktopSidebar() {
   const s = useStyles();
   const { colors } = useTheme();
   const { actions, isPro } = useQuickActions();
+  const [openGroup, setOpenGroup] = useState<ToolGroup | null>(null);
   return (
     <View style={s.sidebar} testID="desktop-sidebar">
       <ScrollView contentContainerStyle={{ padding: space.md, gap: 4 }}>
-        <Text style={s.sideLabel}>Project tools</Text>
-        {actions.map((a) => (
+        {GROUPS.map((g) => actions.some((a) => a.group === g) && (
+          <View key={g} style={{ gap: 4, marginBottom: space.sm }} testID={`sidebar-group-${g.toLowerCase()}`}>
+        <Pressable onPress={() => { tap(); setOpenGroup(openGroup === g ? null : g); }} style={({ hovered }: any) => [s.groupHead, openGroup === g && { backgroundColor: colors.brandTertiary }, hovered && { backgroundColor: colors.surfaceSecondary }]}
+          testID={`sidebar-group-toggle-${g.toLowerCase()}`} accessibilityState={{ expanded: openGroup === g }}>
+          <Icon name={GROUP_ICONS[g]} size={18} color={colors.brand} />
+          <Text style={s.groupHeadText}>{g}</Text>
+          <Icon name={openGroup === g ? "chevron-up" : "chevron-down"} size={16} color={colors.muted} />
+        </Pressable>
+        {openGroup === g && actions.filter((a) => a.group === g).map((a) => (
           <Pressable key={a.id} onPress={() => { tap(); a.onPress(); }} style={({ pressed, hovered }: any) => [s.sideItem, (pressed || hovered) && { backgroundColor: colors.surfaceSecondary }]} testID={`sidebar-action-${a.id}`}>
+            <View style={{ width: space.md }} />
             <View style={[s.sideIcon, a.pro && { backgroundColor: colors.orangeTint }]}>
               <Icon name={a.icon} size={18} color={a.pro ? colors.brandPrimary : colors.brand} />
             </View>
             <Text style={s.sideText} numberOfLines={1}>{a.label}</Text>
             {a.pro && !isPro && <ProBadge locked />}
           </Pressable>
+        ))}
+          </View>
         ))}
       </ScrollView>
     </View>
@@ -78,6 +91,8 @@ const useStyles = makeStyles((c) => ({
   item: { flexDirection: "row", alignItems: "center", gap: space.md, minHeight: 44, paddingHorizontal: space.md, borderRadius: radius.sm },
   itemText: { fontFamily: fonts.semibold, fontSize: 14, color: c.onSurface },
   sidebar: { width: 230, backgroundColor: c.surface, borderRightWidth: 1, borderRightColor: c.border },
+  groupHead: { flexDirection: "row", alignItems: "center", gap: space.md, minHeight: 48, paddingHorizontal: space.sm, borderRadius: radius.md },
+  groupHeadText: { flex: 1, fontFamily: fonts.bold, fontSize: 15, color: c.onSurface },
   sideLabel: { fontFamily: fonts.semibold, fontSize: 11, color: c.muted, textTransform: "uppercase", letterSpacing: 0.6, paddingHorizontal: space.sm, paddingVertical: space.sm },
   sideItem: { flexDirection: "row", alignItems: "center", gap: space.md, minHeight: 48, paddingHorizontal: space.sm, borderRadius: radius.md },
   sideIcon: { width: 34, height: 34, borderRadius: radius.sm, backgroundColor: c.brandTertiary, alignItems: "center", justifyContent: "center" },

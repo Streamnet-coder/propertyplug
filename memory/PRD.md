@@ -311,3 +311,10 @@ Build a mobile app from the "My Builder App | Project, Cost & BRRR Management fo
 - /project/epc (match/pin certificate, improvements with costs), add-to-budget creates "EPC: ..." Hard Cost lines. /epc screen + Home "EPC plan".
 - Sold map "Value by size": floor area (prefilled from EPC) × median £/sq ft, use as BRRR valuation.
 - Desktop (>=1024): left sidebar = project tools (src/quick-actions.ts), header Menu dropdown = Home/Budget/Team/Media (src/components/desktop-nav.tsx).
+
+## Jun 2026 — Tool groups, Rent comps, listing links, credits (iter 61)
+- Tools grouped Research (Sold prices, Rent comps, EPC plan) / Analyse (AI cost, BRRR) / Manage (Share, Receipt, Snags, My tasks) on Home (mobile) and desktop sidebar.
+- /rent-comps: ONS PIPR local authority rents (backend/data/ons_rents.json, Sep 2026; refresh monthly from ONS xlsx), by beds/type, vs region/UK, gross yield.
+- Listing deep links (src/listings.ts): Rightmove/Zoopla/OnTheMarket for sale & to rent; Rightmove sold history per sale postcode.
+- Credits (routes/credits.py): Basic 100/month (sold 5, rent 2, EPC 2, AI estimate 10; same lookup free within 24h); Pro unlimited; 402 -> global CreditsPrompt upgrade modal; CreditsPill + profile card.
+- Tools collapsed: Home shows 3 group buttons (Research/Analyse/Manage) expanding a panel; desktop sidebar accordion (sidebar-group-toggle-*).
