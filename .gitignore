@@ -87,3 +87,10 @@ credentials.json
 *.key
 .credentials
 .env
+
+# Keep env templates, ignore real env files
+!.env.example
+!**/.env.example
+
+# Local test runtime / reports
+.emergent/testing/.runtime/
