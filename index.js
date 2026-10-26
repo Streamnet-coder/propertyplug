@@ -7,7 +7,7 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 // Live PropertyPlug backend (set API_URL in Hostinger's environment variables), e.g. https://your-app.emergent.host
-const API_URL = (process.env.API_URL || '').replace(/\/+$/, '');
+const API_URL = (process.env.API_URL || 'https://dev-budget-tracker-2.emergent.host').replace(/\/+$/, '');
 const BUILD_DIR = path.join(__dirname, 'client', 'build');
 
 // ==========================================
