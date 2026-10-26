@@ -5,17 +5,17 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --check index.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "express": "^4.21.1",
-    "mongoose": "8.24.1"
+    "express": "^4.21.1"
   },
-  "devDependencies": []
+  "devDependencies": [],
+  "engines": {
+    "node": ">=18"
+  }
 }
